@@ -33,6 +33,41 @@ pip install -r requirements.txt
 echo "[+] Installing HARDN as a system-wide command..."
 pip install -e .
 
+# BUILD and CHMOD
+
+# Make Python scripts executable
+chmod +x src/hardn.py
+chmod +x src/hardn_dark.py
+chmod +x src/packages.py
+
+# Make Docker-related files executable
+chmod +x docker/docker_image
+chmod +x docker/docker-compose.yml
+
+# Install Docker if not already installed
+if ! command -v docker &> /dev/null
+then
+    echo "Docker not found, installing..."
+    sudo apt-get update
+    sudo apt-get install -y docker.io
+    sudo systemctl start docker
+    sudo systemctl enable docker
+fi
+
+# Install Docker Compose if not already installed
+if ! command -v docker-compose &> /dev/null
+then
+    echo "Docker Compose not found, installing..."
+    sudo curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+    sudo chmod +x /usr/local/bin/docker-compose
+fi
+
+# Build Docker image
+cd docker
+docker-compose build
+
+echo "Setup complete. You can now run the HARDN scripts."
+
 # SECURITY
 
 # UFW

@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  hardn:
+    build: .
+    container_name: hardn_container
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: ["python", "src/hardn.py"]
+    tty: true

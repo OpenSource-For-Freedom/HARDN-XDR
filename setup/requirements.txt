@@ -1,14 +1,5 @@
 # Core system libraries
-shlex
-subprocess
-sys
-os
-logging
-threading
-datetime
 pexpect
-shutil
-
 
 # GUI 
 tkinter
@@ -27,4 +18,7 @@ tcpd
 requests
 setuptools
 
-# run "pip freeze > requirements.txt" to ensure all are listed. 
+# Docker
+docker
+
+# run "pip freeze > requirements.txt" to ensure all are listed.

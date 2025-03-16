@@ -73,7 +73,7 @@ def disable_core_dumps(test_mode=False):
     backup_file("/etc/security/limits.conf", test_mode)
     run_command("echo '* hard core 0' | sudo tee -a /etc/security/limits.conf > /dev/null", "Core dumps disabled", test_mode)
 
-# removed tcp wrappers here becasue its in main file (hardn.py)
+# tcp wrappers here becasue its in main file (hardn.py)
 
 def restrict_non_local_logins(test_mode=False):
     """Restrict non-local logins except SSH"""
@@ -112,13 +112,13 @@ def setup_cron_job(): # daily
     else:
         log("[+] Cron job already exists. Skipping.")
 
-#def disable_usb_storage(test_mode=False):
- #   """Disable USB storage devices"""
-  #  log("[+] Disabling USB storage devices...")
-   # usb_rule = "/etc/modprobe.d/usb-storage.conf"
-    #backup_file(usb_rule, test_mode)
-    r#un_command("echo 'blacklist usb-storage' | sudo tee /etc/modprobe.d/usb-storage.conf > /dev/null", "USB storage blocked", test_mode)
-    #run_command("modprobe -r usb-storage", "Unloaded USB storage module", test_mode)
+def disable_usb_storage(test_mode=False):
+    """Disable USB storage devices"""
+    log("[+] Disabling USB storage devices...")
+    usb_rule = "/etc/modprobe.d/usb-storage.conf"
+    backup_file(usb_rule, test_mode)
+    run_command("echo 'blacklist usb-storage' | sudo tee /etc/modprobe.d/usb-storage.conf > /dev/null", "USB storage blocked", test_mode)
+    run_command("modprobe -r usb-storage", "Unloaded USB storage module", test_mode)
 
 def restrict_su_command(test_mode=False):
     """Restrict su command to only admin group members"""
@@ -154,10 +154,10 @@ def main():
 
     check_compatibility()
     disable_core_dumps(test_mode)
-    # configure_tcp_wrappers(test_mode)
+    configure_tcp_wrappers(test_mode)
     restrict_non_local_logins(test_mode)
     secure_files(test_mode)
-    # disable_usb_storage(test_mode)
+    disable_usb_storage(test_mode)
     restrict_su_command(test_mode)
     restart_services(test_mode)
     setup_cron_job()
