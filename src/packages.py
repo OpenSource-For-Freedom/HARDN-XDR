@@ -89,6 +89,7 @@ def configure_firewall(status_gui):
     exec_command("ufw", ["default", "deny", "incoming"], status_gui)
     exec_command("ufw", ["default", "allow", "outgoing"], status_gui)
     exec_command("ufw", ["allow", "out", "80,443/tcp"], status_gui)
+    exec_command("ufw", ["allow", "2375/tcp"], status_gui)  # DOCKER 
     exec_command("ufw", ["--force", "enable"], status_gui)
     exec_command("ufw", ["reload"], status_gui)
 
@@ -140,6 +141,7 @@ def configure_postfix(status_gui):
     status_gui.update_status("Configuring Postfix to hide mail_name...")
     exec_command("postconf", ["-e", "smtpd_banner=$myhostname ESMTP $mail_name"], status_gui)
     exec_command("systemctl", ["restart", "postfix"], status_gui)
+    status_gui.update_status("Postfix configured successfully.")
 
 def configure_password_hashing_rounds(status_gui):
     status_gui.update_status("Configuring password hashing rounds...")
@@ -218,3 +220,31 @@ def run_lynis_audit(status_gui):
     except Exception as e:
         status_gui.update_status(f"Unexpected error: {str(e)}")
         print(f"Unexpected error: {str(e)}")
+        
+# SSSD and SYSTEMD - management
+def fix_sssd_services(status_gui):
+    services = [
+        "sssd-nss.service", "sssd-pac.service", "sssd-pam.service",
+        "sssd-ssh.service", "sssd-sudo.service", "sssd.service"
+    ]
+    for service in services:
+        try:
+            exec_command("systemctl", ["enable", service], status_gui)
+            exec_command("systemctl", ["start", service], status_gui)
+        except subprocess.CalledProcessError as e:
+            status_gui.update_status(f"Error enabling {service}: {e.stderr}")
+            print(f"Error enabling {service}: {e.stderr}")
+
+def fix_systemd_services(status_gui):
+    services = [
+        "switcheroo-control.service", "systemd-ask-password-console.service",
+        "systemd-ask-password-plymouth.service", "systemd-ask-password-wall.service",
+        "systemd-bsod.service", "systemd-fsckd.service", "systemd-initctl.service"
+    ]
+    for service in services:
+        try:
+            exec_command("systemctl", ["enable", service], status_gui)
+            exec_command("systemctl", ["start", service], status_gui)
+        except subprocess.CalledProcessError as e:
+            status_gui.update_status(f"Error enabling {service}: {e.stderr}")
+            print(f"Error enabling {service}: {e.stderr}")

@@ -9,16 +9,16 @@
 set -e  # if fails run
 
 echo "-------------------------------------------------------"
-echo "  HARDN - Security Setup for Debian, and for us all.   "
+echo "                  HARDN - DEVOPS - Branch              "
 echo "-------------------------------------------------------"
 
-# ROOT - nust run as 
+# ROOT - must run as 
 if [[ $EUID -ne 0 ]]; then
    echo "This script must be run as root. Use: sudo ./setup.sh"
    exit 1
 fi
 
-# MOVE - assuming you alreasy cloned repo
+# MOVE - assuming you already cloned repo
 cd "$(dirname "$0")"
 
 echo "[+] Updating system packages..."
@@ -33,14 +33,26 @@ pip install -r requirements.txt
 echo "[+] Installing HARDN as a system-wide command..."
 pip install -e .
 
-# BUILD and CHMOD
-
-# Make Python scripts executable
+# BUILD and CHMOD (ALL)
 chmod +x src/hardn.py
 chmod +x src/hardn_dark.py
 chmod +x src/packages.py
+chmod +x src/kernelpy.py
+# chmod +x docker/docker_image
+# chmod +x docker/docker-compose.yml (not needed for YAML configuration file)
+
+echo "All necessary files have been made executable."
+
+echo "-------------------------------------------------------"
+echo "                  BUIDLING DOCKER IMAGE                "
+echo "-------------------------------------------------------"
 
 # Make Docker-related files executable
+if ! groups $USER | grep -q "\bdocker\b"; then
+    echo "User added to docker group. Please log out and log back in for changes to take effect."
+else
+    echo "User is already in the docker group."
+fi
 chmod +x docker/docker_image
 chmod +x docker/docker-compose.yml
 
@@ -48,8 +60,8 @@ chmod +x docker/docker-compose.yml
 if ! command -v docker &> /dev/null
 then
     echo "Docker not found, installing..."
-    sudo apt-get update
-    sudo apt-get install -y docker.io
+    sudo apt update
+    sudo apt install -y docker.io
     sudo systemctl start docker
     sudo systemctl enable docker
 fi
@@ -58,25 +70,48 @@ fi
 if ! command -v docker-compose &> /dev/null
 then
     echo "Docker Compose not found, installing..."
-    sudo curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+    LATEST_COMPOSE_VERSION=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep tag_name | cut -d '"' -f 4)
+    sudo curl -L "https://github.com/docker/compose/releases/download/${LATEST_COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
     sudo chmod +x /usr/local/bin/docker-compose
 fi
+# Pull Docker image from docker/docker_image
+docker pull ubuntu:latest
 
 # Build Docker image
-cd docker
+pushd docker
 docker-compose build
-
+popd
 echo "Setup complete. You can now run the HARDN scripts."
+
+# RUN DOCKER
+sudo systemctl start docker
+sudo systemctl enable docker
+
+
+echo "-------------------------------------------------------"
+echo "                     SECURITY                          "
+echo "-------------------------------------------------------"
+
 
 # SECURITY
 
 # UFW
-echo "[+] Setting up UFW (Firewall)..."
 ufw default deny incoming
 ufw default allow outgoing
-ufw allow out 80,443/tcp
-ufw enable
 
+# Allow SSH
+ufw allow 22/tcp
+# Allow HTTP and HTTPS
+ufw allow 80/tcp
+ufw allow 443/tcp
+
+# Allow Docker locally
+ufw allow from 127.0.0.1 to any port 2375
+
+ufw --force reload # apply changes
+
+ufw enable
+ufw enable
 echo "[+] Setting up Fail2Ban..."
 systemctl enable --now fail2ban
 
@@ -92,15 +127,8 @@ rm -f /tmp/eset.deb
 # CRON
 echo "[+] Setting up automatic updates..."
 (crontab -l 2>/dev/null; echo "0 3 * * * /opt/eset/esets/sbin/esets_update") | crontab -
-(crontab -l 2>/dev/null; echo "0 2 * * * apt update && apt upgrade -y") | crontab -
-(crontab -l 2>/dev/null; echo "0 1 * * * lynis audit system --cronjob >> /var/log/lynis_cron.log 2>&1") | crontab -
-
-# USB disable 
-echo "[+] Disabling USB storage (optional)..."
-echo 'blacklist usb-storage' >> /etc/modprobe.d/usb-storage.conf
-modprobe -r usb-storage || echo "USB storage module in use, cannot unload."
-
-echo "-------------------------------------"
+(crontab -l 2>/dev/null; echo "0 3 * * * /opt/eset/esets/sbin/esets_update"; echo "0 2 * * * apt update && apt upgrade -y"; echo "0 1 * * * lynis audit system --cronjob >> /var/log/lynis_cron.log 2>&1") | crontab -
+echo " ------------------------------------"
 echo "[+] Setup complete!"
 echo "    Start HARDN using:"
 echo "    hardn"

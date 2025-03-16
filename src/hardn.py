@@ -39,7 +39,7 @@ class StatusGUI:
         self.log_text_window = self.canvas.create_window(400, 400, window=self.log_text)
 
         self.task_count = 0
-        self.total_tasks = 19  # Updated to include Docker configuration and kernelpy
+        self.total_tasks = 17  # Updated to include Docker configuration
 
         self.display_ascii_art()
 
@@ -73,12 +73,6 @@ class StatusGUI:
         self.update_status("Running HARDN DARK...")
         subprocess.run(["python3", "src/hardn_dark.py"], check=True)
         self.update_status("HARDN DARK completed.")
-        self.call_kernelpy()
-
-    def call_kernelpy(self):
-        self.update_status("Running kernelpy...")
-        subprocess.run(["python3", "src/kernelpy.py"], check=True)
-        self.update_status("kernelpy completed.")
 
     def run(self):
         self.root.mainloop()
@@ -138,7 +132,6 @@ def start_hardening(dark_mode=False):
             status_gui.update_status("Running HARDN DARK...")
             subprocess.run(["python3", "src/hardn_dark.py"], check=True)
             status_gui.update_status("HARDN DARK completed.")
-            status_gui.call_kernelpy()
     
     threading.Thread(target=run_tasks, daemon=True).start()
 
