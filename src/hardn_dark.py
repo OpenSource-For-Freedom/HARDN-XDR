@@ -111,6 +111,8 @@ def setup_cron_job(): # daily
         run_command(f"(crontab -l 2>/dev/null; echo \"{cron_job}\") | crontab -", "Added HARDN DARK cron job")
     else:
         log("[+] Cron job already exists. Skipping.")
+        
+        
 
 def disable_usb_storage(test_mode=False):
     """Disable USB storage devices"""

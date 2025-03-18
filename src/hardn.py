@@ -39,7 +39,7 @@ class StatusGUI:
         self.log_text_window = self.canvas.create_window(400, 400, window=self.log_text)
 
         self.task_count = 0
-        self.total_tasks = 17  # Updated to include Docker configuration
+        self.total_tasks = 18  # Updated to include Docker configuration and GRUB password
 
         self.display_ascii_art()
 
@@ -95,30 +95,54 @@ class StatusGUI:
     def submit_password(self):
         self.grub_password = self.password_entry.get()
         self.password_window.destroy()
-        self.root.quit()  # Exit the main loop to continue the script
+        self.update_status("GRUB password received.")
 
 # START HARDENING PROCESS
 def start_hardening(dark_mode=False):
+    status_gui = StatusGUI()  # Create an instance of StatusGUI
+
     def run_tasks():
+        # Get the absolute path to the setup.sh script
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        setup_script = os.path.join(script_dir, "../setup/Setup.sh")
+        print(f"Resolved path to Setup.sh: {setup_script}")  # Debug
+
+        # Check if Setup.sh exists
+        if not os.path.exists(setup_script):
+            status_gui.update_status(f"Error: Setup.sh not found at {setup_script}")
+            return
+
+        # Run setup.sh for initial setup
+        status_gui.update_status("Running Setup.sh...")
+        try:
+            subprocess.run(["bash", setup_script], check=True)
+            status_gui.update_status("Setup.sh completed.")
+        except subprocess.CalledProcessError as e:
+            status_gui.update_status(f"Error running Setup.sh: {e}")
+            return
+
+        # Prompt for GRUB password
+        status_gui.update_status("Prompting for GRUB password...")
+        status_gui.get_grub_password()
+
+       # Install Python dependencies
+        status_gui.update_status("Installing Python dependencies...")
+        requirements_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../setup/requirements.txt")
+        subprocess.run(["pip3", "install", "-r", requirements_path], check=True)
+        status_gui.update_status("Python dependencies installed.")
+
+        # Run hardening tasks
+        status_gui.update_status("Starting hardening tasks...")
         check_and_install_dependencies(status_gui)
         exec_command("apt", ["update"], status_gui)
         exec_command("apt", ["upgrade", "-y"], status_gui)
         enforce_password_policies(status_gui)
-        exec_command("apt", ["install", "-y", "fail2ban"], status_gui)
-        exec_command("systemctl", ["enable", "--now", "fail2ban"], status_gui)
         configure_firewall(status_gui)
-        exec_command("apt", ["install", "-y", "rkhunter"], status_gui)
-        exec_command("rkhunter", ["--update"], status_gui)
-        exec_command("rkhunter", ["--propupd"], status_gui)
         install_maldetect(status_gui)
-        exec_command("apt", ["install", "-y", "libpam-pwquality"], status_gui)
         enable_aide(status_gui)
         harden_sysctl(status_gui)
         disable_usb(status_gui)
-        exec_command("apt", ["install", "-y", "apparmor", "apparmor-profiles", "apparmor-utils"], status_gui)
-        exec_command("systemctl", ["enable", "--now", "apparmor"], status_gui)
         configure_postfix(status_gui)
-        exec_command("apt", ["autoremove", "-y"], status_gui)  
         configure_password_hashing_rounds(status_gui)
         add_legal_banners(status_gui)
         configure_selinux(status_gui)
@@ -127,13 +151,22 @@ def start_hardening(dark_mode=False):
         fix_systemd_services(status_gui)
         lynis_score = run_lynis_audit(status_gui)
         status_gui.complete(lynis_score)
-        
+
         if dark_mode:
             status_gui.update_status("Running HARDN DARK...")
             subprocess.run(["python3", "src/hardn_dark.py"], check=True)
             status_gui.update_status("HARDN DARK completed.")
-    
+
     threading.Thread(target=run_tasks, daemon=True).start()
+    status_gui.run()
+
+# Build and run Docker container
+def setup_docker():
+    print("Building Docker image...")
+    subprocess.run(["docker", "build", "-t", "hardn_image", "."], check=True)
+    print("Starting Docker container...")
+    subprocess.run(["docker-compose", "up", "-d"], check=True)
+    print("Docker container is running.")
 
 # MAIN
 def main():
@@ -142,10 +175,10 @@ def main():
     parser.add_argument("--dark", action="store_true", help="Run HARDN DARK for deep security hardening")
     args = parser.parse_args()
 
-    global status_gui  # global
-    status_gui = StatusGUI()  
-    status_gui.root.after(100, lambda: start_hardening(dark_mode=args.dark))
-    status_gui.run()
+    try:
+        start_hardening(dark_mode=args.dark)
+    except KeyboardInterrupt:
+        print("\nScript interrupted by user. Exiting...")
 
 if __name__ == "__main__":
     main()

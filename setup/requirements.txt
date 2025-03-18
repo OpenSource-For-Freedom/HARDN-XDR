@@ -1,24 +1,24 @@
 # Core system libraries
 pexpect
 
-# GUI 
-tkinter
-pyttk
-
-# SEC/MONITOR
-lynis
-fail2ban
-ufw
-apparmor
-firejail
-debsums
-tcpd
-
-# PKG MANAGER/ TOOLS
+# PKG MANAGER
 requests
 setuptools
+wheel  
 
-# Docker
+# DOCKER
 docker
+docker-compose  
 
-# run "pip freeze > requirements.txt" to ensure all are listed.
+# HARDN-specific packages
+hardn-core  
+hardn-utils 
+
+# SETUP
+build  
+twine  
+
+# ADDITIONAL 
+pytest  # Added for testing
+flake8  # Added for linting
+black  # Added for code formatting
