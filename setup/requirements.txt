@@ -8,11 +8,7 @@ wheel
 
 # DOCKER
 docker
-docker-compose  
-
-# HARDN-specific packages
-hardn-core  
-hardn-utils 
+docker-compose 
 
 # SETUP
 build  

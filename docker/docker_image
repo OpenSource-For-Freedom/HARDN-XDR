@@ -1,40 +1,29 @@
-# Use an official Python runtime as a parent image
 FROM python:3.8-slim
 
-# Install necessary packages
 RUN apt-get update && apt-get install -y \
     ufw \
     && rm -rf /var/lib/apt/lists/*
 
-# Configure the firewall
+# UFW UPDATE
 RUN ufw default deny incoming && \
     ufw default allow outgoing && \
     ufw allow 2375/tcp && \
     ufw allow 2376/tcp && \
     ufw --force enable
 
-# Copy the application code
 COPY . /app
 WORKDIR /app
-
-# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV NAME Hardn
 
-# Create a non-root user and group
+
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 
-# Change ownership of the working directory to root
 RUN chown -R root:root /app
 
-# Switch to the non-root user
-USER appuser
-
-# Make port 80 available to the world outside this container
+# non-root
+USER appuser 
 EXPOSE 80
-
-# Run the application
-CMD ["python", "src/hardn_dark.py"]
+CMD ["python", "HARDN.py"]

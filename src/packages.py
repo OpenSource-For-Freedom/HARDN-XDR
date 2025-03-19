@@ -398,19 +398,29 @@ def configure_docker(status_gui):
         
 def configure_tcp_wrappers(test_mode=False):
         """Configure TCP Wrappers for access control"""
-        log("[+] Configuring TCP Wrappers...")
+        print("[+] Configuring TCP Wrappers...")
         hosts_deny = "/etc/hosts.deny"
         hosts_allow = "/etc/hosts.allow"
+        
+        def backup_file(file_path, test_mode=False):
+            """Creates a backup of the specified file."""
+            if test_mode:
+                print(f"[TEST MODE] Would back up: {file_path}")
+            else:
+                backup_path = f"{file_path}.bak"
+                shutil.copy(file_path, backup_path)
+                print(f"Backup created: {backup_path}")
         
         backup_file(hosts_deny, test_mode)
         backup_file(hosts_allow, test_mode)
         
-        run_command("echo 'ALL: ALL' | sudo tee -a /etc/hosts.deny > /dev/null", "Configured /etc/hosts.deny", test_mode)
-        run_command("echo 'sshd: ALL' | sudo tee -a /etc/hosts.allow > /dev/null", "Configured /etc/hosts.allow", test_mode)
+        exec_command("sh", ["-c", "echo 'ALL: ALL' >> /etc/hosts.deny"], None)
+        exec_command("sh", ["-c", "echo 'sshd: ALL' >> /etc/hosts.allow"], None)
     
 
 def run_lynis_audit(status_gui):
     status_gui.update_status("Running Lynis security audit...")
+    subprocess.run(["lynis", "audit", "system", "--pentest"], stdout=open("/var/log/lynis.log", "a"), stderr=subprocess.STDOUT, check=True)
     try:   
         profile_path = "/etc/lynis/custom.prf"
         command = ["sudo", "lynis", "audit", "system", "--pentest"]
@@ -436,11 +446,11 @@ def run_lynis_audit(status_gui):
             for line in output:
                 csv_file.write(f"{line}\n")
         
-        # Lock down to be -r--r--r--
+        # Lock down CSV to be -r--r--r--
         os.chmod(csv_file_path, 0o444)
         
         status_gui.update_status(f"Lynis audit report saved to {csv_file_path}")
-        print(f"Lynis audit report saved to {csv_file_path}")
+        print(f"Lynis audit report locked and saved to {csv_file_path}")
         
         lynis_score = None
         for line in output:

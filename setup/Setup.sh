@@ -23,8 +23,9 @@ cd "$(dirname "$0")"
 echo "[+] Updating system packages..."
 apt update && apt upgrade -y
 # PYTHON 3 EVE BUILD
+sudo apt install python3 -y 
 echo "[+] Installing required system dependencies..."
-apt install -y python3 python3-venv python3-pip ufw fail2ban apparmor apparmor-profiles apparmor-utils firejail tcpd lynis debsums
+apt install -y python3 python3-venv python3-pip ufw fail2ban apparmor apparmor-profiles apparmor-utils firejail tcpd lynis debsums build-essential python3-dev python3-setuptools python3-wheel
 
 echo "[+] Setting up Python virtual environment..."
 python3 -m venv venv
@@ -32,7 +33,10 @@ source venv/bin/activate
 
 echo "[+] Installing Python dependencies..."
 pip install --upgrade pip
+pip install --upgrade pip setuptools
 pip install -r requirements.txt
+pip install cython
+pip install --no-deps PyYAML==6.0.1
 
 echo "[+] Installing HARDN as a system-wide command..."
 pip install -e .
@@ -72,8 +76,6 @@ fi
 echo "[+] Setting up Lynis..."
 sudo apt install -y lynis
 lynis update info   
-lynis audit system --pentest >> /var/log/lynis.log 2>&1
-lynis audit system --pentest
 # FIREJAIL
 echo "[+] Setting up Firejail..."
 sudo apt install firejail -y
@@ -92,7 +94,6 @@ sudo apt install tcpd -y
 # fail2ban
 echo "[+] Setting up fail2ban..."
 sudo apt install fail2ban -y
-
 # DEBSUMS
 echo "[+] Setting up Debsums..." 
 sudo apt install debsums -y
@@ -160,6 +161,7 @@ sudo apt update -y
 sudo apt install -y curl
 sudo apt upgrade -y
 sudo apt dist-upgrade -y
+sudo apt install --install-recommends linux-generic
 # Ensure autoremove is safe before executing
 if sudo apt autoremove --dry-run | grep -q "The following packages will be REMOVED"; then
     echo "Autoremove will remove packages. Proceeding with caution..."
@@ -177,6 +179,7 @@ sudo apt install python3-dev -y
 sudo apt install python3-setuptools -y
 sudo apt install python3-wheel -y
 sudo apt install python3-virtualenv -y
+sudo apt install -y build-essential python3-dev python3-pip python3-setuptools python3-wheel
 
 
 # Install Docker Compose if not already installed
