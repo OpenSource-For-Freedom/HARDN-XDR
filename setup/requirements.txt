@@ -1,20 +1,4 @@
 # Core system libraries
 pexpect
-
-# PKG MANAGER
-requests
-setuptools
-wheel  
-
-# DOCKER
-docker
-docker-compose 
-
-# SETUP
-build  
-twine  
-
-# ADDITIONAL 
-pytest  # Added for testing
-flake8  # Added for linting
-black  # Added for code formatting
+PyYAML==3.13
+cython

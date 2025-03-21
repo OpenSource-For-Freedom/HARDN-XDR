@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "HARDN"
+version = "1.0.0"
+dependencies = [
+    "pexpect",
+    "PyYAML==3.13",
+    "cython",
+]

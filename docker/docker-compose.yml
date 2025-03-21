@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  hardn:
+  hardn_service:
     build:
       context: .
       dockerfile: Dockerfile
@@ -10,3 +10,10 @@ services:
       - PYTHONUNBUFFERED=1
     command: ["python", "src/hardn_dark.py"]
     tty: true
+
+  app:
+    image: ubuntu:20.04
+    working_dir: /app
+    volumes:
+      - ./app:/app
+    command: echo 'HARDN INITIATED!'

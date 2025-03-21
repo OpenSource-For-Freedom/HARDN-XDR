@@ -13,6 +13,28 @@ from packages import (
     run_lynis_audit, configure_selinux, configure_docker,
     fix_sssd_services, fix_systemd_services
 )
+# Define kernel_security using kernel.py
+def kernel_security(status_gui):
+    """
+    Function to perform kernel-level security hardening.
+    This function is implemented using the kernel.py script.
+    """
+    status_gui.update_status("Starting kernel security hardening...")
+    kernel_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "kernel.py")
+    kernel_script = kernel_script.lower()  # Normalize case for case-insensitive comparison
+
+    try:
+        if not any(f.lower() == "kernel.py" for f in os.listdir(os.path.dirname(kernel_script))):
+            status_gui.update_status(f"Error: kernel.py not found at {kernel_script}")
+            return
+
+        result = subprocess.run(["python3", kernel_script], check=True, capture_output=True, text=True)
+        status_gui.update_status(f"Kernel script output:\n{result.stdout}")
+        if result.stderr:
+            status_gui.update_status(f"Kernel script errors:\n{result.stderr}")
+        status_gui.update_status("Kernel security hardening completed.")
+    except subprocess.CalledProcessError as e:
+        status_gui.update_status(f"Error running kernel.py: {e}")
 
 # Add the current directory to the Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -63,16 +85,20 @@ class StatusGUI:
             self.status_text.set("Hardening complete!")
         self.log_text.insert(tk.END, f"Lynis score: {lynis_score}\n")
         self.log_text.see(tk.END)
-        self.add_dark_button()
+        self.add_dark_button()  # Add the button for HARDN DARK
 
     def add_dark_button(self):
-        self.dark_button = ttk.Button(self.root, text="Call DARK", command=self.call_dark, style="TButton")
+        self.dark_button = ttk.Button(self.root, text="Run HARDN DARK", command=self.call_dark, style="TButton")
         self.dark_button_window = self.canvas.create_window(400, 620, window=self.dark_button)
 
     def call_dark(self):
         self.update_status("Running HARDN DARK...")
-        subprocess.run(["python3", "src/hardn_dark.py"], check=True)
-        self.update_status("HARDN DARK completed.")
+        dark_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../dark/hardn_dark.py")
+        try:
+            subprocess.run(["python3", dark_script], check=True)
+            self.update_status("HARDN DARK completed.")
+        except subprocess.CalledProcessError as e:
+            self.update_status(f"Error running HARDN DARK: {e}")
 
     def run(self):
         self.root.mainloop()
@@ -113,7 +139,7 @@ def start_hardening(dark_mode=False):
             return
 
         # Run setup.sh for initial setup
-        status_gui.update_status("Running Setup.sh...")
+        status_gui.update_status("STARTING HARDN...")
         try:
             subprocess.run(["bash", setup_script], check=True)
             status_gui.update_status("Setup.sh completed.")
@@ -154,7 +180,8 @@ def start_hardening(dark_mode=False):
 
         if dark_mode:
             status_gui.update_status("Running HARDN DARK...")
-            subprocess.run(["python3", "src/hardn_dark.py"], check=True)
+            dark_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../dark/hardn_dark.py")
+            subprocess.run(["python3", dark_script], check=True)
             status_gui.update_status("HARDN DARK completed.")
 
     threading.Thread(target=run_tasks, daemon=True).start()
