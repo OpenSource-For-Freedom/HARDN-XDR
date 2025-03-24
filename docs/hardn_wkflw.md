@@ -5,11 +5,12 @@
 
 1. **Initialize the Environment**
     - Set up the required dependencies and environment variables.
-    - PIP and setup eve
+    - PIP and setup eve 
 
 2. **Input Data**
     - Ensure all necessary input files are available and correctly formatted.
     - Setup.sh and packages.sh
+    - UI/UX (@Intel420x)
 
 3. **Processing**
     - Execute the processing scripts to transform and analyze the data.
@@ -22,7 +23,7 @@
     - example file
     - Flask?
     
-    ```sh
+```sh
     from flask import Flask, request, jsonify
 import os
 import shutil
@@ -53,7 +54,7 @@ def restore_file():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
-```sh
+```
 
 5. **Cleanup**
     - Remove temporary files and reset the environment.
@@ -61,16 +62,17 @@ if __name__ == '__main__':
 
 ## File Structure
 
-- `/home/USER/Desktop/HARDN/`
+  -`/home/USER/Desktop/HARDN/`
   - `hardn_wkflw.md` - This workflow document.
   - Files
-  - 
-  - 
 
 
 ## Notes
 
 - Soft healing
+- MAKE file?
+- Should we branch out to CSS? Shoot the seperate GUI for to a diff directory? or index HTML?
+- SIEM (WAZUH, Crowdstrike, SPLUNK)
 - AI integration for fixes and rollbacks
 - USER focused setups and delployts
 
