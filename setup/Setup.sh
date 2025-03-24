@@ -145,14 +145,14 @@ echo "-------------------------------------------------------"
 echo "                     SECURITY                          "
 echo "-------------------------------------------------------"
 
+
 # Configure UFW
 ufw default deny incoming
 ufw default allow outgoing
-ufw allow outgoing 80/tcp 
+ufw allow out 80/tcp
 ufw allow 443/tcp
 ufw allow from 127.0.0.1 to any port 2375
-ufw --force reload
-ufw enable
+ufw --force enable
 
 # Install and configure additional security tools
 apt install -y lynis fail2ban apparmor apparmor-profiles apparmor-utils debsums
