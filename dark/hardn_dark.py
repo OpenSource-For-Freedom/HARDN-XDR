@@ -156,7 +156,6 @@ def main():
 
     check_compatibility()
     disable_core_dumps(test_mode)
-    configure_tcp_wrappers(test_mode)
     restrict_non_local_logins(test_mode)
     secure_files(test_mode)
     disable_usb_storage(test_mode)
