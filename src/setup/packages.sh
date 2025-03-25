@@ -17,6 +17,7 @@ exec_command() {
 }
 
 # Install required APT packages
+# wil still install SELinux but not config at this time - Tim
 install_apt_dependencies() {
   apt_dependencies=(
     "apparmor" "apparmor-profiles" "apparmor-utils" "firejail" "libpam-pwquality"
@@ -121,12 +122,12 @@ enable_aide() {
   mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db
   echo "0 0 * * * /usr/bin/aide --check >> /var/log/aide/aide.log 2>&1" > /etc/cron.d/aide
 }
-
-configure_selinux() {
-  echo "Configuring SELinux..."
-  exec_command apt install -y policycoreutils selinux-utils selinux-basics
-  exec_command selinux-config-enforcing
-}
+# SELinux on hold do to some compatibility errors.- Tim
+#configure_selinux() {
+  #echo "Configuring SELinux..."
+  #exec_command apt install -y policycoreutils selinux-utils selinux-basics
+  #exec_command selinux-config-enforcing
+#}
 
 configure_docker() {
   echo "Configuring Docker..."
