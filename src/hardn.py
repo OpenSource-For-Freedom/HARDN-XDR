@@ -5,7 +5,7 @@ import subprocess
 import threading
 import tkinter as tk
 from tkinter import ttk
-from packages import (
+from docker.packages import (
     exec_command, print_ascii_art, check_and_install_dependencies,
     enforce_password_policies, configure_firewall, install_maldetect,
     enable_aide, harden_sysctl, disable_usb, configure_postfix,
@@ -13,28 +13,6 @@ from packages import (
     run_lynis_audit, configure_selinux, configure_docker,
     fix_sssd_services, fix_systemd_services
 )
-# Define kernel_security using kernel.py
-def kernel_security(status_gui):
-    """
-    Function to perform kernel-level security hardening.
-    This function is implemented using the kernel.py script.
-    """
-    status_gui.update_status("Starting kernel security hardening...")
-    kernel_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "kernel.py")
-    kernel_script = kernel_script.lower()  # Normalize case for case-insensitive comparison
-
-    try:
-        if not any(f.lower() == "kernel.py" for f in os.listdir(os.path.dirname(kernel_script))):
-            status_gui.update_status(f"Error: kernel.py not found at {kernel_script}")
-            return
-
-        result = subprocess.run(["python3", kernel_script], check=True, capture_output=True, text=True)
-        status_gui.update_status(f"Kernel script output:\n{result.stdout}")
-        if result.stderr:
-            status_gui.update_status(f"Kernel script errors:\n{result.stderr}")
-        status_gui.update_status("Kernel security hardening completed.")
-    except subprocess.CalledProcessError as e:
-        status_gui.update_status(f"Error running kernel.py: {e}")
 
 # Add the current directory to the Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -128,30 +106,30 @@ def start_hardening(dark_mode=False):
     status_gui = StatusGUI()  # Create an instance of StatusGUI
 
     def run_tasks():
-        # Get the absolute path to the setup.sh script
+        # Get the absolute path to the packages.sh script
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        setup_script = os.path.join(script_dir, "../setup/Setup.sh")
-        print(f"Resolved path to Setup.sh: {setup_script}")  # Debug
+        packages_script = os.path.join(script_dir, "setup", "packages.sh")
+        print(f"Resolved path to packages.sh: {packages_script}")  # Debug
 
-        # Check if Setup.sh exists
-        if not os.path.exists(setup_script):
-            status_gui.update_status(f"Error: Setup.sh not found at {setup_script}")
+        # Check if packages.sh exists
+        if not os.path.exists(packages_script):
+            status_gui.update_status(f"Error: packages.sh not found at {packages_script}")
             return
 
-        # Run setup.sh for initial setup
+        # Run packages.sh for initial setup
         status_gui.update_status("STARTING HARDN...")
         try:
-            subprocess.run(["bash", setup_script], check=True)
-            status_gui.update_status("Setup.sh completed.")
+            subprocess.run(["bash", packages_script], check=True)
+            status_gui.update_status("packages.sh completed.")
         except subprocess.CalledProcessError as e:
-            status_gui.update_status(f"Error running Setup.sh: {e}")
+            status_gui.update_status(f"Error running packages.sh: {e}")
             return
 
         # Prompt for GRUB password
         status_gui.update_status("Prompting for GRUB password...")
         status_gui.get_grub_password()
 
-       # Install Python dependencies
+        # Install Python dependencies
         status_gui.update_status("Installing Python dependencies...")
         requirements_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../setup/requirements.txt")
         subprocess.run(["pip3", "install", "-r", requirements_path], check=True)

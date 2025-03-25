@@ -70,13 +70,22 @@ configure_firewall() {
 # Install and configure Maldetect
 install_maldetect() {
   echo "Installing Linux Malware Detect (Maldetect)..."
-  exec_command apt install -y maldetect
-  exec_command maldet -u
+  echo "Downloading and installing Maldetect manually..."
+  wget http://www.rfxn.com/downloads/maldetect-current.tar.gz
+  tar -xvf maldetect-current.tar.gz
+  cd maldetect-*
+  sudo ./install.sh
+  sudo maldet --update
   configure_maldetect
 }
 
 configure_maldetect() {
   echo "Configuring Maldetect..."
+  wget http://www.rfxn.com/downloads/maldetect-current.tar.gz
+  sudo tar -xvf maldetect-current.tar.gz
+  cd maldetect-*
+  sudo ./install.sh
+  sudo maldet --update
   sed -i 's/^scan_clamscan=.*/scan_clamscan="1"/' /usr/local/maldetect/conf.maldet
   sed -i 's/^scan_sigs=.*/scan_sigs="1"/' /usr/local/maldetect/conf.maldet
   sed -i 's/^quarantine_hits=.*/quarantine_hits="1"/' /usr/local/maldetect/conf.maldet
