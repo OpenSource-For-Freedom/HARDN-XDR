@@ -106,4 +106,4 @@ sudo ./setup.sh
 
 ## License
 
-- MIT License
+- GPL License
