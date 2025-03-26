@@ -52,6 +52,7 @@ rm -rf setup/venv
 python3 -m venv setup/venv
 source setup/venv/bin/activate
 pip install --upgrade pip setuptools wheel
+# pip install --user yamllint #added
 pip install -r requirements.txt
 
 
@@ -80,11 +81,7 @@ echo "-------------------------------------------------------"
 echo "                     SECURITY                          "
 echo "-------------------------------------------------------"
 
-
-ufw default deny incoming
-ufw default allow outgoing
-ufw --force enable
-
+#plceholder for UFW or iptables
 
 echo "-------------------------------------------------------"
 echo "                      THE PURGE                        "
