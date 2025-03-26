@@ -20,10 +20,11 @@ exec_command() {
 # wil still install SELinux but not config at this time - Tim
 install_apt_dependencies() {
   apt_dependencies=(
-    "apparmor" "apparmor-profiles" "apparmor-utils" "firejail" "libpam-pwquality"
-    "tcpd" "fail2ban" "rkhunter" "aide" "aide-common" "ufw" "postfix" "debsums"
-    "python3-pexpect" "python3-tk" "policycoreutils" "selinux-utils" "selinux-basics" "docker.io"
-  )
+    postfix aide tcpd chkrootkit rkhunter clamav clamav-daemon clamav-freshclam clamav-unofficial-sigs clamtk \
+    libpam-pwquality libpam-cracklib libpam-tmpdir libpam-ccreds libpam-ldap libpam-krb5 libpam-mount libpam-ssh \
+    selinux-basics selinux-policy-default auditd maldetect
+    )
+  }
 
   for package in "${apt_dependencies[@]}"; do
     echo "Checking for $package..."
@@ -82,11 +83,13 @@ install_maldetect() {
 
 configure_maldetect() {
   echo "Configuring Maldetect..."
-  wget http://www.rfxn.com/downloads/maldetect-current.tar.gz
-  sudo tar -xvf maldetect-current.tar.gz
+  wget https://www.rfxn.com/downloads/maldetect-current.tar.gz
+  tar -xvzf maldetect-current.tar.gz
   cd maldetect-*
   sudo ./install.sh
   sudo maldet --update
+
+  
   sed -i 's/^scan_clamscan=.*/scan_clamscan="1"/' /usr/local/maldetect/conf.maldet
   sed -i 's/^scan_sigs=.*/scan_sigs="1"/' /usr/local/maldetect/conf.maldet
   sed -i 's/^quarantine_hits=.*/quarantine_hits="1"/' /usr/local/maldetect/conf.maldet
@@ -94,6 +97,9 @@ configure_maldetect() {
   sed -i 's/^email_alert=.*/email_alert="1"/' /usr/local/maldetect/conf.maldet
   sed -i 's/^email_addr=.*/email_addr="root@localhost"/' /usr/local/maldetect/conf.maldet
 }
+
+sudo apt install clamav clamav-daemon -y
+sudo freshclam  
 
 clamvscan() {
   echo "Running ClamAV scan..."

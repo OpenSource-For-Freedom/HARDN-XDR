@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -10,3 +10,6 @@ dependencies = [
     "PyYAML==3.13",
     "cython",
 ]
+
+[tool.setuptools.packages.find]
+where = ["."]

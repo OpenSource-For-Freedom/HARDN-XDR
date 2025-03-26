@@ -1,5 +1,7 @@
 import os
 import subprocess
+import sys
+
 
 def check_kernel_version():
     kernel_version = subprocess.check_output(['uname', '-r']).decode().strip()
@@ -27,6 +29,40 @@ def audit_kernel_security():
         results.append("Error: The 'aa-status' command is not available. Ensure AppArmor is installed.")
 
     return results
+
+def configure_grub_security():
+        results = []
+        results.append("Configuring GRUB security settings...")
+
+        grub_config_path = '/etc/default/grub'
+        if os.path.exists(grub_config_path):
+            try:
+                with open(grub_config_path, 'a') as grub_file:
+                    grub_file.write('\n# Security enhancements\n')
+                    grub_file.write('GRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUX kvm-intel.vmentry_l1d_flush=always"\n')
+                    grub_file.write('GRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUX random.trust_bootloader=off"\n')
+                    grub_file.write('GRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUX slab_nomerge"\n')
+                    grub_file.write('GRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUX page_alloc.shuffle=1"\n')
+                    grub_file.write('GRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUX randomize_kstack_offset=on"\n')
+                    grub_file.write('GRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUX efi=disable_early_pci_dma"\n')
+                    grub_file.write('GRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUX random.trust_cpu=off"\n')
+                    grub_file.write('GRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUX debugfs=off"\n')
+                    grub_file.write('GRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUX init_on_alloc=1 init_on_free=1"\n')
+                    grub_file.write('GRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUX pti=on"\n')
+                    grub_file.write('GRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUX vsyscall=none"\n')
+                    grub_file.write('GRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUX loglevel=0 acpi_no_watchdog nohz_full=all nohibernate ssbd=force-on topology=on thermal.off=1 noearly ioapicreroute pcie_bus_perf rcu_nocb_poll mce=off nohpet idle=poll numa=noacpi gather_data_sampling=force net.ifnames=0 ipv6.disable=1 hibernate=no"\n')
+                    
+                results.append("GRUB configuration updated with security settings.")
+                # Update GRUB configuration
+                subprocess.run(['sudo', 'update-grub'], check=True)     
+                    
+                results.append("GRUB configuration updated successfully.")
+            except Exception as e:
+                results.append(f"Error updating GRUB configuration: {e}")
+        else:
+            results.append(f"GRUB configuration file not found at {grub_config_path}.")
+        
+        return results
 
 def kernal_security():
     results = []
@@ -83,6 +119,8 @@ def generate_report():
     report.extend(audit_kernel_security())
     report.extend(kernal_security())
     report.extend(grub_password())
+    report.extend(configure_grub_security())
+    report.append("Kernel security audit completed.")
     return "\n".join(report)
 
 def main():

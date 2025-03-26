@@ -2,20 +2,15 @@
 import os
 import sys
 import subprocess
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../setup"))
 import threading
 import tkinter as tk
-from tkinter import ttk
-from docker.packages import (
-    exec_command, print_ascii_art, check_and_install_dependencies,
-    enforce_password_policies, configure_firewall, install_maldetect,
-    enable_aide, harden_sysctl, disable_usb, configure_postfix,
-    configure_password_hashing_rounds, add_legal_banners,
-    run_lynis_audit, configure_selinux, configure_docker,
-    fix_sssd_services, fix_systemd_services
-)
-
-# Add the current directory to the Python path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from tkinter import ttk    
+try:
+    from setup.packages import print_ascii_art
+except ImportError:
+    def print_ascii_art():
+        return "HARDN ASCII Art Placeholder"
 
 # GUI
 class StatusGUI:
@@ -133,7 +128,40 @@ def start_hardening(dark_mode=False):
         status_gui.update_status("Installing Python dependencies...")
         requirements_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../setup/requirements.txt")
         subprocess.run(["pip3", "install", "-r", requirements_path], check=True)
-        status_gui.update_status("Python dependencies installed.")
+        def check_and_install_dependencies(gui):
+        def exec_command(command, args, gui):
+        exec_command("apt", ["upgrade", "-y"], status_gui)
+        def enforce_password_policies(gui):
+        def configure_firewall(gui):
+        def install_maldetect(gui):
+        def enable_aide(gui):
+        def harden_sysctl(gui):
+        def disable_usb(gui):
+        def configure_postfix(gui):
+        def configure_password_hashing_rounds(gui):
+        def add_legal_banners(gui):
+        def configure_selinux(gui):
+        def configure_docker(gui):
+        def fix_sssd_services(gui):
+        def fix_systemd_services(gui):
+        def run_lynis_audit(gui):
+            gui.update_status("Running Lynis audit...")
+            return 85  # Placeholder score
+        lynis_score = run_lynis_audit(status_gui)
+        fix_systemd_services(status_gui)
+        fix_sssd_services(status_gui)
+        configure_docker(status_gui)
+        configure_selinux(status_gui)
+        add_legal_banners(status_gui)
+        configure_password_hashing_rounds(status_gui)
+        configure_postfix(status_gui)
+        disable_usb(status_gui)
+        harden_sysctl(status_gui)
+        enable_aide(status_gui)
+        install_maldetect(status_gui)
+        configure_firewall(status_gui)
+        enforce_password_policies(status_gui)
+        check_and_install_dependencies(status_gui)
 
         # Run hardening tasks
         status_gui.update_status("Starting hardening tasks...")
