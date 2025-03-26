@@ -135,17 +135,36 @@ enable_aide() {
   #exec_command selinux-config-enforcing
 #}
 
-configure_docker() {
-  echo "Configuring Docker..."
-  exec_command apt install -y docker.io
-  exec_command systemctl enable --now docker
-  exec_command usermod -aG docker "$USER"
-}
+#configure_docker() {
+  #echo "Configuring Docker..."
+  #exec_command apt install -y docker.io
+  #exec_command systemctl enable --now docker
+  #exec_command usermod -aG docker "$USER"
+#}
 
+
+# firewall
 configure_tcp_wrappers() {
   echo "Configuring TCP Wrappers..."
   echo "ALL: ALL" >> /etc/hosts.deny
   echo "sshd: ALL" >> /etc/hosts.allow
+}
+
+configure_ufw() {
+  echo "Configuring UFW..."
+
+  # Reset to default rules
+  ufw --force reset
+
+
+  ufw default deny incoming
+  ufw default allow outgoing
+  ufw allow out to any port 1:65535 proto tcp
+  ufw deny out to any proto udp
+  ufw --force enable
+
+  echo "UFW configured successfully."
+  
 }
 
 add_legal_banners() {
@@ -215,6 +234,7 @@ enable_aide
 configure_selinux
 configure_docker
 configure_tcp_wrappers
+configure_ufw
 add_legal_banners
 configure_password_hashing_rounds
 run_lynis  # last place
