@@ -77,21 +77,6 @@ install_selinux() {
     printf "\e[1;31m[+] SELinux installation and configuration completed\e[0m\n"
 }
 
-# Create Python virtual environment and install dependencies
-setup_python_env() {
-    printf "\e[1;31m[+] Setting up Python virtual environment...\e[0m\n"
-    python3 --version
-    sudo apt install python3.11-venv
-    python3 -m venv venv
-    sleep 5
-    source venv/bin/activate
-    if [[ -f requirements.txt ]]; then
-        pip install -r requirements.txt
-    else
-        printf "\e[1;31mRequirements.txt not found. Skipping Python dependencies installation.\e[0m\n"
-    fi
-}
-
 # Install system security tools
 install_security_tools() {
     printf "\e[1;31m[+] Installing required system security tools...\e[0m\n"
@@ -210,7 +195,6 @@ main() {
     fi
 
     install_selinux
-    setup_python_env
     install_security_tools
     configure_ufw
     enable_services
