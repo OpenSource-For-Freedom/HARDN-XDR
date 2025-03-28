@@ -10,10 +10,8 @@ fi
 
 update_system_packages() {
     printf "\e[1;31m[+] Updating system packages...\e[0m\n"
-    sudo apt update && apt upgrade -y;
+    sudo apt update && apt upgrade -y
 }
-update_system_packages
-
 
 # Check for package dependencies
 pkgdeps=(
@@ -34,15 +32,6 @@ check_pkgdeps() {
         echo  # Add a blank line between packages
     done
 }
-check_pkgdeps
-
-
-# Function to trim brackets and whitespace
-#trim_bracks() {
-#    sed 's/\s//g;s/<[^>]*>//g'
-#}
-#trim_bracks
-
 
 # Function to offer resolving issues
 offer_to_resolve_issues() {
@@ -54,37 +43,10 @@ offer_to_resolve_issues() {
     if [[ $answer =~ ^[Yy]$ ]]; then
         echo "$deps_to_resolve" | sed 's/\s//g;s/<[^>]*>//g' >  dependencies_to_resolve.txt
         echo "List of dependencies to resolve saved in dependencies_to_resolve.txt"
-        #echo "$deps_to_resolve" | trim_bracks > dependencies_to_resolve.txt
-        #echo "List of dependencies to resolve saved in dependencies_to_resolve.txt"
     else
         echo "No action taken."
     fi
 }
-offer_to_resolve_issues
-
-
-# Main execution
-deps_and_conflicts=$(check_pkgdeps)
-echo "All dependencies and conflicts:"
-echo "$deps_and_conflicts"
-echo
-
-# Extract only the lines prefixed with "Depends"
-depends_only=$(echo "$deps_and_conflicts" | grep -E '^\s*Depends:')
-
-if [ -n "$depends_only" ]; then
-    echo "Found dependencies:"
-    echo "$depends_only"
-    echo
-    read -p "Do you want to offer resolving these dependencies? (y/n): " offer_answer
-    if [[ $offer_answer =~ ^[Yy]$ ]]; then
-        offer_to_resolve_issues "$depends_only"
-        sudo apt install $depends_only -y
-    else
-        echo "Skipping dependency resolution."
-    fi
-fi
-
 
 # Install and configure SELinux
 install_selinux() {
@@ -114,8 +76,6 @@ install_selinux() {
 
     printf "\e[1;31m[+] SELinux installation and configuration completed\e[0m\n"
 }
-install_selinux
-
 
 # Create Python virtual environment and install dependencies
 setup_python_env() {
@@ -123,7 +83,6 @@ setup_python_env() {
     python3 --version
     sudo apt install python3.11-venv
     python3 -m venv venv
-    # wait 5 seconds before: source venv/bin/activate
     sleep 5
     source venv/bin/activate
     if [[ -f requirements.txt ]]; then
@@ -132,16 +91,12 @@ setup_python_env() {
         printf "\e[1;31mRequirements.txt not found. Skipping Python dependencies installation.\e[0m\n"
     fi
 }
-setup_python_env
-
 
 # Install system security tools
 install_security_tools() {
     printf "\e[1;31m[+] Installing required system security tools...\e[0m\n"
     sudo apt install -y ufw fail2ban apparmor apparmor-profiles apparmor-utils firejail tcpd lynis debsums rkhunter libpam-pwquality libvirt-daemon-system libvirt-clients qemu-kvm docker.io docker-compose openssh-server
 }
-install_security_tools
-
 
 # UFW configuration
 configure_ufw() {
@@ -151,8 +106,6 @@ configure_ufw() {
     ufw allow out 67,68/udp
     ufw reload
 }
-configure_ufw
-
 
 # Enable and start Fail2Ban and AppArmor services
 enable_services() {
@@ -160,8 +113,6 @@ enable_services() {
     sudo systemctl enable --now fail2ban
     sudo systemctl enable --now apparmor
 }
-enable_services
-
 
 # Install chkrootkit, LMD, and rkhunter
 install_additional_tools() {
@@ -178,16 +129,12 @@ install_additional_tools() {
     rkhunter --update
     rkhunter --propupd
 }
-install_additional_tools
-
 
 # Reload AppArmor profiles
 reload_apparmor() {
     printf "\e[1;31m[+] Reloading AppArmor profiles...\e[0m\n"
     apparmor_parser -r /etc/apparmor.d/*
 }
-reload_apparmor
-
 
 # Configure cron jobs
 configure_cron() {
@@ -213,8 +160,6 @@ EOF
     crontab mycron
     rm mycron
 }
-configure_cron
-
 
 # Disable USB storage
 disable_usb_storage() {
@@ -222,14 +167,60 @@ disable_usb_storage() {
     echo 'blacklist usb-storage' > /etc/modprobe.d/usb-storage.conf
     modprobe -r usb-storage && printf "\e[1;31m[+] USB storage successfully disabled.\e[0m\n" || printf "\e[1;31m[-] Warning: USB storage module in use, cannot unload.\e[0m\n"
 }
-disable_usb_storage
 
 # Update system packages again
-update_system_packages || { printf "\e[1;31m[-] System update failed.\e[0m\n"; exit 1; }
+update_sys_pkgs() {
+    update_system_packages || { printf "\e[1;31m[-] System update failed.\e[0m\n"; exit 1; }
+}
 
-echo " "
-echo "=======================================================" 0.02
-echo "             [+] HARDN - Setup Complete                " 0.02
-echo "  [+] Please reboot your system to apply changes       " 0.02
-echo "=======================================================" 0.02
-echo " "
+setup_complete() {
+    echo " "
+    echo "======================================================="
+    echo "             [+] HARDN - Setup Complete                "
+    echo "  [+] Please reboot your system to apply changes       "
+    echo "======================================================="
+    echo " "
+}
+
+# Main function
+main() {
+    update_system_packages
+    check_pkgdeps
+
+    # Main execution
+    deps_and_conflicts=$(check_pkgdeps)
+    echo "All dependencies and conflicts:"
+    echo "$deps_and_conflicts"
+    echo
+
+    # Extract only the lines prefixed with "Depends"
+    depends_only=$(echo "$deps_and_conflicts" | grep -E '^\s*Depends:')
+
+    if [ -n "$depends_only" ]; then
+        echo "Found dependencies:"
+        echo "$depends_only"
+        echo
+        read -p "Do you want to offer resolving these dependencies? (y/n): " offer_answer
+        if [[ $offer_answer =~ ^[Yy]$ ]]; then
+            offer_to_resolve_issues "$depends_only"
+            sudo apt install $depends_only -y
+        else
+            echo "Skipping dependency resolution."
+        fi
+    fi
+
+    install_selinux
+    setup_python_env
+    install_security_tools
+    configure_ufw
+    enable_services
+    install_additional_tools
+    reload_apparmor
+    configure_cron
+    disable_usb_storage
+    update_sys_pkgs
+    setup_complete
+}
+
+# Run the main function
+main
