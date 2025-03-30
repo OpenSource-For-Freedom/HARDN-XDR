@@ -24,16 +24,20 @@ pkgdeps=(
     gawk-doc
 )
 
-# Function to check package dependencies
+# Function to check package dependencies - Edits didnt have a verify credit for dep's
 check_pkgdeps() {
     for pkg in "${pkgdeps[@]}"; do
-        echo "Package: $pkg"
-        apt-cache depends "$pkg" | grep -E '^\s*(PreDepends|Depends|Conflicts):'
-        echo  # Add a blank line between packages
+        if ! dpkg -l | grep -q "^ii  $pkg "; then
+            echo "Installing missing package: $pkg"
+            sudo apt install -y "$pkg"
+        else
+            echo "Package $pkg is already installed."
+        fi
     done
 }
 
-# Function to offer resolving issues
+# 
+# Function to offer resolving issues -  edit the offer_to _resolve + apt install -f -y to fix any broken installs
 offer_to_resolve_issues() {
     local deps_to_resolve="$1"
     echo "Dependencies to resolve:"
@@ -41,31 +45,66 @@ offer_to_resolve_issues() {
     echo
     read -p "Do you want to resolve these dependencies? (y/n): " answer
     if [[ $answer =~ ^[Yy]$ ]]; then
-        echo "$deps_to_resolve" | sed 's/\s//g;s/<[^>]*>//g' >  dependencies_to_resolve.txt
+        # clean up
+        echo "$deps_to_resolve" | sed -E 's/<[^>]*>//g' | tr -s ' ' > dependencies_to_resolve.txt
         echo "List of dependencies to resolve saved in dependencies_to_resolve.txt"
-    else
+        echo "Attempting to resolve dependencies..."
+        sudo apt install -f -y
+    elif [[ $answer =~ ^[Nn]$ ]]; then
         echo "No action taken."
+    else
+        echo "Invalid input. Please enter 'y' or 'n'."
     fi
 }
 
-# Install and configure SELinux
+# SELinux - made quitea few tweaks for Selinux to work on Debian, added check for selinux-utils and selinux-basics, and added check for getenforce command*
+
 install_selinux() {
     printf "\e[1;31m[+] Installing and configuring SELinux...\e[0m\n"
 
-    # Install SELinux packages
+    # Check for Debian
+    if ! command -v apt &> /dev/null; then
+        printf "\e[1;31m[-] This script is designed for Debian-based systems. Exiting.\e[0m\n"
+        return 1
+    fi
+
+    # Install packages
+    printf "\e[1;31m[+] Installing SELinux packages...\e[0m\n"
     sudo apt update
     sudo apt install -y selinux-utils selinux-basics policycoreutils policycoreutils-python-utils selinux-policy-default
 
-    # Check if installation was successful
+    # Check if SELinux is supported
     if ! command -v getenforce &> /dev/null; then
+        printf "\e[1;31m[-] SELinux is not supported on this system. Skipping SELinux configuration.\e[0m\n"
+        return 0
+    fi
+
+    # Verify 
+    if ! getenforce &> /dev/null; then
         printf "\e[1;31m[-] SELinux installation failed. Please check system logs.\e[0m\n"
         return 1
     fi
 
-    # Configure SELinux to enforcing mode
-    setenforce 1 2>/dev/null || printf "\e[1;31m[-] Could not set SELinux to enforcing mode immediately\e[0m\n"
+    # Enable 
+    if ! selinux-activate &> /dev/null; then
+        printf "\e[1;31m[+] Activating SELinux...\e[0m\n"
+        sudo selinux-activate || {
+            printf "\e[1;31m[-] Failed to activate SELinux. Please check system logs.\e[0m\n"
+            return 1
+        }
+    else
+        printf "\e[1;31m[+] SELinux is already activated.\e[0m\n"
+    fi
 
-    # Configure SELinux to be enforcing at boot
+    # Configure enforcing mode
+    if [[ "$(getenforce)" != "Enforcing" ]]; then
+        printf "\e[1;31m[+] Setting SELinux to enforcing mode...\e[0m\n"
+        setenforce 1 2>/dev/null || printf "\e[1;31m[-] Could not set SELinux to enforcing mode immediately\e[0m\n"
+    else
+        printf "\e[1;31m[+] SELinux is already in enforcing mode.\e[0m\n"
+    fi
+
+    # Configure at boot
     if [ -f /etc/selinux/config ]; then
         sed -i 's/SELINUX=disabled/SELINUX=enforcing/' /etc/selinux/config
         sed -i 's/SELINUX=permissive/SELINUX=enforcing/' /etc/selinux/config
@@ -76,7 +115,6 @@ install_selinux() {
 
     printf "\e[1;31m[+] SELinux installation and configuration completed\e[0m\n"
 }
-
 # Install system security tools
 install_security_tools() {
     printf "\e[1;31m[+] Installing required system security tools...\e[0m\n"
@@ -134,16 +172,16 @@ configure_cron() {
         | crontab -
     }
     remove_existing_cron_jobs
-    crontab -l 2>/dev/null > mycron
-    cat <<EOF >> mycron
+crontab -l 2>/dev/null > mycron # set to append jobs if alraedy exist
+cat <<EOF >> mycron
 0 1 * * * lynis audit system --cronjob >> /var/log/lynis_cron.log 2>&1
 0 3 * * * /opt/eset/esets/sbin/esets_update
 0 4 * * * chkrootkit
 0 5 * * * maldet --update
 0 6 * * * maldet --scan-all / >> /var/log/maldet_scan.log 2>&1
 EOF
-    crontab mycron
-    rm mycron
+crontab mycron
+rm mycron
 }
 
 # Disable USB storage
@@ -155,8 +193,22 @@ disable_usb_storage() {
 
 # Update system packages again
 update_sys_pkgs() {
-    update_system_packages || { printf "\e[1;31m[-] System update failed.\e[0m\n"; exit 1; }
+    printf "\e[1;31m[+] Updating system packages...\e[0m\n"
+    if ! sudo apt update && sudo apt upgrade -y; then
+        printf "\e[1;31m[-] System update failed.\e[0m\n"
+        exit 1
+    fi
 }
+
+# error handling
+error_handling() {
+    local error_code=$?
+    if [ $error_code -ne 0 ]; then
+        printf "\e[1;31m[-] An error occurred. Exiting with code: $error_code\e[0m\n"
+        exit $error_code
+    fi
+}
+trap error_handling EXIT # Call to exit
 
 setup_complete() {
     echo " "
