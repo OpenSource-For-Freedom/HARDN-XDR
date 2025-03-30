@@ -1,0 +1,4 @@
+# Core system libraries
+pexpect
+PyYAML==3.13
+cython
