@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 echo "##############################################################"
 echo "#       ██░ ██  ▄▄▄       ██▀███  ▓█████▄  ███▄    █         #"
@@ -9,15 +9,12 @@ echo "#      ░▓█▒░██▓ ▓█   ▓██▒░██▓ ▒█�
 echo "#       ▒ ░░▒░▒ ▒▒   ▓▒█░░ ▒▓ ░▒▓░ ▒▒▓  ▒ ░ ▒░   ▒ ▒         #"
 echo "#       ▒ ░▒░ ░  ▒   ▒▒ ░  ░▒ ░ ▒░ ░ ▒  ▒ ░ ░░   ░ ▒░        #"
 echo "#       ░  ░░ ░  ░   ▒     ░░   ░  ░ ░  ░    ░   ░ ░         #"
-echo "#       ░  ░  ░      ░  ░   ░        ░             ░         #"  
+echo "#       ░  ░  ░      ░  ░   ░        ░             ░         #"
 echo "#                           ░                                #"
 echo "#               THE LINUX SECURITY PROJECT                   #"
-echo "#                                                            #"
-echo "#                                                            #"      
 echo "##############################################################"
 
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-
 
 echo "-------------------------------------------------------"
 echo "                   HARDN - SETUP                       "
@@ -25,138 +22,110 @@ echo "-------------------------------------------------------"
 
 # Ensure the script is run as root
 if [[ $EUID -ne 0 ]]; then
-   echo "This script must be run as root. Use: sudo ./setup.sh"
+   echo "This script must be run as root. Use: sudo ./Setup.sh"
    exit 1
 fi
 
+# Update system packages
+update_system_packages() {
+    printf "\e[1;31m[+] Updating system packages...\e[0m\n"
+    sudo apt update && sudo apt upgrade -y
+}
 
+# Running venv prior 
+setup_python_venv() {
+    printf "\e[1;31m[+] Setting up Python virtual environment...\e[0m\n"
 
-cd "$(dirname "$0")"
+    # Ensure Python3 and venv are installed
+    sudo apt install -y python3 python3-venv python3-pip
 
-echo "[+] Updating system packages..."
-apt update && apt upgrade -y
-sudo apt install -y build-essential python3-dev python3-setuptools python3-wheel cython3
-
-echo "[+] Installing required system dependencies..."
-apt install -y python3 python3-venv python3-pip ufw fail2ban apparmor apparmor-profiles apparmor-utils firejail tcpd lynis debsums build-essential python3-dev python3-setuptools python3-wheel libpam-pwquality docker.io
-
-
-echo "-------------------------------------------------------"
-echo "                 BUILD PYTHON EVE                      "
-echo "-------------------------------------------------------"
-
-
-
-echo "[+] Setting up Python virtual environment..."
-rm -rf setup/venv
-python3 -m venv setup/venv
-source setup/venv/bin/activate
-pip install --upgrade pip setuptools wheel
-# pip install --user yamllint #added
-pip install -r requirements.txt
-
-
-
-
-####################################################################### build
-
-echo "[+] Installing HARDN as a system-wide command..."
-pip install -e .
-#!/bin/bash
-files=("hardn_dark.py" "gui.py" "kernal.py")
-
-for file in "${files[@]}"; do
-
-    filepath=$(find / -name "$file" 2>/dev/null | head -n 1)
-    
-    if [ -n "$filepath" ]; then
-        chmod +x "$filepath"
-        echo "Executable permission added to $filepath"
+    # Create the venv
+    if [ ! -d "../.venv" ]; then
+        python3 -m venv ../.venv
+        printf "\e[1;32m[+] Virtual environment created.\e[0m\n"
     else
-        echo "Warning: $file not found. Skipping chmod."
+        printf "\e[1;33m[+] Virtual environment already exists.\e[0m\n"
     fi
-done
 
-echo "-------------------------------------------------------"
-echo "                     SECURITY                          "
-echo "-------------------------------------------------------"
+    # Activate the venv and pip
+    source ../.venv/bin/activate
+    pip install --upgrade pip
+    if [ -f "requirements.txt" ]; then
+        pip install -r requirements.txt
+        printf "\e[1;32m[+] Python packages installed from requirements.txt.\e[0m\n"
+    else
+        printf "\e[1;33m[+] No requirements.txt found. Skipping Python package installation.\e[0m\n"
+    fi
+    deactivate
+}
 
-#plceholder for UFW or iptables
+# Check dependencies
+pkgdeps=(
+    gawk
+    mariadb-common
+    mysql-common
+    policycoreutils
+    python-matplotlib-data
+    unixodbc-common
+    gawk-doc
+)
 
-echo "-------------------------------------------------------"
-echo "                      THE PURGE                        "
-echo "-------------------------------------------------------"
+check_pkgdeps() {
+    for pkg in "${pkgdeps[@]}"; do
+        if ! dpkg -l | grep -q "^ii  $pkg "; then
+            echo "Installing missing package: $pkg"
+            sudo apt install -y "$pkg"
+        else
+            echo "Package $pkg is already installed."
+        fi
+    done
+}
 
-echo "[+] Checking for unnecessary packages to remove..."
-if sudo apt autoremove --dry-run | grep -q "The following packages will be REMOVED"; then
-    echo "[!] The following packages will be removed:"
-    sudo apt autoremove --dry-run | grep "The following packages will be REMOVED" -A 10
-    echo "[+] Proceeding with autoremove..."
-    sudo apt autoremove -y
-else
-    echo "[+] No unnecessary packages to remove."
-fi
+# Offer to resolve unmet dependencies
+offer_to_resolve_issues() {
+    local deps_to_resolve="$1"
+    echo "Dependencies to resolve:"
+    echo "$deps_to_resolve"
+    echo
+    read -p "Do you want to resolve these dependencies? (y/n): " answer
+    if [[ $answer =~ ^[Yy]$ ]]; then
+        echo "$deps_to_resolve" | sed -E 's/<[^>]*>//g' | tr -s ' ' > dependencies_to_resolve.txt
+        echo "List of dependencies to resolve saved in dependencies_to_resolve.txt"
+        echo "Attempting to resolve dependencies..."
+        sudo apt install -f -y
+    elif [[ $answer =~ ^[Nn]$ ]]; then
+        echo "No action taken."
+    else
+        echo "Invalid input. Please enter 'y' or 'n'."
+    fi
+}
 
-echo "[+] Cleaning up package cache..."
-sudo apt autoclean -y
-sudo apt clean -y
+# SELinux
+install_selinux() {
+    printf "\e[1;31m[+] Installing and configuring SELinux...\e[0m\n"
+    sudo apt install -y selinux-utils selinux-basics policycoreutils policycoreutils-python-utils selinux-policy-default
+    if command -v getenforce &> /dev/null; then
+        if [[ "$(getenforce)" != "Enforcing" ]]; then
+            setenforce 1 || printf "\e[1;31m[-] Could not set SELinux to enforcing mode immediately\e[0m\n"
+        fi
+        sed -i 's/SELINUX=disabled/SELINUX=enforcing/' /etc/selinux/config
+        sed -i 's/SELINUX=permissive/SELINUX=enforcing/' /etc/selinux/config
+    else
+        printf "\e[1;31m[-] SELinux is not supported on this system.\e[0m\n"
+    fi
+}
 
+# Main function
+main() {
+    update_system_packages
+    # setup_python_venv
+    check_pkgdeps
+    install_selinux
+    echo "======================================================="
+    echo "             [+] HARDN - Setup Complete                "
+    echo "  [+] Please reboot your system to apply changes       "
+    echo "======================================================="
+}
 
-echo "[+] Ensuring debsums is installed..."
-if ! dpkg -l | grep -q debsums; then
-	apt install -y debsums
-fi
-
-echo "[+] Running Debsums..."
-debsums -a -s -c 2>&1 | tee /var/log/debsums.log
-
-echo "-------------------------------------------------------"
-echo "                          CRON                         "
-echo "-------------------------------------------------------"
-
-echo "[+] Checking for cron jobs..."
-if [ -f /etc/cron.deny ]; then
-    echo "[!] Removing /etc/cron.deny..."
-    rm /etc/cron.deny
-fi
-
-(crontab -l 2>/dev/null; echo "* * * * * /path/to/Setup.sh >> /var/log/setup.log 2>&1") | crontab -
-
-
-
-# build cron for updates and security checks
-echo "[+] Creating cron jobs..."
-echo "0 0 * * * root apt update && apt upgrade -y" > /etc/cron.d/hardn
-echo "0 0 * * * root lynis audit system" >> /etc/cron.d/hardn
-echo "0 0 * * * root debsums -s" >> /etc/cron.d/hardn
-echo "0 0 * * * root rkhunter --check" >> /etc/cron.d/hardn
-echo "0 0 * * * root clamscan -r /" >> /etc/cron.d/hardn
-echo "0 0 * * * root maldet -a /" >> /etc/cron.d/hardn
-echo "0 0 * * * root chkrootkit" >> /etc/cron.d/hardn
-echo "0 0 * * * root firejail --list" >> /etc/cron.d/hardn
-echo "0 0 * * * root harden" >> /etc/cron.d/hardn
-
-# Ensure cron jobs are set to run daily
-echo "[+] Setting cron jobs to run daily..."
-chmod 644 /etc/cron.d/hardn
-
-
-# print report of security findings on desktop
-echo "[+] Creating daily security report..."
-echo "lynis audit system" > /etc/cron.daily/hardn
-echo "debsums -s" >> /etc/cron.daily/hardn
-echo "rkhunter --check" >> /etc/cron.daily/hardn
-echo "clamscan -r /" >> /etc/cron.daily/hardn
-echo "maldet -a /" >> /etc/cron.daily/hardn
-echo "chkrootkit" >> /etc/cron.daily/hardn
-echo "firejail --list" >> /etc/cron.daily/hardn
-echo "harden" >> /etc/cron.daily/hardn
-
-# make sure report is password protected by root user
-echo "[+] Setting permissions on daily security report..."
-chmod 700 /etc/cron.daily/hardn
-
-
-echo "-------------------------------------------------------"
-echo "[+]               HARDN SETUP COMPLETE"
-echo "-------------------------------------------------------"
+# Run the main function
+main 

@@ -17,7 +17,7 @@ exec_command() {
 }
 
 # Install required APT packages
-# wil still install SELinux but not config at this time - Tim
+
 install_apt_dependencies() {
   apt_dependencies=(
     postfix aide tcpd chkrootkit rkhunter clamav clamav-daemon clamav-freshclam clamav-unofficial-sigs clamtk \
@@ -135,7 +135,7 @@ enable_aide() {
   #exec_command selinux-config-enforcing
 #}
 
-#configure_docker() {
+#configure_docker() { - Not needed at this time
   #echo "Configuring Docker..."
   #exec_command apt install -y docker.io
   #exec_command systemctl enable --now docker
