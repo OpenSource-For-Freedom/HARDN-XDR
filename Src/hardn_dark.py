@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 
-import logging
+# ---------------------------
+# ~~~~~~~~HARDN_DARK~~~~~~~~|
+# MAC swapping.             |
+# TOR routing.              |
+# Directory lockdown        |
+# SELinux & Grsecurity check|
+# ----------------------------
 import os
 import shutil
 import subprocess
+import logging
 from datetime import datetime
-
-
-# This script is the rough draft of the headless version
-
-# With this corrected import:
-from Src.hardn import exec_command
+import argparse
 
 LOG_FILE = "/var/log/hardn_dark.log"
 
@@ -36,8 +38,7 @@ def run_command(command, description="", test_mode=False):
         log(f"[-] ERROR: {description} failed: {e}")
 
 
-import shutil
-
+# BACKUP
 def backup_file(file_path, test_mode=False):
     """Backup a file before modification"""
     if os.path.isfile(file_path):
@@ -45,13 +46,9 @@ def backup_file(file_path, test_mode=False):
         if test_mode:
             log(f"[TEST MODE] Would create backup for {file_path} -> {backup_path}")
         else:
-            try:
-                subprocess.run(["sudo", "cp", "-p", file_path, backup_path], check=True)
-                log(f"[+] Backup created: {backup_path}")
-            except subprocess.CalledProcessError as e:
-                log(f"[-] ERROR: Failed to backup {file_path}: {e}")
-            except Exception as e:
-                log(f"[-] ERROR: Unexpected error when backing up {file_path}: {str(e)}")
+            # Use run_command with sudo to ensure proper permissions
+            run_command(f"sudo cp {file_path} {backup_path}", f"Backing up {file_path}", test_mode)
+            log(f"[+] Backup created: {backup_path}")
     else:
         log(f"[-] {file_path} does not exist. Skipping backup.")
 
@@ -73,11 +70,9 @@ def restore_backup(file_path, test_mode=False):
 def check_root():
     """Check if the script is run as root"""
     if os.geteuid() != 0:
-        print("[-] This script must be run as root.")
-        print("    Please run the script with sudo or as the root user.")
+        log("[-] This script must be run as root.")
         exit(1)
-    else:
-        print("[+] Script is running with root privileges.")
+
 
 def check_compatibility():
     """Check if the system is Debian-based"""
@@ -104,20 +99,16 @@ def disable_core_dumps(test_mode=False):
                 test_mode)
 
 
+# DIR LOCK
 def protect_critical_dirs(test_mode=False):
     """Apply strict security measures to system-critical directories"""
     log("[+] Hardening critical system directories...")
-
-    # Instead of making /sbin immutable, we'll change its permissions
-    run_command("sudo chmod 755 /sbin", "Set restrictive permissions on /sbin", test_mode)
-
+    run_command("sudo chattr -R +i /sbin", "Made /sbin immutable", test_mode)
     run_command("sudo chmod 700 /root", "Restricted /root to root-only", test_mode)
-
-    # Instead of making /etc immutable, we'll change its permissions
-    run_command("sudo chmod -R 755 /etc", "Set restrictive permissions on /etc", test_mode)
-
+    run_command("sudo chattr -R +i /etc", "Made /etc immutable", test_mode)
     run_command("sudo chattr -R +a /var/log", "Made /var/log append-only", test_mode)
     log("[+] Critical system directories locked down.")
+
 
 # KERNAL LOCK
 def enable_kernel_protection(test_mode=False):
@@ -137,15 +128,34 @@ def enable_kernel_protection(test_mode=False):
     log("[+] Kernel security hardened.")
 
 
-def check_selinux():
-    """Check SELinux status and disable if necessary"""
+def enable_selinux(test_mode=False):
+    """Ensure SELinux is enabled"""
+    log("[+] Checking SELinux status...")
+
+    # First check if SELinux utilities are installed
+    if not shutil.which("getenforce"):
+        log("[-] SELinux utilities not found. Attempting to install...")
+        try:
+            run_command("sudo apt update && sudo apt install -y selinux-utils selinux-basics",
+                        "Installing SELinux utilities", test_mode)
+            # Check again after installation attempt
+            if not shutil.which("getenforce"):
+                log("[-] Failed to install SELinux utilities. Skipping SELinux configuration.")
+                return
+        except Exception:
+            log("[-] Failed to install SELinux utilities. Skipping SELinux configuration.")
+            return
+
     try:
         result = subprocess.run(["getenforce"], capture_output=True, text=True, check=True)
-        if result.stdout.strip() == "Enforcing":
-            log("[!] SELinux is enforcing. Temporarily setting to permissive mode.")
-            subprocess.run(["sudo", "setenforce", "0"], check=True)
+        if result.stdout.strip() != "Enforcing":
+            run_command("sudo setenforce 1", "Enabled SELinux", test_mode)
+            run_command("sudo sed -i 's/SELINUX=permissive/SELINUX=enforcing/' /etc/selinux/config",
+                        "Configured SELinux at boot", test_mode)
+        log("[+] SELinux is enforcing.")
     except subprocess.CalledProcessError:
-        log("[!] Unable to check or modify SELinux status.")
+        log("[-] SELinux is installed but not properly configured.")
+
 
 def enable_grsecurity(test_mode=False):
     """Enable grsecurity (if installed)"""
@@ -217,10 +227,10 @@ def main():
     check_root()
     log("[+] Starting HARDN DARK - System Lockdown Initiated...")
     check_compatibility()
-    check_selinux()
     disable_core_dumps()
     protect_critical_dirs()
     enable_kernel_protection()
+    enable_selinux()
     enable_grsecurity()
     randomize_mac()
     force_tor_traffic()
