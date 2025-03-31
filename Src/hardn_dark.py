@@ -39,7 +39,8 @@ def run_command(command, description="", test_mode=False):
         log(f"[-] ERROR: {description} failed: {e}")
 
 
-# BACKUP
+import shutil
+
 def backup_file(file_path, test_mode=False):
     """Backup a file before modification"""
     if os.path.isfile(file_path):
@@ -47,9 +48,14 @@ def backup_file(file_path, test_mode=False):
         if test_mode:
             log(f"[TEST MODE] Would create backup for {file_path} -> {backup_path}")
         else:
-            # Use run_command with sudo to ensure proper permissions
-            run_command(f"sudo cp {file_path} {backup_path}", f"Backing up {file_path}", test_mode)
-            log(f"[+] Backup created: {backup_path}")
+            try:
+                # Use shutil.copy2 instead of cp command
+                shutil.copy2(file_path, backup_path)
+                log(f"[+] Backup created: {backup_path}")
+            except PermissionError:
+                log(f"[-] ERROR: Permission denied when backing up {file_path}. Are you running as root?")
+            except Exception as e:
+                log(f"[-] ERROR: Failed to backup {file_path}: {str(e)}")
     else:
         log(f"[-] {file_path} does not exist. Skipping backup.")
 
