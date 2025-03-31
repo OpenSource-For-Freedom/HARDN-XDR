@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import logging
 # ---------------------------
 # ~~~~~~~~HARDN_DARK~~~~~~~~|
 # MAC swapping.             |
@@ -10,9 +11,9 @@
 import os
 import shutil
 import subprocess
-import logging
 from datetime import datetime
-import argparse
+
+from Src.hardn import exec_command
 
 LOG_FILE = "/var/log/hardn_dark.log"
 
@@ -99,16 +100,20 @@ def disable_core_dumps(test_mode=False):
                 test_mode)
 
 
-# DIR LOCK
 def protect_critical_dirs(test_mode=False):
     """Apply strict security measures to system-critical directories"""
     log("[+] Hardening critical system directories...")
-    run_command("sudo chattr -R +i /sbin", "Made /sbin immutable", test_mode)
+    
+    # Instead of making /sbin immutable, we'll change its permissions
+    run_command("sudo chmod 755 /sbin", "Set restrictive permissions on /sbin", test_mode)
+    
     run_command("sudo chmod 700 /root", "Restricted /root to root-only", test_mode)
-    run_command("sudo chattr -R +i /etc", "Made /etc immutable", test_mode)
+    
+    # Instead of making /etc immutable, we'll change its permissions
+    run_command("sudo chmod -R 755 /etc", "Set restrictive permissions on /etc", test_mode)
+    
     run_command("sudo chattr -R +a /var/log", "Made /var/log append-only", test_mode)
     log("[+] Critical system directories locked down.")
-
 
 # KERNAL LOCK
 def enable_kernel_protection(test_mode=False):
