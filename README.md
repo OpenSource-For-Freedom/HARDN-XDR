@@ -41,8 +41,6 @@
 - Firejail,Sandboxing tool for application isolation.
 - Cron, to keep it all updates maintenanced**
 - Pex*, used for GRUB password hash automation 
-- *Will be adding pass and*
-- *GPG*
 
 1. **Secure the System** – Applies firewall rules, intrusion detection, malware protection, and access control automatically.  
 2. **Monitor & Defend** – Soon to use heuristic analysis, security audits, and automated updates to **stay ahead of threats**.  (`Legion`)
@@ -54,57 +52,29 @@
 > We are also working on server and container compatibility.
 ---
 
+## **Getting Started**  
 
-## **Getting Started**
-
-__Python3 should already be installed on Debian__
-
-###  Clone the Repository
+### Clone the Repository**  
 ```bash
 git clone https://github.com/opensource-for-freedom/HARDN.git
-cd HARDN
+cd hardn
 ```
+### Youll need Python 3 
 
-
-### Install dependencies & prep 
 ```bash
-
-cd Setup
-
-chmod +x setup.sh
-
+sudo apt update && sudo apt install -y python3 python3-pip
+pip install -r requirements.txt
+```
+### Install setup file
+```bash
 sudo ./setup.sh
 ```
-
-### Install Python packages
-```bash
-# Then backup one directory and enter Src
-cd ..
-
-# Enter The Src directory, and install the Python pkgs
-cd Src
-
-# Optional step: Creating a virtual environment. This is for development purposes.
-# If skipping this, then proceed directly to system update.
-# Create it the virtual environment
-python3 -m venv env
-
-# Source it
-source env/bin/activate
-
-# Update your system and install python3 requirements
-sudo apt update && sudo apt install -y python3 python3-pip
-
-pip3 install -r requirements.txt
-```
-
-### Make executable & Run it
+### Run HARDN
 ```bash
 chmod +x ./hardn.py
 sudo ./hardn.py
+
 ```
-
-
 ## Check lynis output
 The GUI Will show you the current system Lynis score (under development)
 
@@ -121,8 +91,7 @@ The GUI Will show you the current system Lynis score (under development)
 - HARDN - Host: For headless, server, Virtualized deploymnets. 
 ---
 ## Contributing
-- Project Partner: 
-  ![Cyber Synapse](https://github.com/OpenSource-For-Freedom/HARDN/blob/Primary/Docs/cybersynapse.png)
+- Contact directly for access 
 ---
 
 ## License
