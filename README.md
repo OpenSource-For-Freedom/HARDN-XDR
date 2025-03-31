@@ -91,8 +91,8 @@ The GUI Will show you the current system Lynis score (under development)
 - HARDN - Host: For headless, server, Virtualized deploymnets. 
 ---
 ## Contributing
-- Managing Partner: ![Cyber Synapse](https://cybersynapse.ro/)
-- Contact directly for access 
+- Project Partner: ![Cyber Synapse](https://cybersynapse.ro/)
+  ![Cyber Synapse](https://github.com/OpenSource-For-Freedom/HARDN/blob/Primary/Docs/cybersynapse.png)
 ---
 
 ## License
