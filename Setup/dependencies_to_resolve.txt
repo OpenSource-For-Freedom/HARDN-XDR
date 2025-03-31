@@ -1,0 +1,10 @@
+Depends:mysql-common
+Depends:lsb-base
+Depends:selinux-utils
+Depends:libaudit1
+Depends:libc6
+Depends:libselinux1
+Depends:libsemanage2
+Depends:libsepol2
+Depends:fonts-dejavu-core
+Depends:fonts-lyx

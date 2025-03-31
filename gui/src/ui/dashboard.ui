@@ -1,0 +1,836 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Dashboard</class>
+ <widget class="QWidget" name="Dashboard">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>950</width>
+    <height>700</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Dashboard</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">background-color: #000000;</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <property name="leftMargin">
+    <number>20</number>
+   </property>
+   <property name="topMargin">
+    <number>20</number>
+   </property>
+   <property name="rightMargin">
+    <number>20</number>
+   </property>
+   <property name="bottomMargin">
+    <number>20</number>
+   </property>
+   <item>
+    <widget class="QLabel" name="label_dashboardTitle">
+     <property name="font">
+      <font>
+       <pointsize>14</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">color: #00ff00;
+background-color: transparent;
+font-size: 20px;
+margin-bottom: 10px;</string>
+     </property>
+     <property name="text">
+      <string>SYSTEM DASHBOARD</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="label_lastUpdated">
+     <property name="styleSheet">
+      <string notr="true">color: #00cc00;
+background-color: transparent;
+font-size: 12px;
+margin-bottom: 15px;</string>
+     </property>
+     <property name="text">
+      <string>Last updated: 23:59:59</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout">
+     <property name="spacing">
+      <number>20</number>
+     </property>
+     <item>
+      <widget class="QWidget" name="widget_securityOverview" native="true">
+       <property name="minimumSize">
+        <size>
+         <width>300</width>
+         <height>200</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">background-color: #0a0a0a;
+border: 1px solid #00ff00;
+border-radius: 5px;</string>
+       </property>
+       <layout class="QVBoxLayout" name="verticalLayout_2">
+        <item>
+         <widget class="QLabel" name="label_uptime">
+          <property name="styleSheet">
+           <string notr="true">color: #00ff00;
+font-size: 12px;
+border: none;
+margin-top: 5px;</string>
+          </property>
+          <property name="text">
+           <string>UPTIME: 14 DAYS 7 HOURS</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignCenter</set>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QWidget" name="widget_matrixRain" native="true">
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>180</height>
+      </size>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">background-color: #0a0a0a;
+border: 1px solid #00ff00;
+border-radius: 5px;</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_6">
+      <item>
+       <widget class="QLabel" name="label_matrixRainTitle">
+        <property name="styleSheet">
+         <string notr="true">color: #00ff00;
+font-size: 16px;
+border: none;
+font-weight: bold;</string>
+        </property>
+        <property name="text">
+         <string>System Activity</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="label_matrixRainPlaceholder">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>120</height>
+         </size>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">color: #00ff00;
+font-family: monospace;
+font-size: 12px;
+background-color: #000000;
+border: 1px solid #007700;</string>
+        </property>
+        <property name="text">
+         <string>0100101001010110101001010 SYSTEM ACTIVE 10010101010101010101010
+1101010101010 MONITORING KERNEL PROCESSES 01010101010101101
+0101010 HEURISTIC ANALYSIS RUNNING 10101010101010101010101
+1010101010101 [Connections: 23] [Port Scan: NONE] 0101010101</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_2">
+     <property name="spacing">
+      <number>20</number>
+     </property>
+     <item>
+      <widget class="QWidget" name="widget_recentActivity" native="true">
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>200</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">background-color: #0a0a0a;
+border: 1px solid #00ff00;
+border-radius: 5px;</string>
+       </property>
+       <layout class="QVBoxLayout" name="verticalLayout_7">
+        <item>
+         <widget class="QLabel" name="label_recentActivityTitle">
+          <property name="styleSheet">
+           <string notr="true">color: #00ff00;
+font-size: 16px;
+border: none;
+font-weight: bold;</string>
+          </property>
+          <property name="text">
+           <string>Recent Activity</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QListWidget" name="listWidget_recentActivity">
+          <property name="styleSheet">
+           <string notr="true">QListWidget {
+    background-color: #050505;
+    color: #00ff00;
+    border: 1px solid #007700;
+    font-family: monospace;
+    font-size: 11px;
+}
+
+QListWidget::item {
+    padding: 5px;
+    border-bottom: 1px solid #004400;
+}
+
+QListWidget::item:selected {
+    background-color: #002200;
+}
+
+QScrollBar:vertical {
+    border: 1px solid #005500;
+    background: #000000;
+    width: 10px;
+    margin: 0px 0px 0px 0px;
+}
+
+QScrollBar::handle:vertical {
+    background: #00aa00;
+    min-height: 20px;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}</string>
+          </property>
+          <item>
+           <property name="text">
+            <string>[23:45:12] Security scan completed - No threats detected</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>[23:30:05] Blocked connection attempt from 192.168.1.254:7895</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>[23:15:33] System update check completed - System up to date</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>[22:45:21] Malicious script blocked - Source: web_download.js</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>[22:30:07] User authentication successful - Admin</string>
+           </property>
+          </item>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item>
+      <widget class="QWidget" name="widget_quickActions" native="true">
+       <property name="minimumSize">
+        <size>
+         <width>300</width>
+         <height>200</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>300</width>
+         <height>16777215</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">background-color: #0a0a0a;
+border: 1px solid #00ff00;
+border-radius: 5px;</string>
+       </property>
+       <layout class="QVBoxLayout" name="verticalLayout_8">
+        <item>
+         <widget class="QLabel" name="label_quickActionsTitle">
+          <property name="styleSheet">
+           <string notr="true">color: #00ff00;
+font-size: 16px;
+border: none;
+font-weight: bold;</string>
+          </property>
+          <property name="text">
+           <string>Quick Actions</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pushButton_scanSystem">
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>40</height>
+           </size>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">QPushButton {
+    color: #00ff00;
+    background-color: #0e0e0e;
+    border: 1px solid #00ff00;
+    border-radius: 3px;
+    font-size: 12px;
+}
+QPushButton:hover {
+    background-color: #0d260d;
+}
+QPushButton:pressed {
+    background-color: #105510;
+}</string>
+          </property>
+          <property name="text">
+           <string>SCAN SYSTEM</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pushButton_checkUpdates">
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>40</height>
+           </size>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">QPushButton {
+    color: #00ff00;
+    background-color: #0e0e0e;
+    border: 1px solid #00ff00;
+    border-radius: 3px;
+    font-size: 12px;
+}
+QPushButton:hover {
+    background-color: #0d260d;
+}
+QPushButton:pressed {
+    background-color: #105510;
+}</string>
+          </property>
+          <property name="text">
+           <string>CHECK FOR UPDATES</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pushButton_networkScan">
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>40</height>
+           </size>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">QPushButton {
+    color: #00ff00;
+    background-color: #0e0e0e;
+    border: 1px solid #00ff00;
+    border-radius: 3px;
+    font-size: 12px;
+}
+QPushButton:hover {
+    background-color: #0d260d;
+}
+QPushButton:pressed {
+    background-color: #105510;
+}</string>
+          </property>
+          <property name="text">
+           <string>SCAN NETWORK</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pushButton_generateReport">
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>40</height>
+           </size>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">QPushButton {
+    color: #00ff00;
+    background-color: #0e0e0e;
+    border: 1px solid #00ff00;
+    border-radius: 3px;
+    font-size: 12px;
+}
+QPushButton:hover {
+    background-color: #0d260d;
+}
+QPushButton:pressed {
+    background-color: #105510;
+}</string>
+          </property>
+          <property name="text">
+           <string>GENERATE REPORT</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui> class="QLabel" name="label_securityOverviewTitle">
+          <property name="styleSheet">
+           <string notr="true">color: #00ff00;
+font-size: 16px;
+border: none;
+font-weight: bold;</string>
+          </property>
+          <property name="text">
+           <string>Security Overview</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="label_securityScore">
+          <property name="styleSheet">
+           <string notr="true">color: #00ff00;
+font-size: 36px;
+font-weight: bold;
+border: none;</string>
+          </property>
+          <property name="text">
+           <string>93%</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignCenter</set>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QProgressBar" name="progressBar_security">
+          <property name="value">
+           <number>93</number>
+          </property>
+          <property name="textVisible">
+           <bool>false</bool>
+          </property>
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">QProgressBar {
+    border: 1px solid #00aa00;
+    border-radius: 2px;
+    background-color: #050505;
+    text-align: center;
+}
+
+QProgressBar::chunk {
+    background-color: #00ff00;
+}</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="label_securityStatus">
+          <property name="styleSheet">
+           <string notr="true">color: #00ff00;
+font-size: 14px;
+border: none;</string>
+          </property>
+          <property name="text">
+           <string>Status: PROTECTED</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignCenter</set>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item>
+      <widget class="QWidget" name="widget_threatCount" native="true">
+       <property name="minimumSize">
+        <size>
+         <width>300</width>
+         <height>200</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">background-color: #0a0a0a;
+border: 1px solid #00ff00;
+border-radius: 5px;</string>
+       </property>
+       <layout class="QVBoxLayout" name="verticalLayout_3">
+        <item>
+         <widget class="QLabel" name="label_threatCountTitle">
+          <property name="styleSheet">
+           <string notr="true">color: #00ff00;
+font-size: 16px;
+border: none;
+font-weight: bold;</string>
+          </property>
+          <property name="text">
+           <string>Threat Detection</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_3">
+          <item>
+           <widget class="QLabel" name="label_threatsBlockedIcon">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>40</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>40</width>
+              <height>40</height>
+             </size>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">color: #00ff00;
+border: none;</string>
+            </property>
+            <property name="text">
+             <string>⚠</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <layout class="QVBoxLayout" name="verticalLayout_4">
+            <item>
+             <widget class="QLabel" name="label_threatsBlocked">
+              <property name="styleSheet">
+               <string notr="true">color: #00ff00;
+font-size: 22px;
+font-weight: bold;
+border: none;</string>
+              </property>
+              <property name="text">
+               <string>152</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="label_threatsBlockedText">
+              <property name="styleSheet">
+               <string notr="true">color: #00ff00;
+font-size: 12px;
+border: none;</string>
+              </property>
+              <property name="text">
+               <string>Threats Blocked Today</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_6">
+          <item>
+           <widget class="QLabel" name="label_ramTitle">
+            <property name="styleSheet">
+             <string notr="true">color: #00ff00;
+font-size: 12px;
+border: none;</string>
+            </property>
+            <property name="text">
+             <string>RAM</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QProgressBar" name="progressBar_ram">
+            <property name="value">
+             <number>45</number>
+            </property>
+            <property name="textVisible">
+             <bool>false</bool>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">QProgressBar {
+    border: 1px solid #00aa00;
+    border-radius: 2px;
+    background-color: #050505;
+}
+
+QProgressBar::chunk {
+    background-color: #00ff00;
+}</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="label_ramValue">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">color: #00ff00;
+font-size: 12px;
+border: none;</string>
+            </property>
+            <property name="text">
+             <string>45%</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_7">
+          <item>
+           <widget class="QLabel" name="label_diskTitle">
+            <property name="styleSheet">
+             <string notr="true">color: #00ff00;
+font-size: 12px;
+border: none;</string>
+            </property>
+            <property name="text">
+             <string>DISK</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QProgressBar" name="progressBar_disk">
+            <property name="value">
+             <number>62</number>
+            </property>
+            <property name="textVisible">
+             <bool>false</bool>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">QProgressBar {
+    border: 1px solid #00aa00;
+    border-radius: 2px;
+    background-color: #050505;
+}
+
+QProgressBar::chunk {
+    background-color: #00ff00;
+}</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="label_diskValue">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">color: #00ff00;
+font-size: 12px;
+border: none;</string>
+            </property>
+            <property name="text">
+             <string>62%</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="Line" name="line">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">color: #007700;</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_4">
+          <item>
+           <widget class="QLabel" name="label_highSeverity">
+            <property name="styleSheet">
+             <string notr="true">color: #ff0000;
+font-size: 12px;
+border: none;</string>
+            </property>
+            <property name="text">
+             <string>HIGH: 12</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="label_mediumSeverity">
+            <property name="styleSheet">
+             <string notr="true">color: #ffaa00;
+font-size: 12px;
+border: none;</string>
+            </property>
+            <property name="text">
+             <string>MEDIUM: 47</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="label_lowSeverity">
+            <property name="styleSheet">
+             <string notr="true">color: #00ff00;
+font-size: 12px;
+border: none;</string>
+            </property>
+            <property name="text">
+             <string>LOW: 93</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item>
+      <widget class="QWidget" name="widget_systemResources" native="true">
+       <property name="minimumSize">
+        <size>
+         <width>300</width>
+         <height>200</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">background-color: #0a0a0a;
+border: 1px solid #00ff00;
+border-radius: 5px;</string>
+       </property>
+       <layout class="QVBoxLayout" name="verticalLayout_5">
+        <item>
+         <widget class="QLabel" name="label_systemResourcesTitle">
+          <property name="styleSheet">
+           <string notr="true">color: #00ff00;
+font-size: 16px;
+border: none;
+font-weight: bold;</string>
+          </property>
+          <property name="text">
+           <string>System Resources</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_5">
+          <item>
+           <widget class="QLabel" name="label_cpuTitle">
+            <property name="styleSheet">
+             <string notr="true">color: #00ff00;
+font-size: 12px;
+border: none;</string>
+            </property>
+            <property name="text">
+             <string>CPU</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QProgressBar" name="progressBar_cpu">
+            <property name="value">
+             <number>32</number>
+            </property>
+            <property name="textVisible">
+             <bool>false</bool>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">QProgressBar {
+    border: 1px solid #00aa00;
+    border-radius: 2px;
+    background-color: #050505;
+}
+
+QProgressBar::chunk {
+    background-color: #00ff00;
+}</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="label_cpuValue">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">color: #00ff00;
+font-size: 12px;
+border: none;</string>
+            </property>
+            <property name="text">
+             <string>32%</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+            </property>
+           </widget>
+          </item>

@@ -107,3 +107,78 @@ sudo ./setup.sh
 ## License
 
 - GPL License
+<<<<<<< Updated upstream
+=======
+
+# HARDN Security Interface
+
+A Matrix-inspired security monitoring interface built with PyQt5.
+
+## Features
+
+- Matrix-style digital rain animation
+- Threat monitoring dashboard
+- Network security monitoring
+- System status indicators
+- Real-time metrics and alerts
+- Terminal console for direct commands
+- Configurable security settings
+
+## Installation
+
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/hardn-security.git
+cd hardn-security
+```
+
+2. Create a virtual environment (recommended):
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+3. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+## Usage
+
+To start the HARDN Security Interface:
+
+```bash
+python -m gui.main
+```
+
+For development and testing:
+
+```bash
+# Run tests
+pytest
+
+# Run with debug mode
+python -m gui.main --debug
+```
+
+## Structure
+
+- `gui/`: Main application package
+  - `src/`: Source code
+    - `widgets/`: Reusable UI components
+    - `views/`: Main application views
+  - `main.py`: Application launcher
+  - `app.py`: Application entry point
+
+## Screenshots
+
+[Screenshots will be added here]
+
+## License
+
+[Add your license information here]
+
+
+
+
+>>>>>>> Stashed changes
