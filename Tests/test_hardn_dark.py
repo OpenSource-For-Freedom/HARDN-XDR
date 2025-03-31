@@ -5,7 +5,7 @@ import unittest
 import sys
 import os
 import subprocess
-import hardn_dark
+from Src import hardn_dark
 
 # Add
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
