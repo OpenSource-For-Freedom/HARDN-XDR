@@ -1,23 +1,10 @@
-         ██░ ██  ▄▄▄       ██▀███  ▓█████▄  ███▄    █ 
-        ▓██░ ██▒▒████▄    ▓██ ▒ ██▒▒██▀ ██▌ ██ ▀█   █ 
-        ▒██▀▀██░▒██  ▀█▄  ▓██ ░▄█ ▒░██   █▌▓██  ▀█ ██▒
-        ░▓█ ░██ ░██▄▄▄▄██ ▒██▀▀█▄  ░▓█▄   ▌▓██▒  ▐▌██▒
-        ░▓█▒░██▓ ▓█   ▓██▒░██▓ ▒██▒░▒████▓ ▒██░   ▓██░
-         ▒ ░░▒░▒ ▒▒   ▓▒█░░ ▒▓ ░▒▓░ ▒▒▓  ▒ ░ ▒░   ▒ ▒ 
-         ▒ ░▒░ ░  ▒   ▒▒ ░  ░▒ ░ ▒░ ░ ▒  ▒ ░ ░░   ░ ▒░
-         ░  ░░ ░  ░   ▒     ░░   ░  ░ ░  ░    ░   ░ ░ 
-         ░  ░  ░      ░  ░   ░        ░             ░ 
-                            ░                 
-                    The Linux Security Project
-   
-===================== TESTING AND DEVELOPING ====================
+<p align="center">
+        <img src="https://github.com/OpenSource-For-Freedom/HARDN/blob/Primary/Docs/HARDN.png" alt="HARDN Logo" />
+</p>
+ The Linux Security Project        ===================== TESTING AND DEVELOPING ====================
 
-# HARDN
 
-## NEW UPDATE: pip install has been implimented to replace APT package install. 
----
-
-A single UX based **Debian** tool to fully secure an OS using  automation, monitoring, heuristics and availability.
+***A single UX based **Debian** tool to fully secure an OS using  automation, monitoring, heuristics and availability***
 ---
 # Table of Contents
 ## Table of Contents
@@ -87,10 +74,6 @@ sudo ./setup.sh
 chmod +x ./hardn.py
 sudo ./hardn.py
 
-#but if that doesn't run, then do the other one
-
-chmod +x ./hardn_dark.py
-sudo ./hardn_dark.py
 ```
 ## Check lynis output
 The GUI Will show you the current system Lynis score (under development)
