@@ -1,19 +1,12 @@
 #!/usr/bin/env python3
 
 import logging
-# ---------------------------
-# ~~~~~~~~HARDN_DARK~~~~~~~~|
-# MAC swapping.             |
-# TOR routing.              |
-# Directory lockdown        |
-# SELinux & Grsecurity check|
-# ----------------------------
 import os
 import shutil
 import subprocess
 from datetime import datetime
 
-from Src.hardn import exec_command
+#from src.hardn import exec_command  # Changed 'Src' to 'src'
 
 LOG_FILE = "/var/log/hardn_dark.log"
 
