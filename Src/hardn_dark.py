@@ -42,13 +42,12 @@ def backup_file(file_path, test_mode=False):
             log(f"[TEST MODE] Would create backup for {file_path} -> {backup_path}")
         else:
             try:
-                # Use shutil.copy2 instead of cp command
-                shutil.copy2(file_path, backup_path)
+                subprocess.run(["sudo", "cp", "-p", file_path, backup_path], check=True)
                 log(f"[+] Backup created: {backup_path}")
-            except PermissionError:
-                log(f"[-] ERROR: Permission denied when backing up {file_path}. Are you running as root?")
+            except subprocess.CalledProcessError as e:
+                log(f"[-] ERROR: Failed to backup {file_path}: {e}")
             except Exception as e:
-                log(f"[-] ERROR: Failed to backup {file_path}: {str(e)}")
+                log(f"[-] ERROR: Unexpected error when backing up {file_path}: {str(e)}")
     else:
         log(f"[-] {file_path} does not exist. Skipping backup.")
 
@@ -70,9 +69,11 @@ def restore_backup(file_path, test_mode=False):
 def check_root():
     """Check if the script is run as root"""
     if os.geteuid() != 0:
-        log("[-] This script must be run as root.")
+        print("[-] This script must be run as root.")
+        print("    Please run the script with sudo or as the root user.")
         exit(1)
-
+    else:
+        print("[+] Script is running with root privileges.")
 
 def check_compatibility():
     """Check if the system is Debian-based"""
@@ -132,34 +133,15 @@ def enable_kernel_protection(test_mode=False):
     log("[+] Kernel security hardened.")
 
 
-def enable_selinux(test_mode=False):
-    """Ensure SELinux is enabled"""
-    log("[+] Checking SELinux status...")
-
-    # First check if SELinux utilities are installed
-    if not shutil.which("getenforce"):
-        log("[-] SELinux utilities not found. Attempting to install...")
-        try:
-            run_command("sudo apt update && sudo apt install -y selinux-utils selinux-basics",
-                        "Installing SELinux utilities", test_mode)
-            # Check again after installation attempt
-            if not shutil.which("getenforce"):
-                log("[-] Failed to install SELinux utilities. Skipping SELinux configuration.")
-                return
-        except Exception:
-            log("[-] Failed to install SELinux utilities. Skipping SELinux configuration.")
-            return
-
+def check_selinux():
+    """Check SELinux status and disable if necessary"""
     try:
         result = subprocess.run(["getenforce"], capture_output=True, text=True, check=True)
-        if result.stdout.strip() != "Enforcing":
-            run_command("sudo setenforce 1", "Enabled SELinux", test_mode)
-            run_command("sudo sed -i 's/SELINUX=permissive/SELINUX=enforcing/' /etc/selinux/config",
-                        "Configured SELinux at boot", test_mode)
-        log("[+] SELinux is enforcing.")
+        if result.stdout.strip() == "Enforcing":
+            log("[!] SELinux is enforcing. Temporarily setting to permissive mode.")
+            subprocess.run(["sudo", "setenforce", "0"], check=True)
     except subprocess.CalledProcessError:
-        log("[-] SELinux is installed but not properly configured.")
-
+        log("[!] Unable to check or modify SELinux status.")
 
 def enable_grsecurity(test_mode=False):
     """Enable grsecurity (if installed)"""
@@ -231,10 +213,10 @@ def main():
     check_root()
     log("[+] Starting HARDN DARK - System Lockdown Initiated...")
     check_compatibility()
+    check_selinux()
     disable_core_dumps()
     protect_critical_dirs()
     enable_kernel_protection()
-    enable_selinux()
     enable_grsecurity()
     randomize_mac()
     force_tor_traffic()
