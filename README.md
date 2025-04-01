@@ -39,7 +39,7 @@
 - AppArmor,Mandatory Access Control (MAC) for enforcing policies.
 - LMD (MALDETECT),(Soon to be replaced by Legion) Open-source antivirus software.
 - Firejail,Sandboxing tool for application isolation.
-- Cron, to keep it all omaintenance**
+- Cron, to keep it all updates maintenanced**
 - Pex*, used for GRUB password hash automation 
 
 1. **Secure the System** – Applies firewall rules, intrusion detection, malware protection, and access control automatically.  
@@ -52,29 +52,57 @@
 > We are also working on server and container compatibility.
 ---
 
-## **Getting Started**  
 
-### Clone the Repository**  
+## **Getting Started**
+
+__Python3 should already be installed on Debian__
+
+###  Clone the Repository
 ```bash
 git clone https://github.com/opensource-for-freedom/HARDN.git
-cd hardn
+cd HARDN
 ```
-### Youll need Python 3 
 
+
+### Install dependencies & prep 
 ```bash
+
+cd Setup
+
+chmod +x Setup.sh
+
+sudo ./Setup.sh
+```
+
+### Install Python packages
+```bash
+# Then backup one directory and enter Src
+cd ..
+
+# Enter The Src directory, and install the Python pkgs
+cd Src
+
+# Optional step: Creating a virtual environment. This is for development purposes.
+# If skipping this, then proceed directly to system update.
+# Create it the virtual environment
+python3 -m venv env
+
+# Source it
+source env/bin/activate
+
+# Update your system and install python3 requirements
 sudo apt update && sudo apt install -y python3 python3-pip
-pip install -r requirements.txt
+
+pip3 install -r requirements.txt
 ```
-### Install setup file
-```bash
-sudo ./setup.sh
-```
-### Run HARDN
+
+### Make executable & Run it
 ```bash
 chmod +x ./hardn.py
 sudo ./hardn.py
-
 ```
+
+
 ## Check lynis output
 The GUI Will show you the current system Lynis score (under development)
 
@@ -85,10 +113,14 @@ The GUI Will show you the current system Lynis score (under development)
 - Integrating Wazuh SIEM – Expanding system-wide monitoring for better incident response.
 - Test and implement GRS, to help fully secure the Kernal. ( Cost associated )
 - Expanding container security – Locking down VMs and containers without affecting performance and allow ssh referal. 
-- Making it easier to use – Simplifying configurations for both end-users and professionals through smooth UX engagement. 
+- Making it easier to use – Simplifying configurations for both end-users and professionals through smooth UX engagement.
+- Headless option for Debian Enterprise needs
+- HARDN - Endpoint: For user based deployments
+- HARDN - Host: For headless, server, Virtualized deploymnets. 
 ---
 ## Contributing
-- Contact directly for access 
+- Project Partner: 
+  ![Cyber Synapse](https://github.com/OpenSource-For-Freedom/HARDN/blob/Primary/Docs/cybersynapse.png)
 ---
 
 ## License
