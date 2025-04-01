@@ -1,20 +1,10 @@
-         ██░ ██  ▄▄▄       ██▀███  ▓█████▄  ███▄    █ 
-        ▓██░ ██▒▒████▄    ▓██ ▒ ██▒▒██▀ ██▌ ██ ▀█   █ 
-        ▒██▀▀██░▒██  ▀█▄  ▓██ ░▄█ ▒░██   █▌▓██  ▀█ ██▒
-        ░▓█ ░██ ░██▄▄▄▄██ ▒██▀▀█▄  ░▓█▄   ▌▓██▒  ▐▌██▒
-        ░▓█▒░██▓ ▓█   ▓██▒░██▓ ▒██▒░▒████▓ ▒██░   ▓██░
-         ▒ ░░▒░▒ ▒▒   ▓▒█░░ ▒▓ ░▒▓░ ▒▒▓  ▒ ░ ▒░   ▒ ▒ 
-         ▒ ░▒░ ░  ▒   ▒▒ ░  ░▒ ░ ▒░ ░ ▒  ▒ ░ ░░   ░ ▒░
-         ░  ░░ ░  ░   ▒     ░░   ░  ░ ░  ░    ░   ░ ░ 
-         ░  ░  ░      ░  ░   ░        ░             ░ 
-                            ░                 
-                    The Linux Security Project
-   ==========•=••••••••• Development ••••••••=•==========
+<p align="center">
+        <img src="https://github.com/OpenSource-For-Freedom/HARDN/blob/Primary/Docs/HARDN.png" alt="HARDN Logo" />
+</p>
+ The Linux Security Project        ===================== TESTING AND DEVELOPING ====================
 
 
-# HARDN
----
-A single **Debian** tool to fully secure an OS using automation, monitoring, heuristics, and keeping availability high.
+***A single UX based **Debian** tool to fully secure an OS using  automation, monitoring, heuristics and availability***
 ---
 # Table of Contents
 ## Table of Contents
@@ -26,84 +16,117 @@ A single **Debian** tool to fully secure an OS using automation, monitoring, heu
 - [Contributing](#contributing)
 - [License](#license)
 ---
-# **Overview**  
+# **Overview and Reciept of Mission**  
 
-In the development of this repo, we aim to include all facets of **kernel hardening**, **penetration testing**, and **OS security** for Debian Linux systems, ensuring both security and stability.
+- Kernel Hardening – Fortifying the Linux kernel to block exploits, enforce strict access controls, and minimize attack surfaces.
 
-We will always take suggestions and mention how to keep Linux secure and productivity high. 
+- Penetration Testing – Proactively scanning and testing for vulnerabilities to find weaknesses before attackers do.
 
-This document outlines the pre-release activities that need to be completed before finalizing the project release.
+- Automation – Reducing manual security tasks with scripts and tools that streamline system protection and performance tuning.
 
-These tasks are designed to reinforce security, improve performance, and streamline user management.
-
-By following these guidelines, you will enhance system security, maintain stability, and optimize Debian-based systems for performance and resilience.
+- OS Security – Locking down vulnerabilities while ensuring stability, speed, and reliability for Debian systems
 
 ---
 
 ## Tools
 
-- Lynis, Security auditing tool for Unix-based systems.
-- Fail2Ban, Protects against brute-force attacks.
-- UFW, Easy-to-configure firewall utility.
-- Lynis Audit, to keep the base secure posture validated.
-- AppArmor, Mandatory Access Control (MAC) for enforcing policies.
-- LMD (Maldetect), (Soon to be replaced by Legion) Open-source antivirus software.
-- Firejail, Sandboxing tool for application isolation.
-- Cron, to keep it all automated.
-- SELinux, Security-Enhanced Linux for enforcing security policies.
+- Lynis,Security auditing tool for Unix-based systems.
+- Fail2Ban,Protects against brute-force attacks.
+- SELinux, a security feature in Linux that enforces strict access controls to protect the system from unauthorized actions, even by compromised or malicious processes.
+- UFW,Easy-to-configure firewall utility.
+- TCP wrappers, to bundle outbound/ inbound and predefined rules monitoring tool, host based. 
+- Lynis Audit- to keep the base secure posture validated, and priovide a systems score.
+- AppArmor,Mandatory Access Control (MAC) for enforcing policies.
+- LMD (MALDETECT),(Soon to be replaced by Legion) Open-source antivirus software.
+- Firejail,Sandboxing tool for application isolation.
+- Cron, to keep it all updates maintenanced**
+- Pex*, used for GRUB password hash automation 
 
----
-
-## How it works
-
-1. **HARDN the System** – Applies firewall rules, intrusion detection, malware protection, and access control automatically.  
-2. **Monitor & Defend** – Uses heuristic analysis, security audits, and automated updates to **stay ahead of threats**. (LEGION to come)
+1. **Secure the System** – Applies firewall rules, intrusion detection, malware protection, and access control automatically.  
+2. **Monitor & Defend** – Soon to use heuristic analysis, security audits, and automated updates to **stay ahead of threats**.  (`Legion`)
 3. **Stay Updated** – Built-in automation via `cron` ensures **constant updates and maintenance** without user intervention.  
 
-Once installed, **HARDN runs in the background**—keeping your system tight **without slowing you down**.
+**The Goal** - Once installed, **HARDN runs in the background**—keeping your system tight **without slowing you down**.
 
-We are working on a 'headless' option to remove the GUI, for server functionality. 
-
+> we are working on a 'headless' option to remove the gui, for server functionality. 
+> We are also working on server and container compatibility.
 ---
 
-## **Getting Started**  
 
-### Clone the Repository
+## **Getting Started**
+
+__Python3 should already be installed on Debian__
+
+###  Clone the Repository
 ```bash
 git clone https://github.com/opensource-for-freedom/HARDN.git
 cd HARDN
 ```
-### You'll need Python 3 
+
+
+### Install dependencies & prep 
 ```bash
-pip install -r requirements.txt
+
+cd Setup
+
+chmod +x Setup.sh
+
+sudo ./Setup.sh
 ```
-### Install HARDN system-wide
+
+### Install Python packages
 ```bash
-pip install -e .
+# Then backup one directory and enter Src
+cd ..
+
+# Enter The Src directory, and install the Python pkgs
+cd Src
+
+# Optional step: Creating a virtual environment. This is for development purposes.
+# If skipping this, then proceed directly to system update.
+# Create it the virtual environment
+python3 -m venv env
+
+# Source it
+source env/bin/activate
+
+# Update your system and install python3 requirements
+sudo apt update && sudo apt install -y python3 python3-pip
+
+pip3 install -r requirements.txt
 ```
-### Run HARDN
+
+### Make executable & Run it
 ```bash
-hardn
+chmod +x ./hardn.py
+sudo ./hardn.py
 ```
-## To update the system
-rerun
-```bash
-sudo ./setup.sh
-```
+
+
+## Check lynis output
+The GUI Will show you the current system Lynis score (under development)
+
 ---
 ## Goals
 - Replacing LMD with `Legion` – A dedicated malware scanner optimized for Linux.
+> [LEGION](https://github.com/opensource-for-freedom/LEGION.git)
 - Integrating Wazuh SIEM – Expanding system-wide monitoring for better incident response.
-- Expanding container security – Locking down VMs and containers without affecting performance.
-- Push the file in two ways : HEADLESS systems monirot and USER role based deployments for endoints. 
-- Making it easier to use – Simplifying configurations for both end-users and professionals.
-- Conforming to the full CIA module for both Security and Availability. 
+- Test and implement GRS, to help fully secure the Kernal. ( Cost associated )
+- Expanding container security – Locking down VMs and containers without affecting performance and allow ssh referal. 
+- Making it easier to use – Simplifying configurations for both end-users and professionals through smooth UX engagement.
+- Headless option for Debian Enterprise needs
+- HARDN - Endpoint: For user based deployments
+- HARDN - Host: For headless, server, Virtualized deploymnets. 
 ---
 ## Contributing
-- Please do 🙂
-- Contact directly for access 
+- Project Partner: 
+  ![Cyber Synapse](https://github.com/OpenSource-For-Freedom/HARDN/blob/Primary/Docs/cybersynapse.png)
 ---
 
 ## License
 
 - GPL License
+
+
+
+
