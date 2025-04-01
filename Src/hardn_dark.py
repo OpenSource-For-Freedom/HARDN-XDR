@@ -6,7 +6,8 @@ import shutil
 import subprocess
 from datetime import datetime
 
-#from src.hardn import exec_command  # Changed 'Src' to 'src'
+# With this corrected import:
+from Src.hardn import exec_command
 
 LOG_FILE = "/var/log/hardn_dark.log"
 
