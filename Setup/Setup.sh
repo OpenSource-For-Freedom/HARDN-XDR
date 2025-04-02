@@ -1,262 +1,221 @@
-#!/usr/bin/env bash
+#!/bin/bash
+########################################
+#            HARDN - Setup             #
+#  Please have repo cloned before hand #
+#       Installs + Pre-config          #
+#    Must have python-3 loaded already #
+#       Author: Tim "TANK" Burns       #
+########################################
+# Update and install dependencies
+# python3 and python3-pip installation moved to later in the script
 
-# ADDED PYTHON EVE FOR PIP INSTALL
-# Ensure the script is run as root
-# TODO add functionality to handle fixing unmet dependencies and --fix-broken install, and add the requirements.txt to this dir
+# Check if requirements.txt exists before attempting to install Python dependencies
+if [[ -f requirements.txt ]]; then
+    pip3 install -r requirements.txt
+else
+    echo "requirements.txt not found. Skipping Python dependencies installation."
+fi
+
+# Function to display scrolling text with color
+scroll_text() {
+    local text="$1"
+    local delay="${2:-0.1}"
+    local color="${3:-\e[0m}"  # Default to no color
+    echo -ne "${color}"  # Set the color
+    for ((i=0; i<${#text}; i++)); do
+        echo -ne "${text:$i:1}"
+        sleep "$delay"
+    done
+    echo -e "\e[0m"  # Reset the color
+}
+
+# BANNER - scrolling text
+clear
+scroll_text "=======================================================" 0.02 $'\e[33m'
+scroll_text "=======================================================" 0.02 $'\e[33m'
+scroll_text "          HARDN - Security Setup for Debian            " 0.02 $'\e[92m'
+scroll_text "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" 0.02 $'\e[33m'
+scroll_text "    WARNING: This script will make changes to your     " 0.02 $'\e[92m'
+scroll_text "    system. Please ensure you have a backup before     " 0.02 $'\e[92m'
+scroll_text "              running this script.                     " 0.02 $'\e[92m'
+scroll_text "=======================================================" 0.02 $'\e[33m'
+scroll_text "=======================================================" 0.02 $'\e[33m'
+scroll_text "                 HARDN - STARTING                      " 0.02 $'\e[92m'
+scroll_text "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" 0.02 $'\e[33m'
+scroll_text "  This script will install all required system packs   " 0.02 $'\e[92m'
+scroll_text "  and security tools for a hardened Debian system.     " 0.02 $'\e[92m'
+scroll_text "  Please ensure you have cloned the repo before hand.  " 0.02 $'\e[92m'
+scroll_text "=======================================================" 0.02 $'\e[33m'
+
+
+# ENSURE - the script is run as root
 if [[ $EUID -ne 0 ]]; then
    echo "This script must be run as root. Use: sudo ./Setup.sh"
    exit 1
 fi
 
+# INSTALL 
+cd "$(dirname "$0")"
+
 update_system_packages() {
-    printf "\e[1;31m[+] Updating system packages...\e[0m\n"
-    sudo apt update && apt upgrade -y
+    echo "[+] Updating system packages..."
+    apt update && apt upgrade -y && apt install -y python3 python3-tk
+}
+apt install -y ufw fail2ban apparmor apparmor-profiles apparmor-utils firejail tcpd lynis debsums rkhunter libpam-pwquality libvirt-daemon-system libvirt-clients qemu-kvm docker.io docker-compose openssh-server
+# Call the function to update system packages
+update_system_packages
+
+echo "[+] Installing required system dependencies..."
+apt install -y ufw fail2ban apparmor apparmor-profiles apparmor-utils firejail tcpd lynis debsums rkhunter libpam-pwquality libvirt-daemon-system libvirt-clients qemu-kvm docker.io docker-compose
+
+# Install pexpect using apt
+echo "[+] Installing pexpect using apt"
+apt install -y python3-pexpect
+
+scroll_text "=======================================================" 0.02
+# SYSTEM PACKS
+echo "[+] Installing all needed system dependencies..."
+# Already installed in the previous command
+    ufw fail2ban apparmor apparmor-profiles apparmor-utils firejail \
+    tcpd lynis debsums rkhunter libpam-pwquality \
+    libvirt-daemon-system libvirt-clients qemu-kvm \
+    docker.io docker-compose \
+    openssh-server
+
+# SECURITY 
+
+# UFW (update) 
+ufw allow out 53,80,443/tcp
+ufw allow out 53,123/udp
+ufw allow out 67,68/udp  # because static Ip's are 1993
+ufw allow out 67,68/udp       
+
+
+# UFW - reload 
+ufw allow out 67,68/udp  # Allow DHCP client traffic
+
+scroll_text "=======================================================" 0.02
+scroll_text "                                                       " 0.02
+scroll_text "               [+] Setting up Fail2Ban...              " 0.02
+scroll_text "                                                       " 0.02
+scroll_text "=======================================================" 0.02
+systemctl enable --now fail2ban
+
+scroll_text "=======================================================" 0.02
+scroll_text "                                                       " 0.02
+scroll_text "               [+] Setting up AppArmor...              " 0.02
+scroll_text "                                                       " 0.02
+scroll_text "=======================================================" 0.02
+systemctl enable --now apparmor
+
+# remove eset32
+# eset32 didnt work
+if [[ -f /etc/apt/sources.list.d/ubuntu-eset-ppa.list ]]; then
+    sudo rm /etc/apt/sources.list.d/ubuntu-eset-ppa.list
+fi
+# sudo apt-get update (already performed earlier)
+
+scroll_text "=======================================================" 0.02
+scroll_text "                                                       " 0.02
+scroll_text "               [+] Installing chkrootkit...            " 0.02
+scroll_text "                                                       " 0.02
+scroll_text "=======================================================" 0.02
+# ADD CHROOTKIT
+sudo apt-get install -y chkrootkit
+
+scroll_text "=======================================================" 0.02
+scroll_text "                                                       " 0.02
+scroll_text "               [+] Installing LMD...                   " 0.02
+scroll_text "                                                       " 0.02
+scroll_text "=======================================================" 0.02
+# ADD lmd
+wget http://www.rfxn.com/downloads/maldetect-current.tar.gz
+tar -xzf maldetect-current.tar.gz
+cd maldetect-*
+sudo ./install.sh
+cd ..
+rm -rf maldetect-*
+rm maldetect-current.tar.gz
+
+
+scroll_text "=======================================================" 0.02
+scroll_text "                                                       " 0.02
+scroll_text "               [+] Installing rkhunter...              " 0.02
+scroll_text "                                                       " 0.02
+scroll_text "=======================================================" 0.02
+# Installing rkhunter
+apt install -y rkhunter
+rkhunter --update
+rkhunter --propupd
+
+scroll_text "=======================================================" 0.02
+scroll_text "                                                       " 0.02
+scroll_text "               [+] Reloading AppArmor...               " 0.02
+scroll_text "                                                       " 0.02
+scroll_text "=======================================================" 0.02
+# Reloading AppArmor 
+apparmor_parser -r /etc/apparmor.d/*
+
+scroll_text "=======================================================" 0.02
+scroll_text "                                                       " 0.02
+scroll_text "               [+] Configuring cron...                 " 0.02
+scroll_text "                                                       " 0.02
+scroll_text "=======================================================" 0.02
+
+# Configuring cron 
+remove_existing_cron_jobs() {
+    crontab -l 2>/dev/null | grep -v "lynis audit system --cronjob" \
+    | grep -v "apt update && apt upgrade -y" \
+    | grep -v "/opt/eset/esets/sbin/esets_update" \
+    | grep -v "chkrootkit" \
+    | grep -v "maldet --update" \
+    | grep -v "maldet --scan-all" \
+    | crontab -
 }
 
-# Check for package dependencies
-pkgdeps=(
-    gawk
-    mariadb-common
-    mysql-common
-    policycoreutils
-    python-matplotlib-data
-    unixodbc-common
-    gawk-doc
-)
-
-# Function to check package dependencies - Edits didnt have a verify credit for dep's
-check_pkgdeps() {
-    for pkg in "${pkgdeps[@]}"; do
-        if ! dpkg -l | grep -q "^ii  $pkg "; then
-            echo "Installing missing package: $pkg"
-            sudo apt install -y "$pkg"
-        else
-            echo "Package $pkg is already installed."
-        fi
-    done
-}
-
-# 
-# Function to offer resolving issues -  edit the offer_to _resolve + apt install -f -y to fix any broken installs
-offer_to_resolve_issues() {
-    local deps_to_resolve="$1"
-    echo "Dependencies to resolve:"
-    echo "$deps_to_resolve"
-    echo
-    read -p "Do you want to resolve these dependencies? (y/n): " answer
-    if [[ $answer =~ ^[Yy]$ ]]; then
-        # clean up
-        echo "$deps_to_resolve" | sed -E 's/<[^>]*>//g' | tr -s ' ' > dependencies_to_resolve.txt
-        echo "List of dependencies to resolve saved in dependencies_to_resolve.txt"
-        echo "Attempting to resolve dependencies..."
-        sudo apt install -f -y
-    elif [[ $answer =~ ^[Nn]$ ]]; then
-        echo "No action taken."
-    else
-        echo "Invalid input. Please enter 'y' or 'n'."
-    fi
-}
-
-# SELinux - made quitea few tweaks for Selinux to work on Debian, added check for selinux-utils and selinux-basics, and added check for getenforce command*
-
-install_selinux() {
-    printf "\e[1;31m[+] Installing and configuring SELinux...\e[0m\n"
-
-    # Check for Debian
-    if ! command -v apt &> /dev/null; then
-        printf "\e[1;31m[-] This script is designed for Debian-based systems. Exiting.\e[0m\n"
-        return 1
-    fi
-
-    # Install packages
-    printf "\e[1;31m[+] Installing SELinux packages...\e[0m\n"
-    sudo apt update
-    sudo apt install -y selinux-utils selinux-basics policycoreutils policycoreutils-python-utils selinux-policy-default
-
-    # Check if SELinux is supported
-    if ! command -v getenforce &> /dev/null; then
-        printf "\e[1;31m[-] SELinux is not supported on this system. Skipping SELinux configuration.\e[0m\n"
-        return 0
-    fi
-
-    # Verify 
-    if ! getenforce &> /dev/null; then
-        printf "\e[1;31m[-] SELinux installation failed. Please check system logs.\e[0m\n"
-        return 1
-    fi
-
-    # Enable 
-    if ! selinux-activate &> /dev/null; then
-        printf "\e[1;31m[+] Activating SELinux...\e[0m\n"
-        sudo selinux-activate || {
-            printf "\e[1;31m[-] Failed to activate SELinux. Please check system logs.\e[0m\n"
-            return 1
-        }
-    else
-        printf "\e[1;31m[+] SELinux is already activated.\e[0m\n"
-    fi
-
-    # Configure enforcing mode
-    if [[ "$(getenforce)" != "Enforcing" ]]; then
-        printf "\e[1;31m[+] Setting SELinux to enforcing mode...\e[0m\n"
-        setenforce 1 2>/dev/null || printf "\e[1;31m[-] Could not set SELinux to enforcing mode immediately\e[0m\n"
-    else
-        printf "\e[1;31m[+] SELinux is already in enforcing mode.\e[0m\n"
-    fi
-
-    # Configure at boot
-    if [ -f /etc/selinux/config ]; then
-        sed -i 's/SELINUX=disabled/SELINUX=enforcing/' /etc/selinux/config
-        sed -i 's/SELINUX=permissive/SELINUX=enforcing/' /etc/selinux/config
-        printf "\e[1;31m[+] SELinux configured to enforcing mode at boot\e[0m\n"
-    else
-        printf "\e[1;31m[-] SELinux config file not found\e[0m\n"
-    fi
-
-    printf "\e[1;31m[+] SELinux installation and configuration completed\e[0m\n"
-}
-# Install system security tools
-install_security_tools() {
-    printf "\e[1;31m[+] Installing required system security tools...\e[0m\n"
-    sudo apt install -y ufw fail2ban apparmor apparmor-profiles apparmor-utils firejail tcpd lynis debsums rkhunter libpam-pwquality libvirt-daemon-system libvirt-clients qemu-kvm docker.io docker-compose openssh-server
-}
-
-# UFW configuration
-configure_ufw() {
-    printf "\e[1;31m[+] Configuring UFW...\e[0m\n"
-    ufw allow out 53,80,443/tcp
-    ufw allow out 53,123/udp
-    ufw allow out 67,68/udp
-    ufw reload
-}
-
-# Enable and start Fail2Ban and AppArmor services
-enable_services() {
-    printf "\e[1;31m[+] Enabling and starting Fail2Ban and AppArmor services...\e[0m\n"
-    sudo systemctl enable --now fail2ban
-    sudo systemctl enable --now apparmor
-}
-
-# Install chkrootkit, LMD, and rkhunter
-install_additional_tools() {
-    printf "\e[1;31m[+] Installing chkrootkit, LMD, and rkhunter...\e[0m\n"
-    apt install -y chkrootkit
-    wget http://www.rfxn.com/downloads/maldetect-current.tar.gz
-    tar -xzf maldetect-current.tar.gz
-    cd maldetect-* || return
-    sudo ./install.sh
-    cd .. || return
-    rm -rf maldetect-*
-    rm maldetect-current.tar.gz
-    apt install -y rkhunter
-    rkhunter --update
-    rkhunter --propupd
-}
-
-# Reload AppArmor profiles
-reload_apparmor() {
-    printf "\e[1;31m[+] Reloading AppArmor profiles...\e[0m\n"
-    apparmor_parser -r /etc/apparmor.d/*
-}
-
-# Configure cron jobs
-configure_cron() {
-    printf "\e[1;31m[+] Configuring cron jobs...\e[0m\n"
-    remove_existing_cron_jobs() {
-        crontab -l 2>/dev/null | grep -v "lynis audit system --cronjob" \
-        | grep -v "apt update && apt upgrade -y" \
-        | grep -v "/opt/eset/esets/sbin/esets_update" \
-        | grep -v "chkrootkit" \
-        | grep -v "maldet --update" \
-        | grep -v "maldet --scan-all" \
-        | crontab -
-    }
-    remove_existing_cron_jobs
-crontab -l 2>/dev/null > mycron # set to append jobs if alraedy exist
+remove_existing_cron_jobs
+chmod 600 /var/log/lynis_cron.log
+crontab -l 2>/dev/null | grep -v "lynis audit system --cronjob" | grep -v "apt update && apt upgrade -y" | grep -v "/opt/eset/esets/sbin/esets_update" | grep -v "chkrootkit" | grep -v "maldet --update" | grep -v "maldet --scan-all" | crontab -
+crontab -l 2>/dev/null > mycron
 cat <<EOF >> mycron
 0 1 * * * lynis audit system --cronjob >> /var/log/lynis_cron.log 2>&1
+# 0 2 * * * apt update && apt upgrade -y (already performed earlier)
 0 3 * * * /opt/eset/esets/sbin/esets_update
 0 4 * * * chkrootkit
 0 5 * * * maldet --update
 0 6 * * * maldet --scan-all / >> /var/log/maldet_scan.log 2>&1
-EOF
-crontab mycron
-rm mycron
-}
+# Disabling USB 
+echo 'blacklist usb-storage' > /etc/modprobe.d/usb-storage.conf
+modprobe -r usb-storage && echo "[+] USB storage successfully disabled." || echo "[-] Warning: USB storage module in use, cannot unload."
+scroll_text "=======================================================" 0.02
+scroll_text "                                                       " 0.02
+scroll_text "               [+] Disabling USB...                    " 0.02
+scroll_text "                                                       " 0.02
+scroll_text "=======================================================" 0.02
 
-# Disable USB storage
-disable_usb_storage() {
-    printf "\e[1;31m[+] Disabling USB storage...\e[0m\n"
-    echo 'blacklist usb-storage' > /etc/modprobe.d/usb-storage.conf
-    modprobe -r usb-storage && printf "\e[1;31m[+] USB storage successfully disabled.\e[0m\n" || printf "\e[1;31m[-] Warning: USB storage module in use, cannot unload.\e[0m\n"
-}
+# Disabling USB 
+lsmod | grep usb_storage && echo "[-] Warning: USB storage is still active!" || echo "[+] USB storage successfully disabled."
+echo 'blacklist usb-storage' >> /etc/modprobe.d/usb-storage.conf
+modprobe -r usb-storage || echo "USB storage module in use, cannot unload."
 
-# Update system packages again
-update_sys_pkgs() {
-    printf "\e[1;31m[+] Updating system packages...\e[0m\n"
-    if ! sudo apt update && sudo apt upgrade -y; then
-        printf "\e[1;31m[-] System update failed.\e[0m\n"
-        exit 1
-    fi
-}
 
-# error handling
-error_handling() {
-    local error_code=$?
-    if [ $error_code -ne 0 ]; then
-        printf "\e[1;31m[-] An error occurred. Exiting with code: $error_code\e[0m\n"
-        exit $error_code
-    fi
-}
-trap error_handling EXIT # Call to exit
+scroll_text "=======================================================" 0.02
+scroll_text "                                                       " 0.02
+scroll_text "             HARDN - UPDATING SYSTEM PACKS             " 0.02
+scroll_text "                                                       " 0.02
+scroll_text "=======================================================" 0.02
 
-setup_complete() {
-    echo " "
-    echo "======================================================="
-    echo "             [+] HARDN - Setup Complete                "
-    echo "  [+] Please reboot your system to apply changes       "
-    echo "======================================================="
-    echo " "
-}
+# Update system
+update_system_packages || { echo "[-] System update failed."; exit 1; }
 
-# Main function
-main() {
-    update_system_packages
-    check_pkgdeps
+# Install grs (commented out because the package is not available)
+# Cannot get it with an updated kernal package and pay for it
+# apt install -y grs
 
-    # Main execution
-    deps_and_conflicts=$(check_pkgdeps)
-    echo "All dependencies and conflicts:"
-    echo "$deps_and_conflicts"
-    echo
-
-    # Extract only the lines prefixed with "Depends"
-    depends_only=$(echo "$deps_and_conflicts" | grep -E '^\s*Depends:')
-
-    if [ -n "$depends_only" ]; then
-        echo "Found dependencies:"
-        echo "$depends_only"
-        echo
-        read -p "Do you want to offer resolving these dependencies? (y/n): " offer_answer
-        if [[ $offer_answer =~ ^[Yy]$ ]]; then
-            offer_to_resolve_issues "$depends_only"
-            sudo apt install $depends_only -y
-        else
-            echo "Skipping dependency resolution."
-        fi
-    fi
-
-    install_selinux
-    install_security_tools
-    configure_ufw
-    enable_services
-    install_additional_tools
-    reload_apparmor
-    configure_cron
-    disable_usb_storage
-    update_sys_pkgs
-    setup_complete
-}
-
-# Run the main function
-main
+scroll_text "=======================================================" 0.02
+scroll_text "             [+] HARDN - Setup Complete                " 0.02
+scroll_text "  Please ensure to configure UFW, Fail2Ban, AppArmor   " 0.02
+scroll_text "        and other security tools as needed.            " 0.02
+scroll_text "-------------------------------------------------------" 0.02
+scroll_text "  [+] Please reboot your system to apply changes       " 0.02
+scroll_text "=======================================================" 0.02
