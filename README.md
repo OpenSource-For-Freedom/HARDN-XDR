@@ -16,8 +16,7 @@
 - [Contributing](#contributing)
 - [License](#license)
 ---
-# **Overview and Reciept of Mission**  
-
+# **Overview and Receipt of Mission**
 - Kernel Hardening – Fortifying the Linux kernel to block exploits, enforce strict access controls, and minimize attack surfaces.
 
 - Penetration Testing – Proactively scanning and testing for vulnerabilities to find weaknesses before attackers do.
