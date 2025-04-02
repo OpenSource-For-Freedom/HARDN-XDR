@@ -116,7 +116,7 @@ The GUI Will show you the current system Lynis score (under development)
 - Making it easier to use – Simplifying configurations for both end-users and professionals through smooth UX engagement.
 - Headless option for Debian Enterprise needs
 - HARDN - Endpoint: For user based deployments
-- HARDN - Host: For headless, server, Virtualized deploymnets. 
+- HARDN - Host: For headless, server, Virtualized deployments. 
 ---
 ## Contributing
 - Project Partner: 
