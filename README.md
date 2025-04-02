@@ -38,7 +38,7 @@
 - AppArmor,Mandatory Access Control (MAC) for enforcing policies.
 - LMD (MALDETECT),(Soon to be replaced by Legion) Open-source antivirus software.
 - Firejail,Sandboxing tool for application isolation.
-- Cron, to keep it all updates maintenanced**
+- Cron, to keep it all updates kept up-to-date
 - Pex*, used for GRUB password hash automation 
 
 1. **Secure the System** – Applies firewall rules, intrusion detection, malware protection, and access control automatically.  
