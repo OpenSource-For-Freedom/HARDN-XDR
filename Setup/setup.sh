@@ -111,40 +111,70 @@ install_additional_tools() {
 
     # Install Linux Malware Detect (LMD)
     printf "\033[1;31m[+] Installing Linux Malware Detect...\033[0m\n"
-    if ! command -v wget >/dev/null 2>&1; then
-        printf "\033[1;31m[-] wget not found, installing...\033[0m\n"
-        apt install -y wget
+
+    # Create a temporary directory for the installation
+    temp_dir=$(mktemp -d)
+    cd "$temp_dir" || {
+        printf "\033[1;31m[-] Failed to create temporary directory\033[0m\n"
+        install_maldet_failed=true
+    }
+
+    # Try to install from GitHub
+    if [ "$install_maldet_failed" != "true" ]; then
+        printf "\033[1;31m[+] Cloning Linux Malware Detect from GitHub...\033[0m\n"
+        if git clone https://github.com/rfxn/linux-malware-detect.git; then
+            cd linux-malware-detect || {
+                printf "\033[1;31m[-] Failed to change to maldetect directory\033[0m\n"
+                install_maldet_failed=true
+            }
+
+            if [ "$install_maldet_failed" != "true" ]; then
+                printf "\033[1;31m[+] Running maldetect installer...\033[0m\n"
+                chmod +x install.sh
+                if ./install.sh; then
+                    printf "\033[1;31m[+] Linux Malware Detect installed successfully from GitHub\033[0m\n"
+                    install_maldet_failed=false
+                else
+                    printf "\033[1;31m[-] Maldetect installer failed\033[0m\n"
+                    install_maldet_failed=true
+                fi
+            fi
+        else
+            printf "\033[1;31m[-] Failed to clone maldetect repository\033[0m\n"
+            install_maldet_failed=true
+        fi
     fi
 
-    if wget http://www.rfxn.com/downloads/maldetect-current.tar.gz; then
-        if tar -xzf maldetect-current.tar.gz; then
-            cd maldetect-* || {
-                printf "\033[1;31m[-] Failed to change to maldetect directory\033[0m\n"
-                return 1
-            }
-            ./install.sh
-            cd .. || return
-            rm -rf maldetect-*
-            rm maldetect-current.tar.gz
-            printf "\033[1;31m[+] Linux Malware Detect installed successfully\033[0m\n"
-        else
-            printf "\033[1;31m[-] Failed to extract maldetect archive\033[0m\n"
-        fi
-    else
-        printf "\033[1;31m[-] Failed to download maldetect. Trying alternative method...\033[0m\n"
-        # Try alternative installation using apt
+    # If GitHub method failed, try apt
+    if [ "$install_maldet_failed" = "true" ]; then
+        printf "\033[1;31m[+] Attempting to install maldetect via apt...\033[0m\n"
         if apt install -y maldetect; then
             printf "\033[1;31m[+] Maldetect installed via apt\033[0m\n"
             if command -v maldet >/dev/null 2>&1; then
                 maldet -u
                 printf "\033[1;31m[+] Maldetect updated successfully\033[0m\n"
+                install_maldet_failed=false
             fi
         else
-            printf "\033[1;31m[-] Failed to install maldetect. Please install manually.\033[0m\n"
+            printf "\033[1;31m[-] Apt installation failed\033[0m\n"
+            install_maldet_failed=true
         fi
     fi
 
+    # If both methods failed, provide manual instructions
+    if [ "$install_maldet_failed" = "true" ]; then
+        printf "\033[1;31m[-] All installation methods for maldetect failed.\033[0m\n"
+        printf "\033[1;31m[-] Please install manually after setup completes using one of these methods:\033[0m\n"
+        printf "\033[1;31m[-] 1. apt install maldetect\033[0m\n"
+        printf "\033[1;31m[-] 2. git clone https://github.com/rfxn/linux-malware-detect.git && cd linux-malware-detect && ./install.sh\033[0m\n"
+    fi
+
+    # Clean up and return to original directory
+    cd /tmp || true
+    rm -rf "$temp_dir"
+
     # Install rkhunter
+    printf "\033[1;31m[+] Installing rkhunter...\033[0m\n"
     apt install -y rkhunter
     rkhunter --update
     rkhunter --propupd
