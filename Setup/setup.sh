@@ -17,7 +17,7 @@ update_system_packages() {
 install_pkgdeps() {
     printf "\033[1;31m[+] Installing package dependencies...\033[0m\n"
     # List of packages to install
-    apt install -y gawk mariadb-common mysql-common policycoreutils \
+    apt install -y wget gawk mariadb-common mysql-common policycoreutils \
         python-matplotlib-data unixodbc-common gawk-doc
 }
 
