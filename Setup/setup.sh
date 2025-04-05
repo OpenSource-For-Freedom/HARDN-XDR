@@ -17,7 +17,7 @@ update_system_packages() {
 install_pkgdeps() {
     printf "\033[1;31m[+] Installing package dependencies...\033[0m\n"
     # List of packages to install
-    apt install -y wget gawk mariadb-common mysql-common policycoreutils \
+    apt install -y wget curl gawk mariadb-common mysql-common policycoreutils \
         python-matplotlib-data unixodbc-common gawk-doc
 }
 
@@ -108,13 +108,43 @@ enable_services() {
 install_additional_tools() {
     printf "\033[1;31m[+] Installing chkrootkit, LMD, and rkhunter...\033[0m\n"
     apt install -y chkrootkit
-    wget http://www.rfxn.com/downloads/maldetect-current.tar.gz
-    tar -xzf maldetect-current.tar.gz
-    cd maldetect-* || return
-    ./install.sh
-    cd .. || return
-    rm -rf maldetect-*
-    rm maldetect-current.tar.gz
+
+    # Install Linux Malware Detect (LMD)
+    printf "\033[1;31m[+] Installing Linux Malware Detect...\033[0m\n"
+    if ! command -v wget >/dev/null 2>&1; then
+        printf "\033[1;31m[-] wget not found, installing...\033[0m\n"
+        apt install -y wget
+    fi
+
+    if wget http://www.rfxn.com/downloads/maldetect-current.tar.gz; then
+        if tar -xzf maldetect-current.tar.gz; then
+            cd maldetect-* || {
+                printf "\033[1;31m[-] Failed to change to maldetect directory\033[0m\n"
+                return 1
+            }
+            ./install.sh
+            cd .. || return
+            rm -rf maldetect-*
+            rm maldetect-current.tar.gz
+            printf "\033[1;31m[+] Linux Malware Detect installed successfully\033[0m\n"
+        else
+            printf "\033[1;31m[-] Failed to extract maldetect archive\033[0m\n"
+        fi
+    else
+        printf "\033[1;31m[-] Failed to download maldetect. Trying alternative method...\033[0m\n"
+        # Try alternative installation using apt
+        if apt install -y maldetect; then
+            printf "\033[1;31m[+] Maldetect installed via apt\033[0m\n"
+            if command -v maldet >/dev/null 2>&1; then
+                maldet -u
+                printf "\033[1;31m[+] Maldetect updated successfully\033[0m\n"
+            fi
+        else
+            printf "\033[1;31m[-] Failed to install maldetect. Please install manually.\033[0m\n"
+        fi
+    fi
+
+    # Install rkhunter
     apt install -y rkhunter
     rkhunter --update
     rkhunter --propupd
