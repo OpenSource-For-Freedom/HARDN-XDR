@@ -17,7 +17,7 @@ update_system_packages() {
 install_pkgdeps() {
     printf "\033[1;31m[+] Installing package dependencies...\033[0m\n"
     # List of packages to install
-    apt install -y wget curl gawk mariadb-common mysql-common policycoreutils \
+    apt install -y wget curl git gawk mariadb-common mysql-common policycoreutils \
         python-matplotlib-data unixodbc-common gawk-doc
 }
 
@@ -183,7 +183,23 @@ install_additional_tools() {
 # Reload AppArmor profiles
 reload_apparmor() {
     printf "\033[1;31m[+] Reloading AppArmor profiles...\033[0m\n"
-    apparmor_parser -r /etc/apparmor.d/*
+
+    # Use systemd to reload AppArmor instead of manually parsing files
+    if systemctl is-active --quiet apparmor; then
+        printf "\033[1;31m[+] Reloading AppArmor service...\033[0m\n"
+        systemctl reload apparmor
+    else
+        printf "\033[1;31m[+] Starting AppArmor service...\033[0m\n"
+        systemctl start apparmor
+    fi
+
+    # Verify AppArmor status
+    if aa-status >/dev/null 2>&1; then
+        printf "\033[1;31m[+] AppArmor is running properly\033[0m\n"
+    else
+        printf "\033[1;31m[-] Warning: AppArmor may not be running correctly\033[0m\n"
+        printf "\033[1;31m[-] You may need to reboot your system\033[0m\n"
+    fi
 }
 
 # Configure cron jobs
