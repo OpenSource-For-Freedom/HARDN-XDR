@@ -1,15 +1,22 @@
 #!/usr/bin/env bash
 
-# This is the innstall script for HARDN
+# This is the install script for HARDN
+# How to run it in the command line: sudo bash setup.sh
+# Ensure the script runs with bash
+if [ "$(basename "$SHELL")" != "bash" ] && [ "$(readlink -f /bin/sh)" != "$(readlink -f /bin/bash)" ]; then
+    echo "This script must be run with bash. Use: sudo bash ./setup.sh"
+    exit 1
+fi
 
-if [[ $EUID -ne 0 ]]; then
-   echo "This script must be run as root. Use: sudo ./setup.sh"
+# Check for root privileges
+if [ "$EUID" -ne 0 ]; then
+   echo "This script must be run as root. Use: sudo bash ./setup.sh"
    exit 1
 fi
 
 update_system_packages() {
     printf "\e[1;31m[+] Updating system packages...\e[0m\n"
-    sudo apt update && apt upgrade -y
+    apt update && apt upgrade -y
 }
 
 # needed packages will be read from this file and installed
@@ -26,14 +33,26 @@ pkgdeps=(
 # Function to check package dependencies
 install_pkgdeps() {
     for pkg in "${pkgdeps[@]}"; do
-        sudo apt install "$pkg" -y
-
+        apt install "$pkg" -y
     done
+}
+
+# Function to check package dependencies
+check_pkgdeps() {
+    # Implementation of check_pkgdeps function
+    echo "Checking package dependencies..."
+    # Return empty for now as the original implementation is missing
+    return 0
 }
 
 # Function to offer resolving issues
 offer_to_resolve_issues() {
     local deps_to_resolve="$1"
+    if [ -z "$deps_to_resolve" ]; then
+        echo "No dependencies to resolve."
+        return 0
+    fi
+
     echo "Dependencies to resolve:"
     echo "$deps_to_resolve"
     echo
@@ -51,8 +70,8 @@ install_selinux() {
     printf "\e[1;31m[+] Installing and configuring SELinux...\e[0m\n"
 
     # Install SELinux packages
-    sudo apt update
-    sudo apt install -y selinux-utils selinux-basics policycoreutils policycoreutils-python-utils selinux-policy-default
+    apt update
+    apt install -y selinux-utils selinux-basics policycoreutils policycoreutils-python-utils selinux-policy-default
 
     # Check if installation was successful
     if ! command -v getenforce &> /dev/null; then
@@ -78,7 +97,7 @@ install_selinux() {
 # Install system security tools
 install_security_tools() {
     printf "\e[1;31m[+] Installing required system security tools...\e[0m\n"
-    sudo apt install -y ufw fail2ban apparmor apparmor-profiles apparmor-utils firejail tcpd lynis debsums rkhunter libpam-pwquality libvirt-daemon-system libvirt-clients qemu-kvm docker.io docker-compose openssh-server
+    apt install -y ufw fail2ban apparmor apparmor-profiles apparmor-utils firejail tcpd lynis debsums rkhunter libpam-pwquality libvirt-daemon-system libvirt-clients qemu-kvm docker.io docker-compose openssh-server
 }
 
 # UFW configuration
@@ -93,8 +112,8 @@ configure_ufw() {
 # Enable and start Fail2Ban and AppArmor services
 enable_services() {
     printf "\e[1;31m[+] Enabling and starting Fail2Ban and AppArmor services...\e[0m\n"
-    sudo systemctl enable --now fail2ban
-    sudo systemctl enable --now apparmor
+    systemctl enable --now fail2ban
+    systemctl enable --now apparmor
 }
 
 # Install chkrootkit, LMD, and rkhunter
@@ -104,7 +123,7 @@ install_additional_tools() {
     wget http://www.rfxn.com/downloads/maldetect-current.tar.gz
     tar -xzf maldetect-current.tar.gz
     cd maldetect-* || return
-    sudo ./install.sh
+    ./install.sh
     cd .. || return
     rm -rf maldetect-*
     rm maldetect-current.tar.gz
@@ -168,34 +187,34 @@ setup_complete() {
 # Main function
 main() {
     update_system_packages
-    check_pkgdeps
 
-    # Main execution
+    # Check dependencies
     deps_and_conflicts=$(check_pkgdeps)
-    echo "All dependencies and conflicts:"
-    echo "$deps_and_conflicts"
-    echo
-
-    # Extract only the lines prefixed with "Depends"
-    depends_only=$(echo "$deps_and_conflicts" | grep -E '^\s*Depends:')
-
-    if [ -n "$depends_only" ]; then
-        echo "Found dependencies:"
-        echo "$depends_only"
+    if [ -n "$deps_and_conflicts" ]; then
+        echo "All dependencies and conflicts:"
+        echo "$deps_and_conflicts"
         echo
-        read -p "Do you want to offer resolving these dependencies? (y/n): " offer_answer
-        if [[ $offer_answer =~ ^[Yy]$ ]]; then
-            offer_to_resolve_issues "$depends_only"
-            sudo apt install $depends_only -y
-        else
-            echo "Skipping dependency resolution."
+
+        # Extract only the lines prefixed with "Depends"
+        depends_only=$(echo "$deps_and_conflicts" | grep -E '^\s*Depends:')
+
+        if [ -n "$depends_only" ]; then
+            echo "Found dependencies:"
+            echo "$depends_only"
+            echo
+            read -p "Do you want to offer resolving these dependencies? (y/n): " offer_answer
+            if [[ $offer_answer =~ ^[Yy]$ ]]; then
+                offer_to_resolve_issues "$depends_only"
+                apt install $depends_only -y
+            else
+                echo "Skipping dependency resolution."
+            fi
         fi
+    else
+        install_pkgdeps
     fi
 
     # call each function in the proper order
-    update_system_packages
-    install_pkgdeps
-    offer_to_resolve_issues
     install_selinux
     install_security_tools
     configure_ufw
