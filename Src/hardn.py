@@ -10,7 +10,7 @@ from tkinter import ttk
 import pexpect
 
 # Add current to Python path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+#sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 def ensure_root():
     if os.geteuid() != 0:

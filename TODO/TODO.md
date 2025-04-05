@@ -6,6 +6,19 @@
 
 ## Create a wiki/trouble shooting guide
 
+<br>
+
+### . [ ]  Stash the current hard_dark.py
+
+### . [ ]  Make a headless version - terminal-based
+
+- Shell script it first, then python & rust it...and or 
+- C/C++ extension , or something???
+
+
+### . [ ]  restructure the file system - streamline the setup process
+
+
 ### 1. [ ] fix/ automate handling the broken packages, etc..
 
 ### 2. [ ] fix the pip dependency hell
@@ -13,9 +26,6 @@
 ### . [ ] take care of the errors on the setup.sh script 
 
 ### . [ ] resolve import issues in the both hardn python scripts
-
-### . [ ]  
-
 
 
 

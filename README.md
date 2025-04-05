@@ -41,6 +41,8 @@
 - Firejail,Sandboxing tool for application isolation.
 - Cron, to keep it all updates maintenanced**
 - Pex*, used for GRUB password hash automation 
+- *Will be adding pass and*
+- *GPG*
 
 1. **Secure the System** – Applies firewall rules, intrusion detection, malware protection, and access control automatically.  
 2. **Monitor & Defend** – Soon to use heuristic analysis, security audits, and automated updates to **stay ahead of threats**.  (`Legion`)
@@ -69,9 +71,9 @@ cd HARDN
 
 cd Setup
 
-chmod +x Setup.sh
+chmod +x setup.sh
 
-sudo ./Setup.sh
+sudo ./setup.sh
 ```
 
 ### Install Python packages
