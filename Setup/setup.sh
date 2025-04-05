@@ -1,6 +1,14 @@
 #!/bin/sh
 
-# This is the install script for HARDN
+########################################
+#            HARDN - Setup             #
+#  Please have repo cloned before hand #
+#       Installs + Pre-config          #
+#    Must have python-3 loaded already #
+#       Author: Chris Bingham          #
+#           Date: 4/5/2025             #
+########################################
+
 
 # Check for root privileges
 if [ "$(id -u)" -ne 0 ]; then
