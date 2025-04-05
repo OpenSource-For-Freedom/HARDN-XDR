@@ -1,40 +1,24 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
 # This is the install script for HARDN
-# How to run it in the command line: sudo bash setup.sh
-# Ensure the script runs with bash
-if [ "$(basename "$SHELL")" != "bash" ] && [ "$(readlink -f /bin/sh)" != "$(readlink -f /bin/bash)" ]; then
-    echo "This script must be run with bash. Use: sudo bash ./setup.sh"
-    exit 1
-fi
 
 # Check for root privileges
-if [ "$EUID" -ne 0 ]; then
-   echo "This script must be run as root. Use: sudo bash ./setup.sh"
+if [ "$(id -u)" -ne 0 ]; then
+   echo "This script must be run as root. Use: sudo ./setup.sh"
    exit 1
 fi
 
 update_system_packages() {
-    printf "\e[1;31m[+] Updating system packages...\e[0m\n"
+    printf "\033[1;31m[+] Updating system packages...\033[0m\n"
     apt update && apt upgrade -y
 }
 
-# needed packages will be read from this file and installed
-pkgdeps=(
-    gawk
-    mariadb-common
-    mysql-common
-    policycoreutils
-    python-matplotlib-data
-    unixodbc-common
-    gawk-doc
-)
-
-# Function to check package dependencies
+# Install package dependencies
 install_pkgdeps() {
-    for pkg in "${pkgdeps[@]}"; do
-        apt install "$pkg" -y
-    done
+    printf "\033[1;31m[+] Installing package dependencies...\033[0m\n"
+    # List of packages to install
+    apt install -y gawk mariadb-common mysql-common policycoreutils \
+        python-matplotlib-data unixodbc-common gawk-doc
 }
 
 # Function to check package dependencies
@@ -47,7 +31,7 @@ check_pkgdeps() {
 
 # Function to offer resolving issues
 offer_to_resolve_issues() {
-    local deps_to_resolve="$1"
+    deps_to_resolve="$1"
     if [ -z "$deps_to_resolve" ]; then
         echo "No dependencies to resolve."
         return 0
@@ -56,53 +40,57 @@ offer_to_resolve_issues() {
     echo "Dependencies to resolve:"
     echo "$deps_to_resolve"
     echo
-    read -p "Do you want to resolve these dependencies? (y/n): " answer
-    if [[ $answer =~ ^[Yy]$ ]]; then
-        echo "$deps_to_resolve" | sed 's/\s//g;s/<[^>]*>//g' >  dependencies_to_resolve.txt
-        echo "List of dependencies to resolve saved in dependencies_to_resolve.txt"
-    else
-        echo "No action taken."
-    fi
+    printf "Do you want to resolve these dependencies? (y/n): "
+    read answer
+    case "$answer" in
+        [Yy]*)
+            echo "$deps_to_resolve" | sed 's/\s//g;s/<[^>]*>//g' > dependencies_to_resolve.txt
+            echo "List of dependencies to resolve saved in dependencies_to_resolve.txt"
+            ;;
+        *)
+            echo "No action taken."
+            ;;
+    esac
 }
 
 # Install and configure SELinux
 install_selinux() {
-    printf "\e[1;31m[+] Installing and configuring SELinux...\e[0m\n"
+    printf "\033[1;31m[+] Installing and configuring SELinux...\033[0m\n"
 
     # Install SELinux packages
     apt update
     apt install -y selinux-utils selinux-basics policycoreutils policycoreutils-python-utils selinux-policy-default
 
     # Check if installation was successful
-    if ! command -v getenforce &> /dev/null; then
-        printf "\e[1;31m[-] SELinux installation failed. Please check system logs.\e[0m\n"
+    if ! command -v getenforce > /dev/null 2>&1; then
+        printf "\033[1;31m[-] SELinux installation failed. Please check system logs.\033[0m\n"
         return 1
     fi
 
     # Configure SELinux to enforcing mode
-    setenforce 1 2>/dev/null || printf "\e[1;31m[-] Could not set SELinux to enforcing mode immediately\e[0m\n"
+    setenforce 1 2>/dev/null || printf "\033[1;31m[-] Could not set SELinux to enforcing mode immediately\033[0m\n"
 
     # Configure SELinux to be enforcing at boot
     if [ -f /etc/selinux/config ]; then
         sed -i 's/SELINUX=disabled/SELINUX=enforcing/' /etc/selinux/config
         sed -i 's/SELINUX=permissive/SELINUX=enforcing/' /etc/selinux/config
-        printf "\e[1;31m[+] SELinux configured to enforcing mode at boot\e[0m\n"
+        printf "\033[1;31m[+] SELinux configured to enforcing mode at boot\033[0m\n"
     else
-        printf "\e[1;31m[-] SELinux config file not found\e[0m\n"
+        printf "\033[1;31m[-] SELinux config file not found\033[0m\n"
     fi
 
-    printf "\e[1;31m[+] SELinux installation and configuration completed\e[0m\n"
+    printf "\033[1;31m[+] SELinux installation and configuration completed\033[0m\n"
 }
 
 # Install system security tools
 install_security_tools() {
-    printf "\e[1;31m[+] Installing required system security tools...\e[0m\n"
+    printf "\033[1;31m[+] Installing required system security tools...\033[0m\n"
     apt install -y ufw fail2ban apparmor apparmor-profiles apparmor-utils firejail tcpd lynis debsums rkhunter libpam-pwquality libvirt-daemon-system libvirt-clients qemu-kvm docker.io docker-compose openssh-server
 }
 
 # UFW configuration
 configure_ufw() {
-    printf "\e[1;31m[+] Configuring UFW...\e[0m\n"
+    printf "\033[1;31m[+] Configuring UFW...\033[0m\n"
     ufw allow out 53,80,443/tcp
     ufw allow out 53,123/udp
     ufw allow out 67,68/udp
@@ -111,14 +99,14 @@ configure_ufw() {
 
 # Enable and start Fail2Ban and AppArmor services
 enable_services() {
-    printf "\e[1;31m[+] Enabling and starting Fail2Ban and AppArmor services...\e[0m\n"
+    printf "\033[1;31m[+] Enabling and starting Fail2Ban and AppArmor services...\033[0m\n"
     systemctl enable --now fail2ban
     systemctl enable --now apparmor
 }
 
 # Install chkrootkit, LMD, and rkhunter
 install_additional_tools() {
-    printf "\e[1;31m[+] Installing chkrootkit, LMD, and rkhunter...\e[0m\n"
+    printf "\033[1;31m[+] Installing chkrootkit, LMD, and rkhunter...\033[0m\n"
     apt install -y chkrootkit
     wget http://www.rfxn.com/downloads/maldetect-current.tar.gz
     tar -xzf maldetect-current.tar.gz
@@ -134,45 +122,53 @@ install_additional_tools() {
 
 # Reload AppArmor profiles
 reload_apparmor() {
-    printf "\e[1;31m[+] Reloading AppArmor profiles...\e[0m\n"
+    printf "\033[1;31m[+] Reloading AppArmor profiles...\033[0m\n"
     apparmor_parser -r /etc/apparmor.d/*
 }
 
 # Configure cron jobs
 configure_cron() {
-    printf "\e[1;31m[+] Configuring cron jobs...\e[0m\n"
-    remove_existing_cron_jobs() {
-        crontab -l 2>/dev/null | grep -v "lynis audit system --cronjob" \
-        | grep -v "apt update && apt upgrade -y" \
-        | grep -v "/opt/eset/esets/sbin/esets_update" \
-        | grep -v "chkrootkit" \
-        | grep -v "maldet --update" \
-        | grep -v "maldet --scan-all" \
-        | crontab -
-    }
-    remove_existing_cron_jobs
-    crontab -l 2>/dev/null > mycron
-    cat <<EOF >> mycron
+    printf "\033[1;31m[+] Configuring cron jobs...\033[0m\n"
+
+    # Remove existing cron jobs
+    (crontab -l 2>/dev/null | grep -v "lynis audit system --cronjob" | \
+     grep -v "apt update && apt upgrade -y" | \
+     grep -v "/opt/eset/esets/sbin/esets_update" | \
+     grep -v "chkrootkit" | \
+     grep -v "maldet --update" | \
+     grep -v "maldet --scan-all" | \
+     crontab -) || true
+
+    # Create new cron jobs
+    (crontab -l 2>/dev/null || true) > mycron
+    cat >> mycron << 'EOFCRON'
 0 1 * * * lynis audit system --cronjob >> /var/log/lynis_cron.log 2>&1
 0 3 * * * /opt/eset/esets/sbin/esets_update
 0 4 * * * chkrootkit
 0 5 * * * maldet --update
 0 6 * * * maldet --scan-all / >> /var/log/maldet_scan.log 2>&1
-EOF
+EOFCRON
     crontab mycron
     rm mycron
 }
 
 # Disable USB storage
 disable_usb_storage() {
-    printf "\e[1;31m[+] Disabling USB storage...\e[0m\n"
+    printf "\033[1;31m[+] Disabling USB storage...\033[0m\n"
     echo 'blacklist usb-storage' > /etc/modprobe.d/usb-storage.conf
-    modprobe -r usb-storage && printf "\e[1;31m[+] USB storage successfully disabled.\e[0m\n" || printf "\e[1;31m[-] Warning: USB storage module in use, cannot unload.\e[0m\n"
+    if modprobe -r usb-storage 2>/dev/null; then
+        printf "\033[1;31m[+] USB storage successfully disabled.\033[0m\n"
+    else
+        printf "\033[1;31m[-] Warning: USB storage module in use, cannot unload.\033[0m\n"
+    fi
 }
 
 # Update system packages again
 update_sys_pkgs() {
-    update_system_packages || { printf "\e[1;31m[-] System update failed.\e[0m\n"; exit 1; }
+    if ! update_system_packages; then
+        printf "\033[1;31m[-] System update failed.\033[0m\n"
+        exit 1
+    fi
 }
 
 setup_complete() {
@@ -187,6 +183,7 @@ setup_complete() {
 # Main function
 main() {
     update_system_packages
+    install_pkgdeps
 
     # Check dependencies
     deps_and_conflicts=$(check_pkgdeps)
@@ -202,19 +199,21 @@ main() {
             echo "Found dependencies:"
             echo "$depends_only"
             echo
-            read -p "Do you want to offer resolving these dependencies? (y/n): " offer_answer
-            if [[ $offer_answer =~ ^[Yy]$ ]]; then
-                offer_to_resolve_issues "$depends_only"
-                apt install $depends_only -y
-            else
-                echo "Skipping dependency resolution."
-            fi
+            printf "Do you want to offer resolving these dependencies? (y/n): "
+            read offer_answer
+            case "$offer_answer" in
+                [Yy]*)
+                    offer_to_resolve_issues "$depends_only"
+                    apt install $depends_only -y
+                    ;;
+                *)
+                    echo "Skipping dependency resolution."
+                    ;;
+            esac
         fi
-    else
-        install_pkgdeps
     fi
 
-    # call each function in the proper order
+    # Call each function in the proper order
     install_selinux
     install_security_tools
     configure_ufw
