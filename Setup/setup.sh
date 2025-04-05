@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 
-# ADDED PYTHON EVE FOR PIP INSTALL
-# Ensure the script is run as root
-# TODO add functionality to handle fixing unmet dependencies and --fix-broken install, and add the requirements.txt to this dir
+# This is the innstall script for HARDN
+
 if [[ $EUID -ne 0 ]]; then
-   echo "This script must be run as root. Use: sudo ./Setup.sh"
+   echo "This script must be run as root. Use: sudo ./setup.sh"
    exit 1
 fi
 
@@ -13,7 +12,7 @@ update_system_packages() {
     sudo apt update && apt upgrade -y
 }
 
-# Check for package dependencies
+# needed packages will be read from this file and installed
 pkgdeps=(
     gawk
     mariadb-common
@@ -25,11 +24,10 @@ pkgdeps=(
 )
 
 # Function to check package dependencies
-check_pkgdeps() {
+install_pkgdeps() {
     for pkg in "${pkgdeps[@]}"; do
-        echo "Package: $pkg"
-        apt-cache depends "$pkg" | grep -E '^\s*(PreDepends|Depends|Conflicts):'
-        echo  # Add a blank line between packages
+        sudo apt install "$pkg" -y
+
     done
 }
 
@@ -194,6 +192,10 @@ main() {
         fi
     fi
 
+    # call each function in the proper order
+    update_system_packages
+    install_pkgdeps
+    offer_to_resolve_issues
     install_selinux
     install_security_tools
     configure_ufw
