@@ -1,16 +1,200 @@
+<<<<<<< HEAD
+#!/bin/bash
+########################################
+#            HARDN - Setup             #
+#  Please have repo cloned before hand #
+#       Installs + Pre-config          #
+#    Must have python-3 loaded already #
+#       Author: Tim "TANK" Burns       #
+#           Date: 3/2/2022             #
+########################################
+
+
+# Check if requirements.txt exists before attempting to install Python dependencies
+if [[ -f requirements.txt ]]; then
+    echo "[+] Setting up a Python virtual environment..."
+    # Ensure python3-venv is installed
+    apt install -y python3-venv || { echo "[-] Failed to install python3-venv."; exit 1; }
+    
+    # Create and activate the virtual environment
+    python3 -m venv venv || { echo "[-] Failed to create a virtual environment."; exit 1; }
+    source venv/bin/activate || { echo "[-] Failed to activate the virtual environment."; exit 1; }
+    
+    # Upgrade pip and install dependencies
+    pip install --upgrade pip || { echo "[-] Failed to upgrade pip."; deactivate; exit 1; }
+    pip install -r requirements.txt || { echo "[-] Failed to install Python dependencies."; deactivate; exit 1; }
+    
+    # Deactivate the virtual environment
+    deactivate
+    echo "[+] Python dependencies installed successfully in the virtual environment."
+else
+    echo "requirements.txt not found. Skipping Python dependencies installation."
+fi
+
+# Function to display scrolling text with color
+scroll_text() {
+    local text="$1"
+    local delay="${2:-0.1}"
+    local color="${3:-\e[0m}"  # Default to no color
+    echo -ne "${color}"  # Set the color
+    for ((i=0; i<${#text}; i++)); do
+        echo -ne "${text:$i:1}"
+        sleep "$delay"
+    done
+    echo -e "\e[0m"  # Reset the color
+}
+
+# BANNER - scrolling text
+clear
+scroll_text "=======================================================" 0.02 $'\e[33m'
+scroll_text "=======================================================" 0.02 $'\e[33m'
+scroll_text "          HARDN - Security Setup for Debian            " 0.02 $'\e[92m'
+scroll_text "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" 0.02 $'\e[33m'
+scroll_text "    WARNING: This script will make changes to your     " 0.02 $'\e[92m'
+scroll_text "    system. Please ensure you have a backup before     " 0.02 $'\e[92m'
+scroll_text "              running this script.                     " 0.02 $'\e[92m'
+scroll_text "=======================================================" 0.02 $'\e[33m'
+scroll_text "=======================================================" 0.02 $'\e[33m'
+scroll_text "                 HARDN - STARTING                      " 0.02 $'\e[92m'
+scroll_text "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" 0.02 $'\e[33m'
+scroll_text "  This script will install all required system packs   " 0.02 $'\e[92m'
+scroll_text "  and security tools for a hardened Debian system.     " 0.02 $'\e[92m'
+scroll_text "  Please ensure you have cloned the repo before hand.  " 0.02 $'\e[92m'
+scroll_text "=======================================================" 0.02 $'\e[33m'
+
+
+# ENSURE - the script is run as root
+=======
 #!/usr/bin/env bash
 
 # ADDED PYTHON EVE FOR PIP INSTALL
 # Ensure the script is run as root
 # TODO add functionality to handle fixing unmet dependencies and --fix-broken install, and add the requirements.txt to this dir
+>>>>>>> 95847df0c6a59db6ec80af7bd03033a013cbd106
 if [[ $EUID -ne 0 ]]; then
    echo "This script must be run as root. Use: sudo ./Setup.sh"
    exit 1
 fi
 
 update_system_packages() {
+<<<<<<< HEAD
+    echo "[+] Updating system packages..."
+    apt update && apt upgrade -y || { echo "[-] System update failed."; exit 1; }
+    apt install -y python3 python3-tk python3-venv || { echo "[-] Failed to install required Python packages."; exit 1; }
+}
+apt install -y ufw fail2ban apparmor apparmor-profiles apparmor-utils firejail tcpd lynis debsums rkhunter libpam-pwquality libvirt-daemon-system libvirt-clients qemu-kvm docker.io docker-compose openssh-server
+# Call the function to update system packages
+update_system_packages
+
+echo "[+] Installing required system dependencies..."
+apt install -y ufw fail2ban apparmor apparmor-profiles apparmor-utils firejail tcpd lynis debsums rkhunter libpam-pwquality libvirt-daemon-system libvirt-clients qemu-kvm docker.io docker-compose || { echo "[-] Failed to install dependencies."; exit 1; }
+
+# Install pexpect using apt
+echo "[+] Installing pexpect using apt"
+apt install -y python3-pexpect || { echo "[-] Failed to install python3-pexpect."; exit 1; }
+
+scroll_text "=======================================================" 0.02
+# SYSTEM PACKS
+echo "[+] Installing all needed system dependencies..."
+# Already installed in the previous command
+    ufw fail2ban apparmor apparmor-profiles apparmor-utils firejail \
+    tcpd lynis debsums rkhunter libpam-pwquality \
+    libvirt-daemon-system libvirt-clients qemu-kvm \
+    docker.io docker-compose \
+    openssh-server
+
+# SECURITY 
+
+# UFW (update) 
+ufw allow out 53,80,443/tcp
+ufw allow out 53,123/udp
+ufw allow out 67,68/udp  # because static Ip's are 1993
+ufw allow out 67,68/udp       
+
+
+# UFW - reload 
+ufw allow out 67,68/udp  # Allow DHCP client traffic
+
+scroll_text "=======================================================" 0.02
+scroll_text "                                                       " 0.02
+scroll_text "               [+] Setting up Fail2Ban...              " 0.02
+scroll_text "                                                       " 0.02
+scroll_text "=======================================================" 0.02
+systemctl enable --now fail2ban || { echo "[-] Failed to enable Fail2Ban."; exit 1; }
+
+scroll_text "=======================================================" 0.02
+scroll_text "                                                       " 0.02
+scroll_text "               [+] Setting up AppArmor...              " 0.02
+scroll_text "                                                       " 0.02
+scroll_text "=======================================================" 0.02
+systemctl enable --now apparmor || { echo "[-] Failed to enable AppArmor."; exit 1; }
+
+# remove eset32
+# eset32 didnt work
+if [[ -f /etc/apt/sources.list.d/ubuntu-eset-ppa.list ]]; then
+    sudo rm /etc/apt/sources.list.d/ubuntu-eset-ppa.list
+fi
+# sudo apt-get update (already performed earlier)
+
+scroll_text "=======================================================" 0.02
+scroll_text "                                                       " 0.02
+scroll_text "               [+] Installing chkrootkit...            " 0.02
+scroll_text "                                                       " 0.02
+scroll_text "=======================================================" 0.02
+# ADD CHROOTKIT
+sudo apt-get install -y chkrootkit || { echo "[-] Failed to install chkrootkit."; exit 1; }
+
+scroll_text "=======================================================" 0.02
+scroll_text "                                                       " 0.02
+scroll_text "               [+] Installing LMD...                   " 0.02
+scroll_text "                                                       " 0.02
+scroll_text "=======================================================" 0.02
+# ADD lmd
+wget http://www.rfxn.com/downloads/maldetect-current.tar.gz || { echo "[-] Failed to download LMD."; exit 1; }
+tar -xzf maldetect-current.tar.gz
+cd maldetect-* || exit 1
+sudo ./install.sh || { echo "[-] Failed to install LMD."; exit 1; }
+cd ..
+rm -rf maldetect-*
+rm maldetect-current.tar.gz
+
+scroll_text "=======================================================" 0.02
+scroll_text "                                                       " 0.02
+scroll_text "               [+] Installing rkhunter...              " 0.02
+scroll_text "                                                       " 0.02
+scroll_text "=======================================================" 0.02
+# Installing rkhunter
+apt install -y rkhunter || { echo "[-] Failed to install rkhunter."; exit 1; }
+rkhunter --update
+rkhunter --propupd
+
+scroll_text "=======================================================" 0.02
+scroll_text "                                                       " 0.02
+scroll_text "               [+] Reloading AppArmor...               " 0.02
+scroll_text "                                                       " 0.02
+scroll_text "=======================================================" 0.02
+# Reloading AppArmor 
+apparmor_parser -r /etc/apparmor.d/* || { echo "[-] Failed to reload AppArmor."; exit 1; }
+
+scroll_text "=======================================================" 0.02
+scroll_text "                                                       " 0.02
+scroll_text "               [+] Configuring cron...                 " 0.02
+scroll_text "                                                       " 0.02
+scroll_text "=======================================================" 0.02
+
+# Configuring cron 
+remove_existing_cron_jobs() {
+    crontab -l 2>/dev/null | grep -v "lynis audit system --cronjob" \
+    | grep -v "apt update && apt upgrade -y" \
+    | grep -v "/opt/eset/esets/sbin/esets_update" \
+    | grep -v "chkrootkit" \
+    | grep -v "maldet --update" \
+    | grep -v "maldet --scan-all" \
+    | crontab -
+=======
     printf "\e[1;31m[+] Updating system packages...\e[0m\n"
     sudo apt update && apt upgrade -y
+>>>>>>> 95847df0c6a59db6ec80af7bd03033a013cbd106
 }
 
 # Check for package dependencies
@@ -142,6 +326,18 @@ configure_cron() {
 0 5 * * * maldet --update
 0 6 * * * maldet --scan-all / >> /var/log/maldet_scan.log 2>&1
 EOF
+<<<<<<< HEAD
+crontab mycron
+rm mycron
+
+scroll_text "=======================================================" 0.02
+scroll_text "             [+] HARDN - Setup Complete                " 0.02
+scroll_text "  Please ensure to configure UFW, Fail2Ban, AppArmor   " 0.02
+scroll_text "        and other security tools as needed.            " 0.02
+scroll_text "-------------------------------------------------------" 0.02
+scroll_text "  [+] Please reboot your system to apply changes       " 0.02
+scroll_text "=======================================================" 0.02
+=======
     crontab mycron
     rm mycron
 }
@@ -208,3 +404,4 @@ main() {
 
 # Run the main function
 main
+>>>>>>> 95847df0c6a59db6ec80af7bd03033a013cbd106
