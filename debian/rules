@@ -1,0 +1,22 @@
+#!/usr/bin/make -f
+
+# This is the debian/rules file 
+
+export DH_VERBOSE=1
+
+%:
+    dh $@
+
+override_dh_auto_build:
+    echo "Building HARDN endpoint..."
+    mkdir -p build
+    gcc -o build/hardn-endpoint src/hardn-endpoint.c
+
+override_dh_auto_install:  
+    echo "Installing HARDN endpoint..."
+    mkdir -p $(DESTDIR)/usr/local/bin
+    cp build/hardn-endpoint $(DESTDIR)/usr/local/bin/
+
+override_dh_auto_clean:
+    echo "Cleaning up build artifacts..."
+    rm -rf build/
