@@ -1,5 +1,5 @@
 <p align="center">
-        <img src="https://github.com/OpenSource-For-Freedom/HARDN/blob/main/Docs/assets/HARDN.png" alt="HARDN Logo" />
+        <img src="https://github.com/OpenSource-For-Freedom/HARDN/blob/HARDN/docs/assets/HARDN.png" alt="HARDN Logo" />
 </p>
 # HARD Endpoint
 
@@ -32,7 +32,7 @@ We welcome contributions! Please see our [Contributing Guidelines](./CONTRIBUTIN
 
 ## Project Partner
 <p align="center">
-        <img src="https://github.com/OpenSource-For-Freedom/HARDN/blob/main/Docs/assets/cybersynapse.png" alt="CYBERSYNAPSE Logo" />
+        <img src="https://github.com/OpenSource-For-Freedom/HARDN/blob/HARDN/docs/assets/cybersynapse.png" alt="CYBERSYNAPSE Logo" />
 </p>
 
 ## License
