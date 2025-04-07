@@ -1,6 +1,6 @@
 <p align="center">
     <img src="https://github.com/OpenSource-For-Freedom/HARDN/Dev-t/docs/assets/HARDN(1).png" alt="HARDN Logo" />
-</p>/>
+
 </p>
 
 
