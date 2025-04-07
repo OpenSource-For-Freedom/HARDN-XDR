@@ -1,5 +1,5 @@
 <p align="center">
-        <img src="https://github.com/OpenSource-For-Freedom/HARDN/blob/main/docs/assets/HARDN.png" />
+        <img src="https://github.com/OpenSource-For-Freedom/HARDN/blob/HARDN/docs/assets/HARDN.png" />
 </p>
 # HARD Endpoint
 
@@ -25,6 +25,7 @@ The purpose of HARDN Endpoint is to empower IT administrators with the tools the
     ```bash
     sudo apt-get install -f
     ```
+then run `sudo hardn`
 4. Follow the setup instructions in the [Installation Guide](./INSTALL.md).
 
 ## Contributing
@@ -32,7 +33,7 @@ We welcome contributions! Please see our [Contributing Guidelines](./CONTRIBUTIN
 
 ## Project Partner
 <p align="center">
-        <img src="https://github.com/OpenSource-For-Freedom/HARDN/blob/main/docs/assets/cybersynapse.png"/>
+        <img src="https://github.com/OpenSource-For-Freedom/HARDN/blob/HARDN/docs/assets/cybersynapse.png"/>
 </p>
 
 ## License
