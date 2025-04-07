@@ -1,0 +1,9 @@
+HARDN Endpoint Deployment (1.0.0) stable; urgency=medium
+
+    * Initial release of HARDN endpoint deployment.
+    * Added core functionality for endpoint communication.
+    * Implemented secure authentication mechanisms.
+    * Enhanced logging and monitoring features.
+    * Fixed minor bugs and improved performance.
+
+ -- Tim,  Wed, 18 Oct 2023 12:00:00 +****

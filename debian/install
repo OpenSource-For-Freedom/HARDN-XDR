@@ -1,0 +1,49 @@
+#!/bin/bash
+
+# HARDN Endpoint Deployment BASELINE
+# This (should) install HARDN-endpoint on a Debian-based system.
+
+set -e
+
+echo "Starting HARDN Endpoint installation..."
+echo "Updating package list and installing dependencies..."
+sudo apt-get update
+sudo apt-get install -y curl wget git python3 python3-pip
+
+echo "Creating necessary directories..."
+INSTALL_DIR="/opt/hardn-endpoint"
+sudo mkdir -p "$INSTALL_DIR"
+sudo chown "$USER":"$USER" "$INSTALL_DIR"
+
+# Clone main
+echo "Cloning HARDN repository..."
+REPO_URL="https://github.com/opensource-for-freedom/hardn-endpoint.git"
+git clone "$REPO_URL" "$INSTALL_DIR"
+
+
+cd "$INSTALL_DIR"
+echo "Installing Python dependencies..."
+pip3 install -r requirements.txt
+echo "Setting up systemd service..."
+SERVICE_FILE="/etc/systemd/system/hardn-endpoint.service"
+sudo bash -c "cat > $SERVICE_FILE" <<EOL
+[Unit]
+Description=HARDN Endpoint Service
+After=network.target
+
+[Service]
+User=$USER
+WorkingDirectory=$INSTALL_DIR
+ExecStart=/usr/bin/python3 $INSTALL_DIR/main.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOL
+
+# Reload 
+sudo systemctl daemon-reload
+sudo systemctl enable hardn-endpoint.service
+
+echo "Installation complete. You may start HARDN:"
+echo "  sudo systemctl start hardn-endpoint.service"

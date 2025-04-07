@@ -1,0 +1,15 @@
+Source: hardn-endpoint
+Section: utils
+Priority: optional
+Maintainer: Tim <WEBSITE>
+Build-Depends: debhelper (>= 9)
+Standards-Version: 4.5.0
+Homepage: https://WEBSITE/hardn-endpoint
+
+Package: hardn-endpoint
+Architecture: all
+Depends: ${shlibs:Depends}, ${misc:Depends}, python3, python3-requests
+Description: HARDN Endpoint Deployment
+ This package provides the necessary tools and scripts for deploying
+ HARDN endpoints. It includes configuration files and utilities
+ required for seamless integration.
