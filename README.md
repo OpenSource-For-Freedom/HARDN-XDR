@@ -1,5 +1,5 @@
 <p align="center">
-    <img src="https://raw.githubusercontent.com/OpenSource-For-Freedom/HARDN/HARDN/Dev-t/docs/assets/HARDN(1).png"/>
+    <img src="https://raw.github.com/OpenSource-For-Freedom/HARDN/HARDN/Dev-t/docs/assets/HARDN(1).png"/>
 </p>
 
 
