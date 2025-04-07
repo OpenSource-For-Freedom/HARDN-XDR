@@ -23,7 +23,7 @@ The purpose of HARDN Endpoint is to empower IT administrators with the tools the
 1. Download the `.deb` package from the [Releases](https://github.com/opensource-for-freedom/HARDN/releases) page.
 2. Install the package using the following command:
     ```bash
-    sudo dpkg -i hardn-endpoint.deb
+    sudo dpkg -i hardn.deb
     ```
 3. Resolve any missing dependencies:
     ```bash
