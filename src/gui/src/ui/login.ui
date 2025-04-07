@@ -1,0 +1,339 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Login</class>
+ <widget class="QWidget" name="Login">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>500</width>
+    <height>600</height>
+   </rect>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>500</width>
+    <height>600</height>
+   </size>
+  </property>
+  <property name="windowTitle">
+   <string>HARDN - Login</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">background-color: #000000;</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <property name="spacing">
+    <number>15</number>
+   </property>
+   <property name="leftMargin">
+    <number>30</number>
+   </property>
+   <property name="topMargin">
+    <number>30</number>
+   </property>
+   <property name="rightMargin">
+    <number>30</number>
+   </property>
+   <property name="bottomMargin">
+    <number>30</number>
+   </property>
+   <item>
+    <widget class="QLabel" name="label_title">
+     <property name="font">
+      <font>
+       <pointsize>20</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">color: #00ff00;
+margin-bottom: 10px;</string>
+     </property>
+     <property name="text">
+      <string>HARDN SECURITY</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="label_subtitle">
+     <property name="styleSheet">
+      <string notr="true">color: #00cc00;
+margin-bottom: 20px;</string>
+     </property>
+     <property name="text">
+      <string>MATRIX SECURITY INTERFACE</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="label_matrixAnimation">
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>150</height>
+      </size>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">color: #00ff00;
+font-family: monospace;
+background-color: #000000;
+border: 1px solid #007700;
+padding: 10px;
+font-size: 12px;</string>
+     </property>
+     <property name="text">
+      <string>01010101010101010101010
+10101 HARDN MATRIX 0101
+01010101010101010101010
+10101010101010101010101
+INITIALIZING SECURITY...</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="label_systemStatus">
+     <property name="styleSheet">
+      <string notr="true">color: #00ff00;
+font-size: 12px;</string>
+     </property>
+     <property name="text">
+      <string>System Status: READY</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="label_loginPrompt">
+     <property name="styleSheet">
+      <string notr="true">color: #00ff00;
+font-size: 14px;
+margin-top: 20px;</string>
+     </property>
+     <property name="text">
+      <string>ACCESS AUTHENTICATION REQUIRED</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="label_username">
+     <property name="styleSheet">
+      <string notr="true">color: #00ff00;
+font-size: 12px;</string>
+     </property>
+     <property name="text">
+      <string>Username:</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLineEdit" name="lineEdit_username">
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>40</height>
+      </size>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">QLineEdit {
+    color: #00ff00;
+    background-color: #050505;
+    border: 1px solid #00ff00;
+    border-radius: 3px;
+    padding: 5px 10px;
+    font-size: 14px;
+    font-family: monospace;
+}</string>
+     </property>
+     <property name="placeholderText">
+      <string>Enter Username</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="label_password">
+     <property name="styleSheet">
+      <string notr="true">color: #00ff00;
+font-size: 12px;</string>
+     </property>
+     <property name="text">
+      <string>Password:</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLineEdit" name="lineEdit_password">
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>40</height>
+      </size>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">QLineEdit {
+    color: #00ff00;
+    background-color: #050505;
+    border: 1px solid #00ff00;
+    border-radius: 3px;
+    padding: 5px 10px;
+    font-size: 14px;
+    font-family: monospace;
+}</string>
+     </property>
+     <property name="echoMode">
+      <enum>QLineEdit::Password</enum>
+     </property>
+     <property name="placeholderText">
+      <string>Enter Password</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QCheckBox" name="checkBox_rememberMe">
+     <property name="styleSheet">
+      <string notr="true">QCheckBox {
+    color: #00ff00;
+}
+
+QCheckBox::indicator {
+    width: 18px;
+    height: 18px;
+}
+
+QCheckBox::indicator:unchecked {
+    border: 2px solid #00ff00;
+    background-color: #050505;
+}
+
+QCheckBox::indicator:checked {
+    border: 2px solid #00ff00;
+    background-color: #00ff00;
+}</string>
+     </property>
+     <property name="text">
+      <string>Remember Credentials</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <spacer name="verticalSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+   <item>
+    <widget class="QLabel" name="label_loginStatus">
+     <property name="styleSheet">
+      <string notr="true">color: #00ff00;
+font-size: 12px;</string>
+     </property>
+     <property name="text">
+      <string>Ready for authentication</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout">
+     <item>
+      <widget class="QPushButton" name="pushButton_exit">
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>50</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">QPushButton {
+    color: #00ff00;
+    background-color: #0e0e0e;
+    border: 1px solid #00ff00;
+    border-radius: 3px;
+    font-size: 14px;
+}
+QPushButton:hover {
+    background-color: #0d260d;
+}
+QPushButton:pressed {
+    background-color: #105510;
+}</string>
+       </property>
+       <property name="text">
+        <string>EXIT</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="pushButton_login">
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>50</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">QPushButton {
+    color: #00ff00;
+    background-color: #0e0e0e;
+    border: 1px solid #00ff00;
+    border-radius: 3px;
+    font-size: 14px;
+}
+QPushButton:hover {
+    background-color: #0d260d;
+}
+QPushButton:pressed {
+    background-color: #105510;
+}</string>
+       </property>
+       <property name="text">
+        <string>LOGIN</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QLabel" name="label_footer">
+     <property name="styleSheet">
+      <string notr="true">color: #007700;
+font-size: 10px;
+margin-top: 10px;</string>
+     </property>
+     <property name="text">
+      <string>HARDN MATRIX SECURITY v1.0.0 | © 2025 OpenSource-For-Freedom</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
