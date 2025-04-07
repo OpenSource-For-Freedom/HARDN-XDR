@@ -1,5 +1,5 @@
 <p align="center">
-        <img src="https://github.com/OpenSource-For-Freedom/HARDN/blob/HARDN/tree/Dev-t/docs/assets" />
+        <img src="https://github.com/OpenSource-For-Freedom/HARDN/blob/HARDN/Dev-t/docs/assets/HARDN.png" />
 </p>
 # HARD Endpoint
 
