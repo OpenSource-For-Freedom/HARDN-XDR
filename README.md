@@ -5,7 +5,7 @@
 
 
 
-# HARD Endpoint
+# HARDN-Endpoint
 
 ## Overview
 HARDN Endpoint is a robust and secure endpoint management solution designed to simplify and enhance the management of devices in your network. It provides advanced features for monitoring, securing, and maintaining endpoints efficiently.
