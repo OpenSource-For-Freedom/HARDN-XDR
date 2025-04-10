@@ -1,6 +1,8 @@
+import subprocess
+
 
 # this is a module for executing shell commands
-# it is to imported to other scripts
+# it is to be imported to other scripts
 
 def exec_command(command, args, status_callback=None):
     try:

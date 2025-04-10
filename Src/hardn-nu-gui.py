@@ -8,18 +8,10 @@ import sys
 import time
 import pexpect
 
-# Add current to Python path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from Src.command_execute import exec_command
 
 
-def ensure_root():
-    if os.geteuid() != 0:
-        print("Restarting as root...")
-        try:
-            subprocess.run(["sudo", sys.executable] + sys.argv, check=True)
-        except subprocess.CalledProcessError as e:
-            print(f"Failed to elevate to root: {e}")
-        sys.exit(0)
+
 
 # from src import cmd_exec.py
 #def exec_command(command, args, status_callback=None):
@@ -48,13 +40,29 @@ def ensure_root():
 #    return None
 
 
-# GET DIR
-script_dir = os.path.dirname(os.path.abspath(__file__))
+def ensure_root():
+    if os.geteuid() != 0:
+        print("Restarting as root...")
+        try:
+            subprocess.run(["sudo", sys.executable] + sys.argv, check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Failed to elevate to root: {e}")
+        sys.exit(0)
+# Call ensure_root() at the beginning of the script, before any other operations
+ensure_root()
 
-# FILE PATH - to dependents
-HARDN_DARK_PATH = os.path.join(script_dir, "hardn_dark.py")
 
-print("HARDN_DARK_PATH:", HARDN_DARK_PATH)
+def directory_structure(test_mode=False):
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    HARDN_DARK_PATH = os.path.join(script_dir, "HARDN_dark.py")
+
+    print("HARDN_DARK_PATH:", HARDN_DARK_PATH)
+    if not os.path.exists(HARDN_DARK_PATH):
+        print(f"Error: HARDN_dark.py not found at {HARDN_DARK_PATH}")
+        sys.exit(1)
+        return
+    return script_dir
 
 
 # CLI Status Handler
