@@ -5,8 +5,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="1154ff61-838f-499b-adac-1d2601c549c3" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Src/hardn-nu-gui.py" beforeDir="false" afterPath="$PROJECT_DIR$/Src/hardn-nu-gui.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -48,7 +48,6 @@
     "Python.hardn_dark.executor": "Debug",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.git.unshallow": "true",
-    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
     "git-widget-placeholder": "LinuxUser255-Primary",
     "last_opened_file_path": "/home/linux/Projects/LinuxThings/HARDN-Repo-Me/HARDN",
     "node.js.detected.package.eslint": "true",
@@ -130,7 +129,7 @@
       <workItem from="1743987753667" duration="26000" />
       <workItem from="1743987860664" duration="1561000" />
       <workItem from="1743989481551" duration="1247000" />
-      <workItem from="1744483360878" duration="926000" />
+      <workItem from="1744483360878" duration="4294000" />
     </task>
     <servers />
   </component>

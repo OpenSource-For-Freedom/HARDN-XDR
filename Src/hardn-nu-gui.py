@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import sys
 import time
-import pexpect
+#import pexpect
 
 from Src.command_execute import exec_command
 
