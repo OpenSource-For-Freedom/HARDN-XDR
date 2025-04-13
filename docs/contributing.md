@@ -1,1 +1,1 @@
-# contributing seciton for public notice
+# contributing section for public notice
