@@ -8,4 +8,4 @@ dependencies:
   - pytest
   - pip
   - pip:
-      - pytest-cov
+    - pytest-cov
