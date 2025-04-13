@@ -7,4 +7,4 @@
 
 # kernel control, root , bin ,sbin,
 # complete white list for legion, heuristics,
-# work with hardn as a sentinl
+# work with hardn as a sentinal
