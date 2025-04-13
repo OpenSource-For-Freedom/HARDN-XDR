@@ -1,11 +1,21 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# Please see the documentation for all configuration options:
-# https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+# Dependabot configuration for HARDN
+# Automatically checks for dependency updates in the project.
 
 version: 2
 updates:
-  - package-ecosystem: "python" # See documentation for possible values
-    directory: "/src" # Location of package manifests
+  # Python dependencies
+  - package-ecosystem: "python" # Ecosystem for Python dependencies
+    directory: "/" 
     schedule:
-      interval: "weekly"
+      interval: "weekly" 
+      time: "02:00" # Time in UTC for the update checks
+    ignore:
+      - dependency-name: "example-package" 
+        versions: ["1.x"] 
+
+  # GitHub Actions dependencies
+  - package-ecosystem: "github-actions"s
+    directory: "/.github/workflows" 
+    schedule:
+      interval: "daily" 
+      time: "03:00" 
