@@ -10,7 +10,7 @@ updates:
       interval: "weekly" 
       time: "02:00" # Time in UTC for the update checks
     ignore:
-      - dependency-name: "example-package" 
+      - dependency-name: "null" 
         versions: ["1.x"] 
 
   # GitHub Actions dependencies
