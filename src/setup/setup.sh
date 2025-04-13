@@ -13,8 +13,26 @@
 
 # Check for root privileges
 if [ "$(id -u)" -ne 0 ]; then
-   echo "This script must be run as root. Use: sudo ./setup.sh"
-   exit 1
+    echo "This script must be run as root. Use: sudo ./setup.sh"
+    exit 1
+fi
+
+# Check if the script is being run by a valid user account
+if ! id "$(whoami)" > /dev/null 2>&1; then
+    echo "This script must be run by a valid user account."
+    exit 1
+fi
+
+# Check if the user has sudo/admin privileges
+if ! groups "$(whoami)" | grep -q '\bsudo\b'; then
+    echo "This script requires sudo/admin privileges. Add the user to the sudo group."
+    exit 1
+fi
+
+# Check if a separate user account is set up
+if [ "$(whoami)" = "root" ]; then
+    echo "This script must not be run directly as root. Please use a separate user account with sudo privileges."
+    exit 1
 fi
 
 update_system_packages() {
@@ -186,6 +204,14 @@ run_openscap_scan() {
     oscap xccdf eval --profile stig /usr/share/xml/scap/ssg/content/ssg-debian10-ds.xml
     printf "\033[1;31m[+] OpenSCAP scan completed.\033[0m\n"
 }
+
+# Disable guest accounts>> no point 
+disable_guest_accounts() {
+    printf "\033[1;31m[+] Disabling guest accounts...\033[0m\n"
+    usermod -L guest || printf "\033[1;31m[-] Warning: Could not disable guest account.\033[0m\n"
+    printf "\033[1;31m[+] Guest accounts disabled.\033[0m\n"
+}
+
 
 # AUDITD for STIG 
 configure_auditd() {

@@ -1,0 +1,11 @@
+name: test-env
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.11
+  - flake8
+  - pytest
+  - pip
+  - pip:
+      - pytest-cov
