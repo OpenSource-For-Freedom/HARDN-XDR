@@ -1,5 +1,5 @@
 # Dependabot configuration for HARDN
-# Automatically checks for dependency updates in the project.
+
 
 version: 2
 updates:
@@ -14,7 +14,7 @@ updates:
         versions: ["1.x"] 
 
   # GitHub Actions dependencies
-  - package-ecosystem: "github-actions"s
+  - package-ecosystem: "github-actions"
     directory: "/.github/workflows" 
     schedule:
       interval: "daily" 
