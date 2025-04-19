@@ -75,7 +75,8 @@ HARDN/
 │   └── workflows/
 │       ├── deb-build.yml
 │       ├── python_test.yml
-│       └── shell_test.yml
+│       |-- shell_test.yml
+|       |__ hardn.yml       # testing workflow for orchestration
 ├── debian/                 # packaging files
 │   ├── changelog
 │   ├── compat
