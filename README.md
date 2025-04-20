@@ -184,16 +184,17 @@ office@cybersynapse.ro
 HARDN/
 ├── .github/                # workflows
 │   └── workflows/
-│       ├── deb-build.yml
+│       ├── deb-build-test.yml
 │      
 ├── debian/                 # packaging files
 │   ├── changelog
 │   ├── compat
+|   ├── deb-build.yml       # packaging workflow
 │   ├── control
 │   ├── rules
 │   ├── hardn.install
 │   └── ...
-├── src/                    # Source code
+├── src/                    # Source
 │   ├── gui/                # GUI-related files
 │   │   ├── __init__.py
 │   │   ├── app.py
@@ -208,7 +209,7 @@ HARDN/
 │   │   ├── setup.sh
 │   │   └── packages.sh
 │   ├── kernel.c           # Kernel hardening 
-│   ├── hardn.rs           # Main entry point
+│   ├── hardn.rs           # Main 
 │   └── ...
 ├── build/                  # build artifacts (ignored in `.gitignore`)
 ├── dist/                   # Distribution packages (ignored in `.gitignore`)
