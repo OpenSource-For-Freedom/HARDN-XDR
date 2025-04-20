@@ -31,7 +31,7 @@ With cyber threats evolving daily, securing Linux systems—especially those bas
 ## Repository Structure (Current Architecture)  
 As we approach the `.deb` packaging milestone, the repo has been distilled down to the essentials—making it lean, maintainable, and easy to audit:
 
-- **hardn.c** – The main automation engine, written in C, responsible for executing security tasks and validations.
+- **hardn.rs** – The main automation engine, written in Rust, responsible for executing security tasks and validations synchronized with gui input/output.
 - **setup.sh** – A bootstrap script that prepares the environment and launches the hardening process.
 - **packages.sh** – A curated package installer that fetches and configures essential tools for firewalling, monitoring, and malware detection.
 - **kernel.c** – A C module that handles kernel optimization and module blacklisting, improving both security and boot-time efficiency.
