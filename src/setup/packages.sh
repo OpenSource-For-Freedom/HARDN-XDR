@@ -1,5 +1,5 @@
 #!/bin/bash
-# Validates setup.sh for install and configuration setups + STIG compliance + auto-fix
+# Validates (cron with hardn.rs) setup.sh for install and configuration setups + STIG compliance + auto-fix
 
 ########################################
 #           HARDN - Packages           #
