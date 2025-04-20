@@ -12,17 +12,17 @@
 ---
 
 ## GUI Backend Integration
-8. Starts a live in-memory backend with:
+1. Starts a live in-memory backend with:
    - Authentication service  
    - Network monitor  
    - Threat detection  
    - Log manager  
 
-9. Runs async threads to monitor:
+2. Runs async threads to monitor:
    - Active network connections  
    - Threat detection loop  
 
-10. Starts a Unix socket IPC server at `/tmp/hardn.sock`:
+3. Starts a Unix socket IPC server at `/tmp/hardn.sock`:
    - Accepts JSON requests from the GUI  
    - Supports actions: `auth`, `network`, `threats`, `logs`  
    - Returns structured JSON responses for each service  
