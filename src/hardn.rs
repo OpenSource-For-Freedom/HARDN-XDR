@@ -1,5 +1,5 @@
 // Full `hardn.rs` with IPC integration and preserved orchestration logic
-// see hardn.rs med for design 
+// see docs/hardn_rs.md for design 
 rust_code = """
 use clap::{App, Arg};
 use std::env;
