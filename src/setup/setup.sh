@@ -62,7 +62,6 @@ install_security_tools() {
         libpam-pwquality libvirt-daemon-system libvirt-clients qemu-system-x86 openssh-server openssh-client
 }
 
-
 enable_services() {
     printf "\033[1;31m[+] Enabling and starting Fail2Ban and AppArmor services...\033[0m\n"
     systemctl enable --now fail2ban
@@ -88,7 +87,6 @@ install_additional_tools() {
     rm -rf "$temp_dir"
 }
 
-# RUST
 install_rust() {
     printf "\033[1;31m[+] Installing Rust...\033[0m\n"
 
@@ -108,10 +106,6 @@ install_rust() {
         return 1
     fi
 }
-
-
-
-# --- STIG Compliance (No OpenSCAP) ---
 
 stig_password_policy() {
     apt install -y libpam-pwquality
@@ -137,7 +131,8 @@ stig_login_banners() {
 }
 
 stig_secure_filesystem() {
-    chown root:root /etc/{passwd,shadow,group}
+    printf "\033[1;31m[+] Securing filesystem permissions...\033[0m\n"
+    chown root:root /etc/passwd /etc/shadow /etc/group
     chmod 644 /etc/passwd /etc/group
     chmod 000 /etc/shadow
 }
