@@ -3,7 +3,7 @@
 ## Core Orchestration
 1. Validates root access  
 2. Sets executable permissions for key scripts  
-3. Runs setup and package hardening scripts  
+3. Runs setup.sh and packages.sh hardening scripts  
 4. Compiles and runs kernel hardening (`kernel.c`)  
 5. Launches your Python-based GUI  
 6. Monitors file system for changes  
