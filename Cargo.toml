@@ -1,17 +1,11 @@
-cargo_toml_content = """[package]
+[package]
 name = "hardn"
-version = "1.1.1"
+version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-clap = "2"
-notify = "5"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+clap = "4.1.8"
+notify = "5.2.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 nix = "0.26"
-"""
-
-cargo_toml_path = "/mnt/data/Cargo.toml"
-Path(cargo_toml_path).write_text(cargo_toml_content)
-
-cargo_toml_path

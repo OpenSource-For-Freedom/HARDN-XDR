@@ -27,7 +27,7 @@ update_system_packages() {
 install_pkgdeps() {
     printf "\033[1;31m[+] Installing package dependencies...\033[0m\n"
     apt install -y wget curl git gawk mariadb-common mysql-common policycoreutils \
-        python3-matplotlib-data unixodbc-common firejail python3-pyqt6
+        python3-matplotlib unixodbc-common firejail python3-pyqt6
 }
 
 echo "========================================================"
@@ -62,15 +62,6 @@ install_security_tools() {
         libpam-pwquality libvirt-daemon-system libvirt-clients qemu-system-x86 openssh-server openssh-client
 }
 
-configure_ufw() {
-    printf "\033[1;31m[+] Configuring UFW...\033[0m\n"
-    ufw default deny incoming
-    ufw default allow outgoing
-    ufw allow ssh
-    ufw enable || printf "\033[1;31m[-] Warning: Could not enable UFW.\033[0m\n"
-    ufw reload || printf "\033[1;31m[-] Warning: Could not reload UFW.\033[0m\n"
-    printf "\033[1;31m[+] UFW configuration completed.\033[0m\n"
-}
 
 enable_services() {
     printf "\033[1;31m[+] Enabling and starting Fail2Ban and AppArmor services...\033[0m\n"
@@ -105,9 +96,10 @@ install_rust() {
         printf "\033[1;32m[+] Rust is already installed. Skipping installation.\033[0m\n"
         return 0
     fi
+
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-    # Add Rust to the PATH
-    source $HOME/.cargo/env
+    export PATH="$HOME/.cargo/bin:$PATH"
+
     if command -v rustc > /dev/null 2>&1; then
         printf "\033[1;32m[+] Rust installed successfully.\033[0m\n"
         rustc --version
@@ -185,6 +177,17 @@ stig_disable_ipv6() {
     sysctl -p
 }
 
+configure_ufw() {
+    printf "\033[1;31m[+] Configuring UFW...\033[0m\n"
+    ufw default deny incoming
+    ufw default allow outgoing
+    ufw allow out 53    # Allow DNS for LMD signature updates and Rust installs
+    ufw allow out 443   # Allow HTTPS for LMD signature updates and Rust installs
+    ufw enable || printf "\033[1;31m[-] Warning: Could not enable UFW.\033[0m\n"
+    ufw reload || printf "\033[1;31m[-] Warning: Could not reload UFW.\033[0m\n"
+    printf "\033[1;31m[+] UFW configuration completed.\033[0m\n"
+}
+
 apply_stig_hardening() {
     stig_password_policy
     stig_lock_inactive_accounts
@@ -214,6 +217,7 @@ main() {
     install_additional_tools
     install_rust
     apply_stig_hardening
+    configure_ufw
     setup_complete
 }
 

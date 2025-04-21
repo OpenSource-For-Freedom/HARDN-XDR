@@ -1,8 +1,7 @@
-use clap::{Command as ClapCommand, Arg};
+use clap::{Command as ClapCommand, Arg, ArgAction};
 use std::env;
 use std::fs::{self, OpenOptions};
 use std::io::{BufReader, BufRead, Write};
-// use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
 use std::process::{Command as ProcessCommand, exit};
@@ -11,6 +10,7 @@ use std::time::Duration;
 use notify::{Watcher, RecursiveMode};
 use serde::{Serialize};
 use serde_json::{json, Value};
+//use std::os::unix::fs::PermissionsExt;
 //use std::fs;
 
 
@@ -28,12 +28,16 @@ struct Connection {
 struct NetworkMonitor;
 impl NetworkMonitor {
     fn new() -> Self { Self }
+
     fn start_monitoring(&self) {
         println!("[+] Monitoring network...");
         loop {
-            std::thread::sleep(Duration::from_secs(30));
+            for _ in 0..10 {
+                std::thread::sleep(Duration::from_secs(30));
+            }
         }
     }
+
     fn get_active_connections(&self) -> Vec<Connection> {
         vec![
             Connection { ip: "192.168.0.1".into(), port: 22 },
@@ -58,9 +62,10 @@ impl ThreatDetector {
     fn new() -> Self { Self }
     fn watch_threats(&self) {
         println!("[+] Threat detection started...");
-        loop {
+        for _ in 0..10 {
             std::thread::sleep(Duration::from_secs(60));
         }
+        println!("[+] Threat detection completed.");
     }
     fn get_current_threats(&self) -> ThreatSummary {
         ThreatSummary {
@@ -190,20 +195,24 @@ fn validate_environment() {
         exit(1);
     }
 }
-//fn set_executable_permissions(base_dir: &str) {
-   // use std::fs;
+fn set_executable_permissions(base_dir: &str) {
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
+    use std::path::Path;
 
     let files = vec![
-        format!("{}/setup/setup.sh", base_dir),
-        format!("{}/setup/packages.sh", base_dir),
-        format!("{}/kernel.c", base_dir),
-        format!("{}/gui/main.py", base_dir),
-        format!("{}/src/hardn.rs", base_dir),
+        format!("{}/src/setup/setup.sh", base_dir),
+        format!("{}/src/setup/packages.sh", base_dir),
+        format!("{}/src/kernel.c", base_dir),
+        format!("{}/src/gui/main.py", base_dir),
     ];
 
     for file in files {
         if Path::new(&file).exists() {
-            println!("[+] Skipping file locking for now: {}", file);
+            let mut permissions = fs::metadata(&file).unwrap().permissions();
+            permissions.set_mode(0o755); // Read, write, and execute for owner; read and execute for group and others
+            fs::set_permissions(&file).unwrap();
+            println!("[+] Set executable permissions for: {}", file);
         } else {
             println!("[!] File not found: {}", file);
         }
@@ -234,7 +243,7 @@ fn run_kernel(base_dir: &str) {
         .arg("-o")
         .arg(output_file.as_str())
         .status()
-        .unwrap();
+        .expect("Failed to execute gcc");
     if !compile_status.success() {
         eprintln!("Error compiling kernel");
         exit(1);
@@ -256,6 +265,7 @@ fn launch_gui(base_dir: &str) {
 
 use std::sync::mpsc::{Sender, Receiver};
 
+
 fn monitor_system() {
     let (_tx, rx): (Sender<String>, Receiver<String>) = channel();
     let mut watcher = notify::recommended_watcher(move |res| {
@@ -264,8 +274,10 @@ fn monitor_system() {
             Err(e) => eprintln!("Watch error: {:?}", e),
         }
     })
-    .unwrap();
-    watcher.watch(Path::new("/"), RecursiveMode::Recursive).unwrap();
+    .expect("Failed to create watcher");
+    watcher
+        .watch(Path::new("/"), RecursiveMode::Recursive)
+        .expect("Failed to watch path");
     loop {
         match rx.recv() {
             Ok(event) => println!("System change: {:?}", event),
@@ -324,13 +336,40 @@ fn remove_systemd_timers() {
     ProcessCommand::new("systemctl").arg("daemon-reload").status().ok();
 }
 
-//#[allow(dead_code)]
-//fn lock_down_hardn_file(file_path: &str) {
-   // println!("[+] Skipping file locking for now-testing fn first: {}", file_path);
-//    let mut permissions = fs::metadata(file_path).unwrap().permissions();
-    //permissions.set_mode(0o400); // Read-only for owner
-    //fs::set_permissions(file_path, permissions).unwrap();
-    //println!("[+] Locked down file: {}", file_path);  
+
+/* holding for more testing befoe I lock the door completly 
+fn lock_down_hardn_files(base_dir: &str) {
+
+    let files = vec![
+        format!("{}/setup/setup.sh", base_dir),
+        format!("{}/setup/packages.sh", base_dir),
+        format!("{}/kernel.c", base_dir),
+        format!("{}/gui/main.py", base_dir),
+        format!("{}/src/hardn.rs", base_dir),
+    ];
+
+    for file in files {
+        if Path::new(&file).exists() {
+            let mut permissions = fs::metadata(&file).unwrap().permissions();
+            permissions.set_mode(0o444); // Read-only for all users, including root
+            fs::set_permissions(&file, permissions).unwrap();
+            println!("[+] Set read-only permissions for: {}", file);
+        } else {
+            println!("[!] File not found: {}", file);
+        }
+    }
+
+    let main_file = format!("{}/src/main.rs", base_dir);
+    if Path::new(&main_file).exists() {
+        let mut permissions = fs::metadata(&main_file).unwrap().permissions();
+        permissions.set_mode(0o555); // Read and execute for all users, including root
+        fs::set_permissions(&main_file, permissions).unwrap();
+        println!("[+] Set read and execute permissions for: {}", main_file);
+    } else {
+        println!("[!] Main file not found: {}", main_file);
+    }
+}
+*/
 //}
 
 fn log_message(message: &str) {
@@ -348,28 +387,38 @@ fn main() {
         .version("1.1.1")
         .author("SIG")
         .about("Secure Linux automation & GUI integration")
-        .arg(Arg::new("setup").long("setup"))
-        .arg(Arg::new("kernel").long("kernel"))
-        .arg(Arg::new("gui").long("gui"))
-        .arg(Arg::new("monitor").long("monitor"))
-        .arg(Arg::new("all").long("all"))
-        .arg(Arg::new("install-service").long("install-service"))
-        .arg(Arg::new("install-timers").long("install-timers"))
-        .arg(Arg::new("remove-cron").long("remove-cron"))
+        .arg(Arg::new("setup").long("setup").action(ArgAction::SetTrue))
+        .arg(Arg::new("kernel").long("kernel").action(ArgAction::SetTrue))
+        .arg(Arg::new("gui").long("gui").action(ArgAction::SetTrue))
+        .arg(Arg::new("monitor").long("monitor").action(ArgAction::SetTrue))
+        .arg(Arg::new("all").long("all").action(ArgAction::SetTrue))
+        .arg(Arg::new("install-service").long("install-service").action(ArgAction::SetTrue))
+        .arg(Arg::new("install-timers").long("install-timers").action(ArgAction::SetTrue))
+        .arg(Arg::new("remove-cron").long("remove-cron").action(ArgAction::SetTrue))
         .get_matches();
 
-    if matches.contains_id("setup") {
-        println!("Setup argument detected");
+    if matches.get_flag("setup") {
+        println!("Setup flag detected");
     }
 
-    let status = ProcessCommand::new("/bin/bash")
-        .arg("setup.sh")
-        .status()
-        .unwrap();
+    if matches.get_flag("setup") {
+        let base_dir = env::current_dir().unwrap().canonicalize().unwrap();
+        let setup_script = format!("{}/setup.sh", base_dir.to_str().unwrap());
+        let packages_script = format!("{}/packages.sh", base_dir.to_str().unwrap());
+        let kernel_file = format!("{}/kernel.c", base_dir.to_str().unwrap());
 
-    if !status.success() {
-        eprintln!("Script failed");
-        exit(1);
+        run_script(&setup_script);
+        run_script(&packages_script);
+        run_kernel(&base_dir.to_str().unwrap());
+        run_script(&setup_script);
+        run_script(&packages_script);
+        run_kernel(&base_dir.to_str().unwrap());
+    }
+    }
+        //let main_script = format!("{}/src/main.rs", base_dir.to_str().unwrap());
+
+        run_script(&setup_script);
+        run_script(&packages_script);
     }
 
     let base_dir = env::current_dir().unwrap().canonicalize().unwrap();
@@ -380,32 +429,32 @@ fn main() {
     // Lock down all referenced files
     set_executable_permissions(&base_str);
 
-    if matches.contains_id("install-service") {
+    if matches.get_flag("install-service") {
         let path = std::env::current_exe().unwrap();
         create_systemd_service(path.to_str().unwrap());
         return;
     }
 
-    if matches.contains_id("install-timers") {
+    if matches.get_flag("install-timers") {
         install_systemd_timers(&base_str);
         return;
     }
 
-    if matches.contains_id("remove-cron") {
+    if matches.get_flag("remove-cron") {
         remove_systemd_timers();
         return;
     }
 
-    if matches.contains_id("setup") || matches.contains_id("all") {
+    if matches.get_flag("setup") || matches.get_flag("all") {
         run_script(&format!("{}/setup/setup.sh", base_str));
         run_script(&format!("{}/setup/packages.sh", base_str));
     }
 
-    if matches.contains_id("kernel") || matches.contains_id("all") {
+    if matches.get_flag("kernel") || matches.get_flag("all") {
         run_kernel(&base_str);
     }
 
-    if matches.contains_id("gui") || matches.contains_id("all") {
+    if matches.get_flag("gui") || matches.get_flag("all") {
         let state = Arc::new(AppState::new());
 
         let net = Arc::clone(&state.network_monitor);
@@ -419,7 +468,7 @@ fn main() {
         launch_gui(&base_str);
     }
 
-    if matches.contains_id("monitor") || matches.contains_id("all") {
+    if matches.get_flag("monitor") || matches.get_flag("all") {
         monitor_system();
     }
 
