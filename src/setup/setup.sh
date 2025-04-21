@@ -97,6 +97,28 @@ install_additional_tools() {
     rm -rf "$temp_dir"
 }
 
+# RUST
+install_rust() {
+    printf "\033[1;31m[+] Installing Rust...\033[0m\n"
+
+    if command -v rustc > /dev/null 2>&1; then
+        printf "\033[1;32m[+] Rust is already installed. Skipping installation.\033[0m\n"
+        return 0
+    fi
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    # Add Rust to the PATH
+    source $HOME/.cargo/env
+    if command -v rustc > /dev/null 2>&1; then
+        printf "\033[1;32m[+] Rust installed successfully.\033[0m\n"
+        rustc --version
+    else
+        printf "\033[1;31m[-] Rust installation failed. Please check the logs.\033[0m\n"
+        return 1
+    fi
+}
+
+
+
 # --- STIG Compliance (No OpenSCAP) ---
 
 stig_password_policy() {
@@ -190,6 +212,7 @@ main() {
     configure_ufw
     enable_services
     install_additional_tools
+    install_rust
     apply_stig_hardening
     setup_complete
 }

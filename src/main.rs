@@ -1,19 +1,18 @@
-// Full `hardn.rs` with IPC integration and preserved orchestration logic
-// see docs/hardn_rs.md for design 
-rust_code = """
-use clap::{App, Arg};
+use clap::{Command as ClapCommand, Arg};
 use std::env;
 use std::fs::{self, OpenOptions};
 use std::io::{BufReader, BufRead, Write};
-use std::os::unix::fs::PermissionsExt;
+// use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
-use std::process::{Command, exit};
+use std::process::{Command as ProcessCommand, exit};
 use std::sync::{mpsc::channel, Arc, Mutex};
 use std::time::Duration;
-use notify::{Watcher, RecursiveMode, watcher};
-use serde::{Serialize, Deserialize};
+use notify::{Watcher, RecursiveMode};
+use serde::{Serialize};
 use serde_json::{json, Value};
+//use std::fs;
+
 
 // =================== Constants ===================
 const LOG_FILE: &str = "/var/log/hardn.log";
@@ -184,26 +183,29 @@ fn start_ipc_server(state: Arc<AppState>) {
         }
     }
 }
-
-// =================== Orchestration ===================
+// =================== Orchetration ===================
 fn validate_environment() {
     if !nix::unistd::Uid::effective().is_root() {
         eprintln!("This script must be run as root.");
         exit(1);
     }
 }
-fn set_executable_permissions(base_dir: &str) {
+//fn set_executable_permissions(base_dir: &str) {
+   // use std::fs;
+
     let files = vec![
         format!("{}/setup/setup.sh", base_dir),
         format!("{}/setup/packages.sh", base_dir),
         format!("{}/kernel.c", base_dir),
         format!("{}/gui/main.py", base_dir),
+        format!("{}/src/hardn.rs", base_dir),
     ];
+
     for file in files {
         if Path::new(&file).exists() {
-            let mut perms = fs::metadata(&file).unwrap().permissions();
-            perms.set_mode(0o755);
-            fs::set_permissions(&file, perms).unwrap();
+            println!("[+] Skipping file locking for now: {}", file);
+        } else {
+            println!("[!] File not found: {}", file);
         }
     }
 }
@@ -212,7 +214,13 @@ fn run_script(script_name: &str) {
         eprintln!("Script not found: {}", script_name);
         exit(1);
     }
-    let status = Command::new("/bin/bash").arg(script_name).status().unwrap();
+    let status = match ProcessCommand::new("/bin/bash").arg(script_name).status() {
+        Ok(status) => status,
+        Err(e) => {
+            eprintln!("Failed to execute script {}: {}", script_name, e);
+            exit(1);
+        }
+    };
     if !status.success() {
         eprintln!("Script failed: {}", script_name);
         exit(1);
@@ -221,12 +229,17 @@ fn run_script(script_name: &str) {
 fn run_kernel(base_dir: &str) {
     let kernel_file = format!("{}/kernel.c", base_dir);
     let output_file = format!("{}/kernel", base_dir);
-    let compile_status = Command::new("gcc").arg(&kernel_file).arg("-o").arg(&output_file).status().unwrap();
+    let compile_status = ProcessCommand::new("gcc")
+        .arg(kernel_file.as_str())
+        .arg("-o")
+        .arg(output_file.as_str())
+        .status()
+        .unwrap();
     if !compile_status.success() {
         eprintln!("Error compiling kernel");
         exit(1);
     }
-    let run_status = Command::new(&output_file).status().unwrap();
+    let run_status = ProcessCommand::new(&output_file).status().unwrap();
     if !run_status.success() {
         eprintln!("Kernel execution failed");
         exit(1);
@@ -234,16 +247,25 @@ fn run_kernel(base_dir: &str) {
 }
 fn launch_gui(base_dir: &str) {
     let gui_file = format!("{}/gui/main.py", base_dir);
-    let status = Command::new("python3").arg(&gui_file).status().unwrap();
+    let status = ProcessCommand::new("python3").arg(&gui_file).status().unwrap();
     if !status.success() {
         eprintln!("GUI failed to launch");
         exit(1);
     }
 }
+
+use std::sync::mpsc::{Sender, Receiver};
+
 fn monitor_system() {
-    let (tx, rx) = channel();
-    let mut watcher = watcher(tx, Duration::from_secs(10)).unwrap();
-    watcher.watch("/", RecursiveMode::Recursive).unwrap();
+    let (_tx, rx): (Sender<String>, Receiver<String>) = channel();
+    let mut watcher = notify::recommended_watcher(move |res| {
+        match res {
+            Ok(event) => println!("System change: {:?}", event),
+            Err(e) => eprintln!("Watch error: {:?}", e),
+        }
+    })
+    .unwrap();
+    watcher.watch(Path::new("/"), RecursiveMode::Recursive).unwrap();
     loop {
         match rx.recv() {
             Ok(event) => println!("System change: {:?}", event),
@@ -253,82 +275,137 @@ fn monitor_system() {
 }
 fn create_systemd_service(exec_path: &str) {
     let unit = format!(
-        "[Unit]\\nDescription=HARDN Service\\n[Service]\\nExecStart={} --all\\n[Install]\\nWantedBy=multi-user.target\\n",
+        "[Unit]\nDescription=HARDN Service\n[Service]\nExecStart={} --all\n[Install]\nWantedBy=multi-user.target\n",
         exec_path
     );
-    let mut file = OpenOptions::new().create(true).write(true).truncate(true).open(SYSTEMD_UNIT).unwrap();
+    let mut file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(SYSTEMD_UNIT)
+        .unwrap();
     file.write_all(unit.as_bytes()).unwrap();
-    Command::new("systemctl").args(["daemon-reload"]).status().ok();
-    Command::new("systemctl").args(["enable", "--now", "hardn.service"]).status().ok();
+    ProcessCommand::new("systemctl").args(["daemon-reload"]).status().ok();
+    ProcessCommand::new("systemctl").args(["enable", "--now", "hardn.service"]).status().ok();
 }
+
 fn install_systemd_timers(base_dir: &str) {
     let timers = [
         ("hardn-packages", format!("{}/setup/packages.sh", base_dir)),
         ("hardn-kernel", format!("{}/kernel", base_dir)),
     ];
     for (name, path) in timers.iter() {
-        fs::write(format!("/etc/systemd/system/{}.service", name), format!("[Unit]\\n[Service]\\nExecStart={}", path)).unwrap();
-        fs::write(format!("/etc/systemd/system/{}.timer", name), "[Timer]\\nOnCalendar=daily\\n[Install]\\nWantedBy=timers.target").unwrap();
-        Command::new("systemctl").args(["enable", "--now", &format!("{}.timer", name)]).status().ok();
+        fs::write(
+            format!("/etc/systemd/system/{}.service", name),
+            format!("[Unit]\n[Service]\nExecStart={}", path),
+        )
+        .unwrap();
+        fs::write(
+            format!("/etc/systemd/system/{}.timer", name),
+            "[Timer]\nOnCalendar=daily\n[Install]\nWantedBy=timers.target\n",
+        )
+        .unwrap();
+        ProcessCommand::new("systemctl")
+            .args(["enable", "--now", &format!("{}.timer", name)])
+            .status()
+            .ok();
     }
 }
+
 fn remove_systemd_timers() {
     for name in ["hardn-packages", "hardn-kernel"] {
-        Command::new("systemctl").args(["disable", "--now", &format!("{}.timer", name)]).status().ok();
+        ProcessCommand::new("systemctl")
+            .args(["disable", "--now", &format!("{}.timer", name)])
+            .status()
+            .ok();
         fs::remove_file(format!("/etc/systemd/system/{}.timer", name)).ok();
         fs::remove_file(format!("/etc/systemd/system/{}.service", name)).ok();
     }
-    Command::new("systemctl").arg("daemon-reload").status().ok();
+    ProcessCommand::new("systemctl").arg("daemon-reload").status().ok();
+}
+
+//#[allow(dead_code)]
+//fn lock_down_hardn_file(file_path: &str) {
+   // println!("[+] Skipping file locking for now-testing fn first: {}", file_path);
+//    let mut permissions = fs::metadata(file_path).unwrap().permissions();
+    //permissions.set_mode(0o400); // Read-only for owner
+    //fs::set_permissions(file_path, permissions).unwrap();
+    //println!("[+] Locked down file: {}", file_path);  
+//}
+
+fn log_message(message: &str) {
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(LOG_FILE)
+        .expect("Failed to open log file");
+    writeln!(file, "{}", message).expect("Failed to write to log file");
 }
 
 // =================== Main ===================
 fn main() {
-    let matches = App::new("HARDN")
+    let matches = ClapCommand::new("HARDN")
         .version("1.1.1")
-        .author("Tim Burns")
+        .author("SIG")
         .about("Secure Linux automation & GUI integration")
-        .arg(Arg::with_name("setup").long("setup"))
-        .arg(Arg::with_name("kernel").long("kernel"))
-        .arg(Arg::with_name("gui").long("gui"))
-        .arg(Arg::with_name("monitor").long("monitor"))
-        .arg(Arg::with_name("all").long("all"))
-        .arg(Arg::with_name("install-service").long("install-service"))
-        .arg(Arg::with_name("install-timers").long("install-timers"))
-        .arg(Arg::with_name("remove-cron").long("remove-cron"))
+        .arg(Arg::new("setup").long("setup"))
+        .arg(Arg::new("kernel").long("kernel"))
+        .arg(Arg::new("gui").long("gui"))
+        .arg(Arg::new("monitor").long("monitor"))
+        .arg(Arg::new("all").long("all"))
+        .arg(Arg::new("install-service").long("install-service"))
+        .arg(Arg::new("install-timers").long("install-timers"))
+        .arg(Arg::new("remove-cron").long("remove-cron"))
         .get_matches();
+
+    if matches.contains_id("setup") {
+        println!("Setup argument detected");
+    }
+
+    let status = ProcessCommand::new("/bin/bash")
+        .arg("setup.sh")
+        .status()
+        .unwrap();
+
+    if !status.success() {
+        eprintln!("Script failed");
+        exit(1);
+    }
 
     let base_dir = env::current_dir().unwrap().canonicalize().unwrap();
     let base_str = base_dir.to_str().unwrap().to_string();
 
     validate_environment();
+
+    // Lock down all referenced files
     set_executable_permissions(&base_str);
 
-    if matches.is_present("install-service") {
+    if matches.contains_id("install-service") {
         let path = std::env::current_exe().unwrap();
         create_systemd_service(path.to_str().unwrap());
         return;
     }
 
-    if matches.is_present("install-timers") {
+    if matches.contains_id("install-timers") {
         install_systemd_timers(&base_str);
         return;
     }
 
-    if matches.is_present("remove-cron") {
+    if matches.contains_id("remove-cron") {
         remove_systemd_timers();
         return;
     }
 
-    if matches.is_present("setup") || matches.is_present("all") {
+    if matches.contains_id("setup") || matches.contains_id("all") {
         run_script(&format!("{}/setup/setup.sh", base_str));
         run_script(&format!("{}/setup/packages.sh", base_str));
     }
 
-    if matches.is_present("kernel") || matches.is_present("all") {
+    if matches.contains_id("kernel") || matches.contains_id("all") {
         run_kernel(&base_str);
     }
 
-    if matches.is_present("gui") || matches.is_present("all") {
+    if matches.contains_id("gui") || matches.contains_id("all") {
         let state = Arc::new(AppState::new());
 
         let net = Arc::clone(&state.network_monitor);
@@ -342,14 +419,10 @@ fn main() {
         launch_gui(&base_str);
     }
 
-    if matches.is_present("monitor") || matches.is_present("all") {
+    if matches.contains_id("monitor") || matches.contains_id("all") {
         monitor_system();
     }
 
+    log_message("HARDN orchestration completed successfully.");
     println!("HARDN orchestration completed successfully.");
 }
-"""
-with open("/mnt/data/hardn.rs", "w") as f:
-    f.write(rust_code)
-
-"/mnt/data/hardn.rs"
