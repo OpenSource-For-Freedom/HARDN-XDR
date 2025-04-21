@@ -4,6 +4,7 @@ set -x # Debug mode
 
 ########################################
 #            HARDN - Setup             #
+#    THIS SCRIPT IS STIG COMPLIANT     #
 #  Please have repo cloned beforehand  #
 #       Installs + Pre-config          #
 #    Must have python-3 loaded already #
@@ -18,6 +19,11 @@ if [ "$(id -u)" -ne 0 ]; then
     echo "This script must be run as root. Use: sudo ./setup.sh"
     exit 1
 fi
+
+set_generic_hostname() {
+    printf "\033[1;31m[+] Setting a generic hostname...\033[0m\n"
+    hostnamectl set-hostname "MY-PC"
+}
 
 update_system_packages() {
     printf "\033[1;31m[+] Updating system packages...\033[0m\n"
@@ -87,6 +93,43 @@ install_additional_tools() {
     rm -rf "$temp_dir"
 }
 
+
+install_aide() {
+    printf "\033[1;31m[+] Installing and configuring AIDE...\033[0m\n"
+    apt install -y aide aide-common
+    aideinit &
+    mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db
+    printf "\033[1;31m[+] AIDE installation and initial database setup completed.\033[0m\n"
+}
+
+configure_firejail() {
+    printf "\033[1;31m[+] Configuring Firejail for Firefox and Chrome...\033[0m\n"
+
+    # Ensure Firejail is installed
+    if ! command -v firejail > /dev/null 2>&1; then
+        printf "\033[1;31m[-] Firejail is not installed. Please install it first.\033[0m\n"
+        return 1
+    fi
+
+    # Configure Firejail for Firefox
+    if command -v firefox > /dev/null 2>&1; then
+        printf "\033[1;31m[+] Setting up Firejail for Firefox...\033[0m\n"
+        ln -sf /usr/bin/firejail /usr/local/bin/firefox
+    else
+        printf "\033[1;31m[-] Firefox is not installed. Skipping Firejail setup for Firefox.\033[0m\n"
+    fi
+
+    # Configure Firejail for Chrome
+    if command -v google-chrome > /dev/null 2>&1; then
+        printf "\033[1;31m[+] Setting up Firejail for Google Chrome...\033[0m\n"
+        ln -sf /usr/bin/firejail /usr/local/bin/google-chrome
+    else
+        printf "\033[1;31m[-] Google Chrome is not installed. Skipping Firejail setup for Chrome.\033[0m\n"
+    fi
+
+    printf "\033[1;31m[+] Firejail configuration completed.\033[0m\n"
+}
+
 install_rust() {
     printf "\033[1;31m[+] Installing Rust...\033[0m\n"
 
@@ -106,6 +149,11 @@ install_rust() {
         return 1
     fi
 }
+
+echo "========================================================"
+echo "             [+] HARDN - STIG Hardening                 "
+echo "       [+] Applying STIG hardening to system            "
+echo "========================================================"     
 
 stig_password_policy() {
     apt install -y libpam-pwquality
@@ -152,7 +200,8 @@ EOF
 }
 
 stig_disable_usb() {
-    echo "install usb-storage /bin/false" > /etc/modprobe.d/usb-storage.conf
+    echo "install usb-storage /bin/false" > /etc/modprobe.d/hardn-blacklist.conf
+    update-initramfs -u || printf "\033[1;31m[-] Failed to update initramfs.\033[0m\n"
 }
 
 stig_disable_core_dumps() {
@@ -172,6 +221,10 @@ stig_disable_ipv6() {
     sysctl -p
 }
 
+echo "You are accessing a fully secured SIG Information System (IS)..." > /etc/issue
+echo "Use of this IS constitutes consent to monitoring..." > /etc/issue.net
+chmod 644 /etc/issue /etc/issue.net
+
 configure_ufw() {
     printf "\033[1;31m[+] Configuring UFW...\033[0m\n"
     ufw default deny incoming
@@ -183,6 +236,34 @@ configure_ufw() {
     printf "\033[1;31m[+] UFW configuration completed.\033[0m\n"
 }
 
+enforce_apparmor_whitelist() {
+    printf "\033[1;31m[+] Enforcing AppArmor whitelist...\033[0m\n"
+    if [ ! -f /etc/apparmor.d/local/hardn.whitelist ]; then
+        echo "/usr/local/bin/hardn rix," > /etc/apparmor.d/local/hardn.whitelist
+    fi
+    apparmor_parser -r /etc/apparmor.d/local/hardn.whitelist || printf "\033[1;31m[-] Failed to enforce AppArmor whitelist.\033[0m\n"
+}
+
+set_randomize_va_space() {
+    printf "\033[1;31m[+] Setting kernel.randomize_va_space...\033[0m\n"
+    echo "kernel.randomize_va_space = 2" > /etc/sysctl.d/hardn.conf
+    sysctl -w kernel.randomize_va_space=2 || printf "\033[1;31m[-] Failed to set randomize_va_space.\033[0m\n"
+    sysctl --system || printf "\033[1;31m[-] Failed to reload sysctl settings.\033[0m\n"
+}
+
+update_firmware() {
+    printf "\033[1;31m[+] Checking for firmware updates...\033[0m\n"
+    apt install -y fwupd
+    fwupdmgr refresh || printf "\033[1;31m[-] Failed to refresh firmware metadata.\033[0m\n"
+    fwupdmgr get-updates || printf "\033[1;31m[-] Failed to check for firmware updates.\033[0m\n"
+    if fwupdmgr update; then
+        printf "\033[1;32m[+] Firmware updates applied successfully.\033[0m\n"
+    else
+        printf "\033[1;33m[+] No firmware updates available or update process skipped.\033[0m\n"
+    fi
+}
+
+
 apply_stig_hardening() {
     stig_password_policy
     stig_lock_inactive_accounts
@@ -193,20 +274,26 @@ apply_stig_hardening() {
     stig_disable_core_dumps
     stig_disable_ctrl_alt_del
     stig_disable_ipv6
+    set_randomize_va_space
+    enforce_apparmor_whitelist
+    update_firmware
+    
 }
 
 setup_complete() {
     echo "======================================================="
     echo "             [+] HARDN - Setup Complete                "
-    echo "  [+] Please reboot your system to apply changes       "
     echo "======================================================="
 }
 
 main() {
     update_system_packages
+    set_generic_hostname
     install_pkgdeps
     install_selinux
     install_security_tools
+    install_aide
+    configure_firejail
     configure_ufw
     enable_services
     install_additional_tools
@@ -214,6 +301,22 @@ main() {
     apply_stig_hardening
     configure_ufw
     setup_complete
+
+
+   PACKAGES_SCRIPT="/home/tim/DEV/HARDN/src/setup/packages.sh"
+    printf "\033[1;31m[+] Looking for packages.sh at: %s\033[0m\n" "$PACKAGES_SCRIPT"
+    if [ -f "$PACKAGES_SCRIPT" ]; then
+        printf "\033[1;31m[+] Setting executable permissions for packages.sh...\033[0m\n"
+        chmod +x "$PACKAGES_SCRIPT"
+        printf "\033[1;31m[+] Calling packages.sh...\033[0m\n"
+        "$PACKAGES_SCRIPT"
+    else
+        printf "\033[1;31m[-] packages.sh not found at: %s. Skipping...\033[0m\n" "$PACKAGES_SCRIPT"
+    fi
+
+   
 }
 
+
 main
+
