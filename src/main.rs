@@ -42,6 +42,9 @@ impl NetworkMonitor {
         vec![
             Connection { ip: "192.168.0.1".into(), port: 22 },
             Connection { ip: "10.0.0.5".into(), port: 443 },
+            Connection { ip: "172.16.0.1".into(), port: 80 },
+            Connection { ip: "172.16.0.2".into(), port: 8080 },
+        ]
         ]
     }
 }
