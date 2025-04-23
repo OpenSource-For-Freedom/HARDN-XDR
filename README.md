@@ -3,17 +3,29 @@
   ![GitHub issues](https://img.shields.io/github/issues/OpenSource-For-Freedom/HARDN)
   ![GitHub stars](https://img.shields.io/github/stars/OpenSource-For-Freedom/HARDN)
 
+
+<p align="center">
+  <img src="https://img.shields.io/badge/OS: DEBIAN 12-red?style=for-the-badge&labelColor=grey" alt="OS: DEBIAN 12"><br><br>
+</p>
+
+
 <p align="center">
   <img src="docs/assets/HARDN(1).png" alt="HARDN Logo" width="300px" /><br><br>
   <img src="https://img.shields.io/badge/The_Linux_Security_Project-red?style=for-the-badge&labelColor=black" alt="The Linux Security Project"><br><br>
   <code>HARDN-Endpoint</code>
 </p>
 
+
 ---
+
 
 <p align="center">
   <img src="https://img.shields.io/badge/OVERVIEW-white?style=for-the-badge&labelColor=black" alt="OVERVIEW"><br><br>
 </p>
+
+
+We also bring you with this release `STIG` COMPLIANCE" to align with the Security Technical Information Guides provided by the DOD Cyber Exchange.
+
 
 ## Abstract  
 **HARDN** is an open-source framework built to help secure Debian-based Linux systems. It’s designed with modular automation in mind—making it easier to lock down vulnerabilities without sacrificing performance. Using a combination of Python, shell scripting, and strict security policies, HARDN creates systems that are more resilient and efficient from the ground up. This document outlines where the project stands, what tools it's using, and where it's headed as it prepares for the release of a polished `.deb` package.
@@ -24,11 +36,22 @@
 With cyber threats evolving daily, securing Linux systems—especially those based on Debian—has never been more important. **HARDN** steps in as a powerful, yet user-conscious toolset that automates the hardening process without overcomplicating it. It brings together battle-tested security methods, zero-trust principles, and modern tools like Ansible, AppArmor, and Fail2Ban. Whether you’re a sysadmin, developer, or security engineer, HARDN is designed to help you take back control of your system’s security.
 
 ---
+
 <p align="center">
   <img src="https://img.shields.io/badge/FEATURES-white?style=for-the-badge&labelColor=black" alt="FEATURES"><br><br>
 </p>
 
+
 ---
+
+- **Comprehensive Monitoring**: Real-time insights into endpoint performance and activity.
+- **Enhanced Security**: Protect endpoints with advanced security protocols.
+- **Scalability**: Manage endpoints across small to large-scale networks.
+- **User-Friendly Interface**: Intuitive design for seamless navigation and management.
+- **STIG Compliance**: This release brings the utmost, security for Debian Government based informatin systems. 
+
+---
+
 
 <p align="center">
   <img src="https://img.shields.io/badge/PURPOSE-white?style=for-the-badge&labelColor=black" alt="PURPOSE"><br><br>
@@ -143,8 +166,31 @@ echo "blacklist usb_storage" >> /etc/modprobe.d/blacklist.conf
 </p>
 
 Coming Soon..
-
 ---
+
+1. Clone the repository from GitHub:
+  ```bash
+  git clone https://github.com/opensource-for-freedom/HARDN.git
+  ```
+2. Navigate to the `src` directory:
+ ```bash
+  cd HARDN/src/setup
+  sudo chmod +x setup.sh
+  sudo ./setup.sh
+
+  ```
+  This will kick off the full setup of HARDN with `STIG` principles. 
+  ### NOTE: 
+
+  
+  #### AIDE will 20-60 minutes to fully establish the "ADVANCED INTRUSION DETECTION SYSTEM"
+  - This script will run syncronously and reboot your system when complete. 
+  - DO-NOT turn your system off: We have established an update routine with reboots using CRON. 
+  - HARDN-Endpoint in itself once executed, will keep your Debian system secure and up to date. 
+
+6. Follow any additional setup instructions and information provided in the `docs` directory.
+</p>
+
 
 <p align="center">
   <img src="https://img.shields.io/badge/CONTRIBUTION-white?style=for-the-badge&labelColor=black" alt="CONTRIBUTION"><br><br>
