@@ -204,6 +204,25 @@ stig_disable_usb() {
     update-initramfs -u || printf "\033[1;31m[-] Failed to update initramfs.\033[0m\n"
 }
 
+enforce_partitioning() {
+    printf "\033[1;31m[+] Enforcing secure partitioning...\033[0m\n"
+
+    # /tmp should be its own partition, noexec, nosuid, nodev
+    echo "tmpfs /tmp tmpfs defaults,noexec,nosuid,nodev 0 0" >> /etc/fstab
+
+    # /var should be its own partition, nodev
+    # (If you don't want separate physical partition, skip this.)
+    # echo "UUID=xxxx-xxxx /var ext4 defaults,nodev 0 2" >> /etc/fstab
+
+    # /home should be nodev
+    echo "UUID=$(blkid -s UUID -o value $(mount | grep '/home' | awk '{print $1}')) /home ext4 defaults,nodev 0 2" >> /etc/fstab
+
+    # /boot should be nosuid,nodev
+    echo "UUID=$(blkid -s UUID -o value $(mount | grep '/boot' | awk '{print $1}')) /boot ext4 defaults,nodev,nosuid 0 2" >> /etc/fstab
+
+    mount -a
+}
+
 stig_disable_core_dumps() {
     echo "* hard core 0" >> /etc/security/limits.conf
     echo "fs.suid_dumpable = 0" > /etc/sysctl.d/99-coredump.conf
@@ -295,6 +314,7 @@ main() {
     install_aide
     configure_firejail
     configure_ufw
+    enforce_partitioning
     enable_services
     install_additional_tools
     install_rust
