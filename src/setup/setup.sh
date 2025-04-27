@@ -113,9 +113,23 @@ install_additional_tools() {
 
 install_aide() {
     printf "\033[1;31m[+] Installing and configuring AIDE...\033[0m\n"
+
     apt install -y aide aide-common
-    aideinit &
-    mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db
+    if aideinit; then
+        printf "\033[1;32m[+] AIDE database initialized successfully.\033[0m\n"
+    else
+        printf "\033[1;31m[-] Failed to initialize AIDE database. Please check the logs.\033[0m\n"
+        return 1
+    fi
+
+    if [ -f /var/lib/aide/aide.db.new ]; then
+        mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db
+        printf "\033[1;32m[+] AIDE database moved to /var/lib/aide/aide.db.\033[0m\n"
+    else
+        printf "\033[1;31m[-] AIDE database file /var/lib/aide/aide.db.new not found. Initialization may have failed.\033[0m\n"
+        return 1
+    fi
+
     printf "\033[1;31m[+] AIDE installation and initial database setup completed.\033[0m\n"
 }
 
