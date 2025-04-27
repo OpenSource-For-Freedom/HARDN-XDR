@@ -65,7 +65,9 @@ The purpose of HARDN Endpoint is to empower IT administrators and users with the
   <img src="https://img.shields.io/badge/INSTALLATION-white?style=for-the-badge&labelColor=black" alt="INSTALLATION"><br><br>
 </p>
 
-
+### Steps for Setup
+- **THIS FILE IS IMMUTABLE ONCE EXECUTED**
+- This file disables HARDN editing onces its executed
 1. Clone the repository from GitHub:
   ```bash
   git clone https://github.com/opensource-for-freedom/HARDN.git
@@ -80,7 +82,7 @@ The purpose of HARDN Endpoint is to empower IT administrators and users with the
   This will kick off the full setup of HARDN with `STIG` principles. 
   ### NOTE: 
 
-  
+  ### Note: 
   #### AIDE will 20-60 minutes to fully establish the "ADVANCED INTRUSION DETECTION SYSTEM"
   - This script will run syncronously and reboot your system when complete. 
   - DO-NOT turn your system off: We have established an update routine with reboots using CRON. 
