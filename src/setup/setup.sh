@@ -412,7 +412,7 @@ echo -e "\033[1;33m========================================================\033[
 
     printf "\033[1;31m[+] Calling packages.sh...\033[0m\n"
    
-   PACKAGES_SCRIPT="/home/tim/DEV/HARDN/src/setup/packages.sh"
+   PACKAGES_SCRIPT="HARDN/src/setup/packages.sh"
     printf "\033[1;31m[+] Looking for packages.sh at: %s\033[0m\n" "$PACKAGES_SCRIPT"
     if [ -f "$PACKAGES_SCRIPT" ]; then
         printf "\033[1;31m[+] Setting executable permissions for packages.sh...\033[0m\n"
