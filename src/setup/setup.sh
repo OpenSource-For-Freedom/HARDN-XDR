@@ -14,22 +14,13 @@ set -x # Debug mode
 #        Date: 4/5-12/2025             #
 ########################################
 
-sudo apt-get update
-sudo apt-get install -y figlet
 
-# banner
-if command -v figlet > /dev/null 2>&1; then
-    echo -e "\033[1;31m"
-    for font in slant big standard; do
-        figlet -f "$font" "HARDN"
-    done
-    echo -e "\033[0m"
-else
-    echo -e "\033[1;31m[+] figlet is not installed. Install it using: sudo apt-get install -y figlet\033[0m"
-fi
+echo -e "\033[1;33m========================================================\033[0m"
+echo -e "\033[1;33m                 [+] HARDN - Setup                      \033[0m"
+echo -e "\033[1;33m      [+] Author's: Chris Bingham + Tim Burns           \033[0m"
+echo -e "\033[1;33m========================================================\033[0m"
 
 
-# Ensure the script is run as root
 if [ "$(id -u)" -ne 0 ]; then
     echo "This script must be run as root. Use: sudo ./setup.sh"
     exit 1
@@ -136,13 +127,12 @@ install_aide() {
 configure_firejail() {
     printf "\033[1;31m[+] Configuring Firejail for Firefox and Chrome...\033[0m\n"
 
-    # Ensure Firejail is installed
     if ! command -v firejail > /dev/null 2>&1; then
         printf "\033[1;31m[-] Firejail is not installed. Please install it first.\033[0m\n"
         return 1
     fi
 
-    # Configure Firejail for Firefox
+    #  Firefox
     if command -v firefox > /dev/null 2>&1; then
         printf "\033[1;31m[+] Setting up Firejail for Firefox...\033[0m\n"
         ln -sf /usr/bin/firejail /usr/local/bin/firefox
@@ -150,7 +140,7 @@ configure_firejail() {
         printf "\033[1;31m[-] Firefox is not installed. Skipping Firejail setup for Firefox.\033[0m\n"
     fi
 
-    # Configure Firejail for Google Chrome
+    # Google Chrome
     if command -v google-chrome > /dev/null 2>&1; then
         printf "\033[1;31m[+] Setting up Firejail for Google Chrome...\033[0m\n"
         ln -sf /usr/bin/firejail /usr/local/bin/google-chrome
@@ -202,7 +192,7 @@ stig_configure_pam() {
     echo "account required pam_tally2.so" >> /etc/pam.d/common-account
 }
 
-# Configure SSH for STIG compliance
+
 stig_configure_ssh() {
     printf "\033[1;31m[+] Configuring SSH for STIG compliance...\033[0m\n"
     sed -i 's/^#PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
