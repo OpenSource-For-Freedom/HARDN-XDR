@@ -106,6 +106,8 @@ install_aide() {
     printf "\033[1;31m[+] Installing and configuring AIDE...\033[0m\n"
 
     apt install -y aide aide-common
+    sudo aideinit
+    
     if aideinit; then
         printf "\033[1;32m[+] AIDE database initialized successfully.\033[0m\n"
     else
