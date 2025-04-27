@@ -14,6 +14,21 @@ set -x # Debug mode
 #        Date: 4/5-12/2025             #
 ########################################
 
+sudo apt-get update
+sudo apt-get install -y figlet
+
+# banner
+if command -v figlet > /dev/null 2>&1; then
+    echo -e "\033[1;31m"
+    for font in slant big standard; do
+        figlet -f "$font" "HARDN"
+    done
+    echo -e "\033[0m"
+else
+    echo -e "\033[1;31m[+] figlet is not installed. Install it using: sudo apt-get install -y figlet\033[0m"
+fi
+
+
 # Ensure the script is run as root
 if [ "$(id -u)" -ne 0 ]; then
     echo "This script must be run as root. Use: sudo ./setup.sh"
@@ -33,13 +48,15 @@ update_system_packages() {
 install_pkgdeps() {
     printf "\033[1;31m[+] Installing package dependencies...\033[0m\n"
     apt install -y wget curl git gawk mariadb-common mysql-common policycoreutils \
-        python3-matplotlib unixodbc-common firejail python3-pyqt6
+        python3-matplotlib unixodbc-common firejail python3-pyqt6 
 }
 
-echo "========================================================"
-echo "             [+] HARDN - Security Features              "
-echo "       [+] Installing required Security Services        "
-echo "========================================================"
+echo -e "\033[1;33m========================================================\033[0m"
+echo -e "\033[1;33m             [+] HARDN - Security Features              \033[0m"
+echo -e "\033[1;33m       [+] Installing required Security Services        \033[0m"
+echo -e "\033[1;33m========================================================\033[0m"
+
+sleep 3
 
 install_selinux() {
     printf "\033[1;31m[+] Installing and configuring SELinux...\033[0m\n"
@@ -150,12 +167,15 @@ install_rust() {
     fi
 }
 
-echo "========================================================"
-echo "             [+] HARDN - STIG Hardening                 "
-echo "       [+] Applying STIG hardening to system            "
-echo "========================================================"     
+echo -e "\033[1;33m========================================================\033[0m"
+echo -e "\033[1;33m             [+] HARDN - STIG Hardening                 \033[0m"
+echo -e "\033[1;33m       [+] Applying STIG hardening to system            \033[0m"
+echo -e "\033[1;33m========================================================\033[0m"
 
-stig_password_policy() {
+sleep 3
+
+stig_configure_pam() {
+    printf "\033[1;31m[+] Configuring PAM for password complexity and account lockout...\033[0m\n"
     apt install -y libpam-pwquality
     sed -i 's/^# minlen.*/minlen = 14/' /etc/security/pwquality.conf
     sed -i 's/^# dcredit.*/dcredit = -1/' /etc/security/pwquality.conf
@@ -163,6 +183,19 @@ stig_password_policy() {
     sed -i 's/^# ocredit.*/ocredit = -1/' /etc/security/pwquality.conf
     sed -i 's/^# lcredit.*/lcredit = -1/' /etc/security/pwquality.conf
     sed -i '/pam_pwquality.so/ s/$/ retry=3 enforce_for_root/' /etc/pam.d/common-password || true
+
+    echo "auth required pam_tally2.so deny=5 unlock_time=900" >> /etc/pam.d/common-auth
+    echo "account required pam_tally2.so" >> /etc/pam.d/common-account
+}
+
+# Configure SSH for STIG compliance
+stig_configure_ssh() {
+    printf "\033[1;31m[+] Configuring SSH for STIG compliance...\033[0m\n"
+    sed -i 's/^#PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
+    sed -i 's/^#PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+    sed -i 's/^#ClientAliveInterval.*/ClientAliveInterval 300/' /etc/ssh/sshd_config
+    sed -i 's/^#ClientAliveCountMax.*/ClientAliveCountMax 0/' /etc/ssh/sshd_config
+    systemctl restart sshd
 }
 
 stig_lock_inactive_accounts() {
@@ -204,23 +237,34 @@ stig_disable_usb() {
     update-initramfs -u || printf "\033[1;31m[-] Failed to update initramfs.\033[0m\n"
 }
 
-enforce_partitioning() {
+stig_enforce_partitioning() {
     printf "\033[1;31m[+] Enforcing secure partitioning...\033[0m\n"
 
-    # /tmp should be its own partition, noexec, nosuid, nodev
-    echo "tmpfs /tmp tmpfs defaults,noexec,nosuid,nodev 0 0" >> /etc/fstab
+    # /tmp should be its own partition, nosuid, nodev
+    echo "tmpfs /tmp tmpfs defaults,nosuid,nodev 0 0" >> /etc/fstab
+    mkdir -p /tmp/approved_apps
+    chmod 1777 /tmp/approved_apps
+    printf "\033[1;31m[+] Allowing exec in /tmp/approved_apps for signed and approved apps...\033[0m\n"
+    mount -o remount,exec /tmp/approved_apps
 
-    # /var should be its own partition, nodev
-    # (If you don't want separate physical partition, skip this.)
-    # echo "UUID=xxxx-xxxx /var ext4 defaults,nodev 0 2" >> /etc/fstab
-
-    # /home should be nodev
-    echo "UUID=$(blkid -s UUID -o value $(mount | grep '/home' | awk '{print $1}')) /home ext4 defaults,nodev 0 2" >> /etc/fstab
+    # /home nodev----
+    HOME_UUID=$(blkid -s UUID -o value $(findmnt -n -o SOURCE --target /home))
+    if [ -n "$HOME_UUID" ]; then
+        echo "UUID=$HOME_UUID /home ext4 defaults,nodev 0 2" >> /etc/fstab
+    else
+        printf "\033[1;31m[-] Could not determine UUID for /home. Skipping...\033[0m\n"
+    fi
 
     # /boot should be nosuid,nodev
-    echo "UUID=$(blkid -s UUID -o value $(mount | grep '/boot' | awk '{print $1}')) /boot ext4 defaults,nodev,nosuid 0 2" >> /etc/fstab
+    BOOT_UUID=$(blkid -s UUID -o value $(findmnt -n -o SOURCE --target /boot))
+    if [ -n "$BOOT_UUID" ]; then
+        echo "UUID=$BOOT_UUID /boot ext4 defaults,nodev,nosuid 0 2" >> /etc/fstab
+    else
+        printf "\033[1;31m[-] Could not determine UUID for /boot. Skipping...\033[0m\n"
+    fi
 
-    mount -a
+    # Apply changes
+    mount -a || printf "\033[1;31m[-] Failed to remount partitions. Please check /etc/fstab.\033[0m\n"
 }
 
 stig_disable_core_dumps() {
@@ -234,6 +278,13 @@ stig_disable_ctrl_alt_del() {
     systemctl daemon-reexec
 }
 
+stig_disable_icmp_redirects() {
+    printf "\033[1;31m[+] Disabling IPv4 ICMP redirects...\033[0m\n"
+    echo "net.ipv4.conf.all.accept_redirects = 0" >> /etc/sysctl.conf
+    echo "net.ipv4.conf.default.accept_redirects = 0" >> /etc/sysctl.conf
+    sysctl -p
+}
+
 stig_disable_ipv6() {
     echo "net.ipv6.conf.all.disable_ipv6 = 1" >> /etc/sysctl.d/99-sysctl.conf
     echo "net.ipv6.conf.default.disable_ipv6 = 1" >> /etc/sysctl.d/99-sysctl.conf
@@ -244,18 +295,19 @@ echo "You are accessing a fully secured SIG Information System (IS)..." > /etc/i
 echo "Use of this IS constitutes consent to monitoring..." > /etc/issue.net
 chmod 644 /etc/issue /etc/issue.net
 
-configure_ufw() {
+stig_configure_ufw() {
     printf "\033[1;31m[+] Configuring UFW...\033[0m\n"
     ufw default deny incoming
     ufw default allow outgoing
     ufw allow out 53    # Allow DNS for LMD signature updates and Rust installs
     ufw allow out 443   # Allow HTTPS for LMD signature updates and Rust installs
+    ufw allow 22/tcp  # STIG based ssh policy allow 
     ufw enable || printf "\033[1;31m[-] Warning: Could not enable UFW.\033[0m\n"
     ufw reload || printf "\033[1;31m[-] Warning: Could not reload UFW.\033[0m\n"
     printf "\033[1;31m[+] UFW configuration completed.\033[0m\n"
 }
 
-enforce_apparmor_whitelist() {
+stig_enforce_apparmor_whitelist() {
     printf "\033[1;31m[+] Enforcing AppArmor whitelist...\033[0m\n"
     if [ ! -f /etc/apparmor.d/local/hardn.whitelist ]; then
         echo "/usr/local/bin/hardn rix," > /etc/apparmor.d/local/hardn.whitelist
@@ -263,12 +315,28 @@ enforce_apparmor_whitelist() {
     apparmor_parser -r /etc/apparmor.d/local/hardn.whitelist || printf "\033[1;31m[-] Failed to enforce AppArmor whitelist.\033[0m\n"
 }
 
-set_randomize_va_space() {
+stig_set_randomize_va_space() {
     printf "\033[1;31m[+] Setting kernel.randomize_va_space...\033[0m\n"
     echo "kernel.randomize_va_space = 2" > /etc/sysctl.d/hardn.conf
     sysctl -w kernel.randomize_va_space=2 || printf "\033[1;31m[-] Failed to set randomize_va_space.\033[0m\n"
     sysctl --system || printf "\033[1;31m[-] Failed to reload sysctl settings.\033[0m\n"
 }
+
+
+
+echo -e "\033[1;32m========================================================\033[0m"
+echo -e "\033[1;32m             [+] HARDN - STIG Hardening                 \033[0m"
+echo -e "\033[1;32m       [+] STIG Hardening Complete                      \033[0m"
+echo -e "\033[1;32m========================================================\033[0m"
+
+
+sleep 3
+
+
+echo -e "\033[1;33m========================================================\033[0m"
+echo -e "\033[1;33m             [+] HARDN - Finishing                      \033[0m"
+echo -e "\033[1;33m       [+] Applying Firmware updates                    \033[0m"
+echo -e "\033[1;33m========================================================\033[0m"
 
 update_firmware() {
     printf "\033[1;31m[+] Checking for firmware updates...\033[0m\n"
@@ -283,8 +351,10 @@ update_firmware() {
 }
 
 
+
 apply_stig_hardening() {
-    stig_password_policy
+    stig_configure_pam
+    stig_configure_ssh
     stig_lock_inactive_accounts
     stig_login_banners
     stig_secure_filesystem
@@ -293,11 +363,15 @@ apply_stig_hardening() {
     stig_disable_core_dumps
     stig_disable_ctrl_alt_del
     stig_disable_ipv6
-    set_randomize_va_space
-    enforce_apparmor_whitelist
+    stig_disable_icmp_redirects
+    stig_set_randomize_va_space
+    stig_enforce_apparmor_whitelist
+    stig_enforce_partitioning
     update_firmware
     
 }
+
+sleep 5
 
 setup_complete() {
     echo "======================================================="
@@ -323,6 +397,17 @@ main() {
     setup_complete
 
 
+
+echo -e "\033[1;33m========================================================\033[0m"
+echo -e "\033[1;33m             [+] HARDN - Calling Package Validation     \033[0m"
+echo -e "\033[1;33m       [+] Validation Sequence starting in 7 seconds    \033[0m"
+echo -e "\033[1;33m========================================================\033[0m"
+
+    sleep 7
+
+
+    printf "\033[1;31m[+] Calling packages.sh...\033[0m\n"
+   
    PACKAGES_SCRIPT="/home/tim/DEV/HARDN/src/setup/packages.sh"
     printf "\033[1;31m[+] Looking for packages.sh at: %s\033[0m\n" "$PACKAGES_SCRIPT"
     if [ -f "$PACKAGES_SCRIPT" ]; then
