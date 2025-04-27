@@ -67,7 +67,7 @@ The purpose of HARDN Endpoint is to empower IT administrators and users with the
 
 ### Steps for Setup
 - **THIS FILE IS IMMUTABLE ONCE EXECUTED**
-- This file disables HARDN editing onces its executed
+- This file disables HARDN editing once its executed
 1. Clone the repository from GitHub:
   ```bash
   git clone https://github.com/opensource-for-freedom/HARDN.git
