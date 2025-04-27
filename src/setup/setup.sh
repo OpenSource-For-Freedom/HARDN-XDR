@@ -150,7 +150,7 @@ configure_firejail() {
         printf "\033[1;31m[-] Firefox is not installed. Skipping Firejail setup for Firefox.\033[0m\n"
     fi
 
-    # Configure Firejail for Chrome
+    # Configure Firejail for Google Chrome
     if command -v google-chrome > /dev/null 2>&1; then
         printf "\033[1;31m[+] Setting up Firejail for Google Chrome...\033[0m\n"
         ln -sf /usr/bin/firejail /usr/local/bin/google-chrome
