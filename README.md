@@ -1,11 +1,10 @@
-
 <p align="center">
-  <Project Status><br><br>
+  <b>Project Status</b><br><br>
+  <img src="https://img.shields.io/github/v/release/OpenSource-For-Freedom/HARDN?include_prereleases">
+  <img src="https://img.shields.io/github/issues/OpenSource-For-Freedom/HARDN">
+  <img src="https://img.shields.io/github/stars/OpenSource-For-Freedom/HARDN">
 </p>
 
-![GitHub release (latest by date)](https://img.shields.io/github/v/release/OpenSource-For-Freedom/HARDN?include_prereleases)
-![GitHub issues](https://img.shields.io/github/issues/OpenSource-For-Freedom/HARDN)
-![GitHub stars](https://img.shields.io/github/stars/OpenSource-For-Freedom/HARDN)
 
 
 <p align="center">
