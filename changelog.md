@@ -13,7 +13,7 @@
 
 ### Fixed
 - 'aide' issues discivered dueing install. Working on directory DB and teating at this time. 
-- This issue is not widespread and onky effecting LMV / Non-bare metal based machines. 
+- This issue is not widespread and only effecting LMV / Non-bare metal based machines. 
 
 
 ---
