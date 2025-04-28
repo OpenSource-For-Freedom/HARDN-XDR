@@ -1,6 +1,6 @@
 
 <p align="center">
-  <## Project Status><br><br>
+  <Project Status><br><br>
 </p>
 
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/OpenSource-For-Freedom/HARDN?include_prereleases)
