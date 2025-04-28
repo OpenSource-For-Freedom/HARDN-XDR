@@ -12,7 +12,7 @@
 - Kernel and PAM based functions implimented in setup.sh
 
 ### Fixed
-- 'aide' issues discivered dueing install. Working on directory DB and teating at this time. 
+- 'aide' issues discovered during tested install. Working on directory DB and testing at this time. 
 - This issue is not widespread and only effecting LMV / Non-bare metal based machines. 
 
 
