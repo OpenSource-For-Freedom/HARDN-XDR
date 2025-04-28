@@ -1,19 +1,20 @@
 # Changelog
 
-## Version 1
+## Version 1.2.1
+
+### Reference : opensource-for-freedom-patch-1
 
 ### Added
-- **HARDN-Endpoint**: Introduced enhanced CLI-based support for ensuring STIG compliance on Debian 12.
-- Added automated STIG compliance validation for Debian 12, integrated into the CLI workflow.
-- Provided new CLI commands for checking and remediating security compliance issues on Debian 12 systems.
+- **HARDN-Endpoint**: Added PAM, audit logging, partitioning enforcment, config patching for OS compatibility. 
 
 ### Improved
-- Optimized CLI performance for faster execution of compliance checks and validations.
-- Improved CLI usability with better command descriptions, error messages, and help documentation.
+- STIG compliance increasing with testing. 
+- Kernel and PAM based functions implimented in setup.sh
 
 ### Fixed
-- Addressed bugs causing incorrect compliance check results in specific Debian 12 configurations.
-- Resolved minor CLI output inconsistencies to ensure a more user-friendly experience.
+- 'aide' issues discivered dueing install. Working on directory DB and teating at this time. 
+- This issue is not widespread and onky effecting LMV / Non-bare metal based machines. 
+
 
 ---
 
