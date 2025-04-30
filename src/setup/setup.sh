@@ -73,35 +73,32 @@ install_pkgdeps() {
 install_selinux() {
     printf "\033[1;31m[+] Installing and configuring SELinux alongside AppArmor as sudo...\033[0m\n"
     sudo apt update
-    sudo apt install -y selinux-utils selinux-basics policycoreutils policycoreutils-python-utils selinux-policy-default apparmor apparmor-utils
+    sudo apt install -y selinux-utils selinux-basics policycoreutils policycoreutils-python-utils selinux-policy-default apparmor apparmor-utils lynis
 
     if ! command -v getenforce > /dev/null 2>&1; then
         printf "\033[1;31m[-] SELinux installation failed. Please check system logs.\033[0m\n"
         return 1
     fi
 
-    
     if getenforce | grep -q "Disabled"; then
         printf "\033[1;31m[-] SELinux is disabled. Configuring it to enforcing mode at boot...\033[0m\n"
-        sudo sed -i 's/^SELINUX=.*/SELINUX=enforcing/' /etc/selinux/config
-        printf "\033[1;31m[+] SELinux configured to enforcing mode at boot.\033[0m\n"
+        sudo sed -i 's/^SELINUX=.*/SELINUX=permissive/' /etc/selinux/config
+        printf "\033[1;31m[+] SELinux configured to permissive mode at boot to avoid conflicts with desktop environments.\033[0m\n"
     else
-        sudo setenforce 1 || printf "\033[1;31m[-] Could not set SELinux to enforcing mode immediately. Please reboot to apply changes.\033[0m\n"
+        sudo setenforce 0 || printf "\033[1;31m[-] Could not set SELinux to permissive mode immediately. Please reboot to apply changes.\033[0m\n"
     fi
 
-    
     printf "\033[1;31m[+] Applying strong SELinux policies...\033[0m\n"
     sudo semodule -DB || printf "\033[1;31m[-] Failed to disable SELinux policy debugging.\033[0m\n"
     sudo semodule -B || printf "\033[1;31m[-] Failed to rebuild SELinux policy.\033[0m\n"
 
-    sudo useradd -r -s /usr/sbin/nologin sddm || true
-    sudo semodule -B || printf "\033[1;31m[-] Failed to rebuild SELinux policy.\033[0m\n"
-
-   
     printf "\033[1;31m[+] Enforcing AppArmor profiles...\033[0m\n"
     sudo aa-enforce /etc/apparmor.d/* || printf "\033[1;31m[-] Warning: Failed to enforce some AppArmor profiles.\033[0m\n"
 
-    printf "\033[1;31m[+] SELinux and AppArmor installation and configuration completed. Reboot required to apply changes.\033[0m\n"
+    printf "\033[1;31m[+] Configuring Lynis for system auditing...\033[0m\n"
+    sudo lynis audit system || printf "\033[1;31m[-] Lynis audit failed. Please check the logs.\033[0m\n"
+
+    printf "\033[1;31m[+] SELinux set to permissive mode to ensure compatibility with GNOME, XFCE4, and LightDM. Reboot required to apply changes.\033[0m\n"
 }
 
 install_security_tools() {
@@ -128,6 +125,8 @@ install_additional_tools() {
         cd linux-malware-detect || { printf "\033[1;31m[-] Could not enter maldetect dir\033[0m\n"; return 1; }
         sudo chmod +x install.sh
         sudo ./install.sh
+        sudo systemctl enable maldet
+        printf "\033[1;32m[+] Maldet installed and enabled to run at startup.\033[0m\n"
     else
         printf "\033[1;31m[-] Failed to clone maldetect repo\033[0m\n"
     fi
@@ -141,21 +140,27 @@ install_aide() {
 
     sudo apt install -y aide aide-common
 
-    # Exclude large directories
-    sudo sed -i '/\/var\/log\/.*/d' /etc/aide/aide.conf
-    sudo sed -i '/\/tmp\/.*/d' /etc/aide/aide.conf
+    # Exclude problematic directories and files
+    echo "!/run/user/1000/doc/.*" | sudo tee -a /etc/aide/aide.conf > /dev/null
+    echo "!/run/user/1000/gvfs/.*" | sudo tee -a /etc/aide/aide.conf > /dev/null
+    echo "!/home/tim/.config/Code/User/globalStorage/.*" | sudo tee -a /etc/aide/aide.conf > /dev/null
+    echo "!/home/tim/.config/Code/User/workspaceStorage/.*" | sudo tee -a /etc/aide/aide.conf > /dev/null
+    echo "!/home/tim/.config/Code/logs/.*" | sudo tee -a /etc/aide/aide.conf > /dev/null
 
-    if sudo aide --init --log_level=info --report_level=info; then
-        if [ -f /var/lib/aide/aide.db.new ]; then
-            sudo mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db
-        elif [ -f /var/lib/aide/aide.db.gz.new ]; then
-            sudo mv /var/lib/aide/aide.db.gz.new /var/lib/aide/aide.db.gz
-        fi
+    # Initialize AIDE
+    sudo aideinit
+    if [ -f /var/lib/aide/aide.db.new ]; then
+        sudo mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db
         sudo chmod 600 /var/lib/aide/aide.db
         printf "\033[1;32m[+] AIDE initialization completed successfully.\033[0m\n"
     else
-        printf "\033[1;31m[-] AIDE initialization failed. Skipping...\033[0m\n" | sudo tee -a /var/log/hardn-setup.log > /dev/null
+        printf "\033[1;31m[-] AIDE initialization failed. Please check the logs.\033[0m\n"
     fi
+
+    # Schedule AIDE checks
+    printf "\033[1;31m[+] Scheduling AIDE to run daily...\033[0m\n"
+    echo "0 2 * * * root /usr/bin/aide --check" | sudo tee /etc/cron.d/aide > /dev/null
+    sudo systemctl restart cron || printf "\033[1;31m[-] Failed to restart cron service.\033[0m\n"
 }
 
 configure_firejail() {
@@ -356,76 +361,21 @@ stig_configure_iptables() {
     printf "\033[1;31m[+] iptables configuration completed.\033[0m\n"
 }
 
-enforce_apparmor_whitelist() {
-    printf "\033[1;31m[+] Enforcing AppArmor whitelist...\033[0m\n"
-    if [ ! -f /etc/apparmor.d/local/hardn.whitelist ]; then
-        sudo tee /etc/apparmor.d/local/hardn.whitelist > /dev/null <<EOF
+stig_enforce_apparmor() {
+    printf "\033[1;31m[+] Enforcing AppArmor profiles for Debian 12...\033[0m\n"
+    
+    if ! command -v aa-status > /dev/null 2>&1; then
+        printf "\033[1;31m[-] AppArmor is not installed. Installing AppArmor...\033[0m\n"
+        sudo apt install -y apparmor apparmor-utils || { printf "\033[1;31m[-] Failed to install AppArmor.\033[0m\n"; return 1; }
+    fi
+    sudo aa-enforce /etc/apparmor.d/* || printf "\033[1;31m[-] Warning: Failed to enforce some AppArmor profiles.\033[0m\n"
 
-/usr/bin/firefox
-/usr/bin/google-chrome
-/usr/bin/ssh
-/usr/bin/ssh-agent
-/usr/bin/ssh-add
-/usr/bin/ssh-keygen
-/usr/bin/ssh-keyscan
-/usr/bin/ssh-copy-id
-/usr/bin/discord
-/usr/bin/code
-/usr/bin/lynis
-/usr/bin/hardn
+    sudo systemctl restart apparmor || printf "\033[1;31m[-] Failed to restart AppArmor service.\033[0m\n"
 
-/usr/bin/gedit
-/usr/bin/vim
-/usr/bin/nano
-/usr/bin/htop
-/usr/bin/top
-/usr/bin/ps
-/usr/bin/netstat
-/usr/bin/ss
-/usr/bin/lsof
-/usr/bin/df
-/usr/bin/du
-/usr/bin/free
-/usr/bin/uptime
-/usr/bin/ifconfig
-/usr/bin/ip
-/usr/bin/iwconfig
-/usr/bin/apt
-/usr/bin/apt-get
-/usr/bin/dpkg
-/usr/bin/systemctl
-/usr/bin/journalctl
-/usr/bin/sudo
-/usr/bin/curl
-/usr/bin/wget
-/usr/bin/git
-/usr/bin/ls
-/usr/bin/cat
-/usr/bin/mkdir
-/usr/bin/rm
-/usr/bin/chmod
-/usr/bin/chown
-/usr/bin/tar
-/usr/bin/grep
-/usr/bin/find
-/usr/bin/awk
-/usr/bin/sed
-/usr/bin/iptables
-/usr/bin/iptables-save
-/usr/bin/iptables-restore
-/usr/bin/aa-enforce
-/usr/bin/aa-complain
-/usr/bin/aa-status
-/usr/bin/selinuxenabled
-/usr/bin/getenforce
-/usr/bin/setenforce
-/usr/bin/semanage
-/usr/bin/restorecon
-/usr/bin/chcon
-/usr/bin/auditctl
-/usr/bin/ausearch
-/usr/bin/fwupdmgr
-EOF
+    if sudo aa-status | grep -q "profiles are in enforce mode"; then
+        printf "\033[1;32m[+] AppArmor profiles successfully enforced.\033[0m\n"
+    else
+        printf "\033[1;31m[-] AppArmor profiles enforcement verification failed.\033[0m\n"
     fi
 }
 
@@ -466,7 +416,7 @@ apply_stig_hardening() {
     stig_disable_ipv6 || { printf "\033[1;31m[-] Failed to disable IPv6.\033[0m\n"; exit 1; }
     stig_configure_iptables || { printf "\033[1;31m[-] Failed to configure iptables.\033[0m\n"; exit 1; }
     stig_set_randomize_va_space || { printf "\033[1;31m[-] Failed to set randomize_va_space.\033[0m\n"; exit 1; }
-    enforce_apparmor_whitelist || { printf "\033[1;31m[-] Failed to enforce AppArmor whitelist.\033[0m\n"; exit 1; }
+    stig_enforce_apparmor || { printf "\033[1;31m[-] Failed to enforce AppArmor.\033[0m\n"; exit 1; }
     update_firmware || { printf "\033[1;31m[-] Failed to update firmware.\033[0m\n"; exit 1; }
 
     printf "\033[1;32m[+] STIG hardening tasks applied successfully.\033[0m\n"
@@ -512,6 +462,7 @@ main() {
     printf "\033[1;31m========================================================\033[0m\n"
     install_pkgdeps
     install_selinux
+    
 
     printf "\033[1;31m========================================================\033[0m\n"
     printf "\033[1;31m                  [+] HARDN - SELinux                   \033[0m\n"
