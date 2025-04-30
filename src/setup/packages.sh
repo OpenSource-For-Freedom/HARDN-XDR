@@ -2,193 +2,433 @@
 set -e # Exit on errors
 set -x # Debug mode
 
-########################################
-# HARDN - Packages #
-# THIS SCRIPT IS STIG COMPLIANT #
-# Please have repo cloned beforehand #
-# Installs + Pre-config #
-# Must have python-3 loaded already #
-# Author(s): #
-# - Chris Bingham #
-# - Tim Burns #
-# Date: 4/5-12/2025 #
-########################################
 
-# Ensure the script is run as root
+
+                                               # Author(s):                         
+                                              #- Chris Bingham                    
+                                              #  - Tim Burns                        
+                                  
+                                             # Date: 4/5-12/2025
+
+
+print_ascii_banner() {
+    cat << "EOF"
+
+                               S E C U I T Y    I N T E R N A T I O N A L    G R O U P
+                              ▄█    █▄       ▄████████    ▄████████ ████████▄  ███▄▄▄▄   
+                             ███    ███     ███    ███   ███    ███ ███   ▀███ ███▀▀▀██▄ 
+                             ███    ███     ███    ███   ███    ███ ███    ███ ███   ███ 
+                            ▄███▄▄▄▄███▄▄   ███    ███  ▄███▄▄▄▄██▀ ███    ███ ███   ███ 
+                           ▀▀███▀▀▀▀███▀  ▀███████████ ▀▀███▀▀▀▀▀   ███    ███ ███   ███ 
+                             ███    ███     ███    ███ ▀███████████ ███    ███ ███   ███ 
+                             ███    ███     ███    ███   ███    ███ ███   ▄███ ███   ███ 
+                             ███    █▀      ███    █▀    ███    ███ ████████▀   ▀█   █▀  
+                                                         ███    ███ 
+                                                                     
+                                       
+                                                    v 1.1.2     
+
+                                              V A L I D A T I O N
+                                                               
+                                  
+EOF
+}
+
+print_ascii_banner
+
+sleep 7
+
+
 if [ "$(id -u)" -ne 0 ]; then
-echo "This script must be run as root. Use: sudo ./packages.sh"
-exit 1
+    echo "This script must be run as root. Re-running with sudo..."
+    if command -v sudo >/dev/null; then
+        exec sudo "$0" "$@"
+    else
+        echo "Error: sudo is not installed. Please run this script as root."
+        exit 1
+    fi
 fi
 
 LOG_FILE="/var/log/hardn_packages.log"
 FIX_MODE=false
 
 initialize_log() {
-echo "========================================" > "$LOG_FILE"
-echo " HARDN - Packages Validation Log" >> "$LOG_FILE"
-echo "========================================" >> "$LOG_FILE"
-echo "[+] Log initialized at $(date)" >> "$LOG_FILE"
+    echo "========================================" > "$LOG_FILE"
+    echo " HARDN - Packages Validation Log" >> "$LOG_FILE"
+    echo "========================================" >> "$LOG_FILE"
+    echo "[+] Log initialized at $(date)" >> "$LOG_FILE"
 }
 
 fix_if_needed() {
-local check_cmd="$1"
-local fix_cmd="$2"
-local success_msg="$3"
-local failure_msg="$4"
+    local check_cmd="$1"
+    local fix_cmd="$2"
+    local success_msg="$3"
+    local failure_msg="$4"
 
-if eval "$check_cmd"; then
-echo "[+] $success_msg" | tee -a "$LOG_FILE"
-else
-echo "[-] $failure_msg" | tee -a "$LOG_FILE"
-if $FIX_MODE; then
-echo "[*] Attempting to fix..." | tee -a "$LOG_FILE"
-eval "$fix_cmd" && echo "[+] Fixed: $success_msg" | tee -a "$LOG_FILE" || echo "[-] Failed to fix: $failure_msg" | tee -a "$LOG_FILE"
-fi
-fi
+    if eval "$check_cmd"; then
+        eval "$fix_cmd" && echo "[+] Fixed: $success_msg" | tee -a "$LOG_FILE" || { echo "[-] Failed to fix: $failure_msg" | tee -a "$LOG_FILE"; return 1; }
+    else
+        echo "[-] $failure_msg" | tee -a "$LOG_FILE"
+        if $FIX_MODE; then
+            echo "[*] Attempting to fix..." | tee -a "$LOG_FILE"
+            eval "$fix_cmd" && echo "[+] Fixed: $success_msg" | tee -a "$LOG_FILE" || echo "[-] Failed to fix: $failure_msg" | tee -a "$LOG_FILE"
+        fi
+    fi
+}
+
+
+validate_packages() {
+    echo "[+] Validating package configurations..." | tee -a "$LOG_FILE"
+
+    fix_if_needed \
+        "command -v getenforce >/dev/null && [ \"$(getenforce)\" = \"Enforcing\" ]" \
+        "echo '[!] Cannot fix SELinux enforcement automatically.'" \
+        "SELinux is enforcing" \
+        "SELinux not enforcing"
+
+    echo "[*] Checking SELinux enforcement..." | tee -a "$LOG_FILE"
+
+    fix_if_needed \
+        "! ping -c 1 google.com >/dev/null 2>&1" \
+        "sudo systemctl restart networking && sudo dhclient" \
+        "Internet connectivity is restored" \
+        "Internet connectivity is not available"
+
+    echo "[*] Checking internet connectivity..." | tee -a "$LOG_FILE"
+
+    fix_if_needed \
+        "sudo iptables -L >/dev/null 2>&1" \
+        "sudo apt-get install -y iptables && sudo iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT && sudo iptables -A INPUT -p tcp --dport 22 -j ACCEPT && sudo iptables -A INPUT -j DROP" \
+        "iptables is configured and active" \
+        "iptables is not configured or active"
+
+    echo "[*] Checking iptables configuration..." | tee -a "$LOG_FILE"
+
+    fix_if_needed \
+        "sudo systemctl is-active --quiet fail2ban" \
+        "sudo systemctl start fail2ban" \
+        "Fail2Ban is active" \
+        "Fail2Ban not running"
+
+    echo "[*] Checking Fail2Ban status..." | tee -a "$LOG_FILE"
+
+    fix_if_needed \
+        "command -v aa-status >/dev/null && sudo systemctl is-active --quiet apparmor" \
+        "sudo systemctl start apparmor" \
+        "AppArmor is active" \
+        "AppArmor not active"
+
+    echo "[*] Checking AppArmor status..." | tee -a "$LOG_FILE"
+
+    fix_if_needed \
+        "command -v firejail >/dev/null" \
+        "sudo apt-get install -y firejail" \
+        "Firejail is installed" \
+        "Firejail missing"
+
+    echo "[*] Checking Firejail installation..." | tee -a "$LOG_FILE"
+
+    fix_if_needed \
+        "command -v chkrootkit >/dev/null" \
+        "sudo apt-get install -y chkrootkit" \
+        "chkrootkit installed" \
+        "chkrootkit missing"
+
+    echo "[*] Checking chkrootkit installation..." | tee -a "$LOG_FILE"
+
+    fix_if_needed \
+        "command -v maldet >/dev/null || [ -x /usr/local/maldetect/maldet ]" \
+        "sudo apt-get install -y maldet" \
+        "LMD installed" \
+        "LMD not found"
+
+    echo "[*] Checking LMD (Maldet) installation..." | tee -a "$LOG_FILE"
+
+    fix_if_needed \
+        "sudo systemctl is-active --quiet auditd" \
+        "sudo systemctl start auditd" \
+        "auditd is running" \
+        "auditd not running"
+
+    echo "[*] Checking auditd status..." | tee -a "$LOG_FILE"
+
+    fix_if_needed \
+        "command -v aide >/dev/null" \
+        "sudo apt-get install -y aide" \
+        "AIDE is installed" \
+        "AIDE not installed"
+
+    echo "[*] Checking AIDE installation..." | tee -a "$LOG_FILE"
+
+    fix_if_needed \
+        "sudo aide --check >/dev/null 2>&1" \
+        "sudo aideinit" \
+        "AIDE database check passed" \
+        "AIDE database check failed"
+
+    echo "[*] Performing AIDE database check..." | tee -a "$LOG_FILE"
 }
 
 validate_stig_hardening() {
-echo "[+] Validating STIG compliance..." | tee -a "$LOG_FILE"
+    echo "[+] Validating STIG compliance..." | tee -a "$LOG_FILE"
 
-fix_if_needed \
-"grep -q 'minlen = 14' /etc/security/pwquality.conf" \
-"sed -i 's/^#\? *minlen.*/minlen = 14/' /etc/security/pwquality.conf" \
-"Password policy minlen is set" \
-"Password policy minlen missing or wrong"
+    fix_if_needed \
+        "grep -q 'minlen = 14' /etc/security/pwquality.conf" \
+        "sudo sed -i 's/^#\\? *minlen.*/minlen = 14/' /etc/security/pwquality.conf" \
+        "Password policy minlen is set" \
+        "Password policy minlen missing or wrong"
 
-fix_if_needed \
-"stat -c '%a' /etc/shadow | grep -q 000" \
-"chmod 000 /etc/shadow" \
-"/etc/shadow permissions are 000" \
-"Incorrect /etc/shadow permissions"
+    fix_if_needed \
+        "stat -c '%a' /etc/shadow | grep -q 000" \
+        "sudo chmod 000 /etc/shadow" \
+        "/etc/shadow permissions are 000" \
+        "Incorrect /etc/shadow permissions"
 
-fix_if_needed \
-"grep -q 'net.ipv6.conf.all.disable_ipv6 = 1' /etc/sysctl.d/99-sysctl.conf" \
-"echo 'net.ipv6.conf.all.disable_ipv6 = 1' >> /etc/sysctl.d/99-sysctl.conf && sysctl -w net.ipv6.conf.all.disable_ipv6=1" \
-"IPv6 is disabled" \
-"IPv6 not disabled"
+    fix_if_needed \
+        "grep -q 'net.ipv6.conf.all.disable_ipv6 = 1' /etc/sysctl.d/99-sysctl.conf" \
+        "echo 'net.ipv6.conf.all.disable_ipv6 = 1' | sudo tee -a /etc/sysctl.d/99-sysctl.conf && sudo sysctl -w net.ipv6.conf.all.disable_ipv6=1" \
+        "IPv6 is disabled" \
+        "IPv6 not disabled"
 
-fix_if_needed \
-"grep -q 'fs.suid_dumpable = 0' /etc/sysctl.d/99-coredump.conf" \
-"echo 'fs.suid_dumpable = 0' > /etc/sysctl.d/99-coredump.conf && sysctl -w fs.suid_dumpable=0" \
-"Core dumps are disabled" \
-"Core dumps enabled"
+    fix_if_needed \
+        "grep -q 'fs.suid_dumpable = 0' /etc/sysctl.d/99-coredump.conf" \
+        "echo 'fs.suid_dumpable = 0' | sudo tee /etc/sysctl.d/99-coredump.conf && sudo sysctl -w fs.suid_dumpable=0" \
+        "Core dumps are disabled" \
+        "Core dumps enabled"
 
-fix_if_needed \
-"grep -q 'install usb-storage /bin/false' /etc/modprobe.d/hardn-blacklist.conf" \
-"echo 'install usb-storage /bin/false' > /etc/modprobe.d/hardn-blacklist.conf" \
-"USB storage blocked via modprobe" \
-"USB storage not blocked"
+    fix_if_needed \
+        "grep -q 'install usb-storage /bin/false' /etc/modprobe.d/hardn-blacklist.conf" \
+        "echo 'install usb-storage /bin/false' | sudo tee /etc/modprobe.d/hardn-blacklist.conf" \
+        "USB storage blocked via modprobe" \
+        "USB storage not blocked"
 
-fix_if_needed \
-"grep -q 'kernel.randomize_va_space = 2' /etc/sysctl.d/hardn.conf" \
-"echo 'kernel.randomize_va_space = 2' >> /etc/sysctl.d/hardn.conf && sysctl -w kernel.randomize_va_space=2" \
-"randomize_va_space = 2 present" \
-"Missing randomize_va_space setting"
+    fix_if_needed \
+        "grep -q 'kernel.randomize_va_space = 2' /etc/sysctl.d/hardn.conf" \
+        "echo 'kernel.randomize_va_space = 2' | sudo tee -a /etc/sysctl.d/hardn.conf && sudo sysctl -w kernel.randomize_va_space=2" \
+        "randomize_va_space = 2 present" \
+        "Missing randomize_va_space setting"
 
-fix_if_needed \
-"grep -q 'U.S. Government' /etc/issue" \
-"echo 'You are accessing a U.S. Government (USG) Information System (IS)...' > /etc/issue" \
-"Login banner exists" \
-"Missing login banner /etc/issue"
+    fix_if_needed \
+        "grep -q 'U.S. Government' /etc/issue" \
+        "echo 'You are accessing a SIG Information System (IS)...' | sudo tee /etc/issue" \
+        "Login banner exists" \
+        "Missing login banner /etc/issue"
 
-fix_if_needed \
-"systemctl status ctrl-alt-del.target | grep -q 'Masked'" \
-"systemctl mask ctrl-alt-del.target" \
-"Ctrl+Alt+Del is disabled" \
-"Ctrl+Alt+Del is still active"
+        fix_if_needed \
+            "sudo systemctl status ctrl-alt-del.target | grep -q 'Masked'" \
+            "sudo systemctl mask ctrl-alt-del.target" \
+            "Ctrl+Alt+Del is disabled" \
+            "Ctrl+Alt+Del is still active"
+    }
 
-if [ -f /etc/apparmor.d/local/hardn.whitelist ]; then
-grep -q "hardn" /etc/apparmor.d/local/hardn.whitelist &&
-echo "[+] AppArmor whitelist exists." | tee -a "$LOG_FILE" ||
-{
-echo "[-] AppArmor whitelist incomplete." | tee -a "$LOG_FILE"
-$FIX_MODE && {
-echo "[*] Appending HARDN whitelist entries..." | tee -a "$LOG_FILE"
-echo "/usr/local/bin/hardn rix," >> /etc/apparmor.d/local/hardn.whitelist
-echo "[+] AppArmor whitelist updated." | tee -a "$LOG_FILE"
-apparmor_parser -r /etc/apparmor.d/local/hardn.whitelist
+
+validate_boot_services() {
+    echo "[*] Validating boot services..." | tee -a "$LOG_FILE"
+
+    # Set fail2ban to start at boot
+    echo "[*] Checking if Fail2Ban is enabled at boot..." | tee -a "$LOG_FILE"
+    fix_if_needed \
+        "sudo systemctl is-enabled fail2ban | grep -q 'disabled'" \
+        "sudo systemctl enable fail2ban" \
+        "Fail2Ban is enabled at boot" \
+        "Fail2Ban is disabled at boot"
+
+    # Set auditd to start at boot
+    echo "[*] Checking if auditd is enabled at boot..." | tee -a "$LOG_FILE"
+    fix_if_needed \
+        "sudo systemctl is-enabled auditd | grep -q 'disabled'" \
+        "sudo systemctl enable auditd" \
+        "auditd is enabled at boot" \
+        "auditd is disabled at boot"
+
+    # Set apparmor to start at boot
+    echo "[*] Checking if AppArmor is enabled at boot..." | tee -a "$LOG_FILE"
+    fix_if_needed \
+        "sudo systemctl is-enabled apparmor | grep -q 'disabled'" \
+        "sudo systemctl enable apparmor" \
+        "AppArmor is enabled at boot" \
+        "AppArmor is disabled at boot"
+
+    # Set sshd to start at boot
+    echo "[*] Checking if sshd is enabled at boot..." | tee -a "$LOG_FILE"
+    fix_if_needed \
+        "sudo systemctl is-enabled sshd | grep -q 'disabled'" \
+        "sudo systemctl enable sshd" \
+        "sshd is enabled at boot" \
+        "sshd is disabled at boot"
 }
+cron_clean() {
+    # setup cron to keep system updated and clean, running at midnight every 2 days
+    echo "========================================" | sudo tee -a /etc/crontab
+    echo "           CRON SETUP - CLEAN           " | sudo tee -a /etc/crontab
+    echo "========================================" | sudo tee -a /etc/crontab
+    echo "0 0 */2 * * root /usr/bin/apt-get update && /usr/bin/apt-get upgrade -y" | sudo tee -a /etc/crontab
+    echo "0 0 */2 * * root /usr/bin/apt-get dist-upgrade -y" | sudo tee -a /etc/crontab
+    echo "0 0 */2 * * root /usr/bin/apt-get autoremove -y" | sudo tee -a /etc/crontab
+    echo "0 0 */2 * * root /usr/bin/apt-get autoclean -y" | sudo tee -a /etc/crontab
+    echo "0 0 */2 * * root /usr/bin/apt-get check" | sudo tee -a /etc/crontab
+    echo "0 0 */2 * * root /usr/bin/apt-get clean" | sudo tee -a /etc/crontab
 }
 
-aa-status | grep -q "enforce mode" &&
-aa-status | grep -q "hardn" &&
-echo "[+] AppArmor enforces HARDN." | tee -a "$LOG_FILE" ||
-echo "[-] AppArmor not enforcing HARDN." | tee -a "$LOG_FILE"
-else
-echo "[-] AppArmor whitelist file missing." | tee -a "$LOG_FILE"
-$FIX_MODE && {
-echo "[*] Creating AppArmor whitelist..." | tee -a "$LOG_FILE"
-echo "/usr/local/bin/hardn rix," > /etc/apparmor.d/local/hardn.whitelist
-apparmor_parser -r /etc/apparmor.d/local/hardn.whitelist
+cron_packages() {
+    # build this to validate and keep aide, lmd, apparmor, fail2ban, grub, and auditd up to date
+    echo "========================================" | sudo tee -a /etc/crontab
+    echo "         CRON SETUP - PACKAGES          " | sudo tee -a /etc/crontab
+    echo "========================================" | sudo tee -a /etc/crontab
+    echo "0 11 * * * aide --check --config /etc/aide/aide.conf" | sudo tee -a /etc/crontab
+    echo "0 5 * * * root /usr/sbin/aide --check | mail -s 'AIDE Integrity Check' admin@example.com" | sudo tee -a /etc/crontab
+    echo "0 0 */2 * * root /usr/bin/maldet --update" | sudo tee -a /etc/crontab
+    echo "0 0 */2 * * root /usr/bin/fail2ban-client -x" | sudo tee -a /etc/crontab
+    echo "0 0 */2 * * root /usr/bin/apparmor_parser -r /etc/apparmor.d/*" | sudo tee -a /etc/crontab
+    echo "0 0 */2 * * root /usr/sbin/grub-mkconfig -o /boot/grub/grub.cfg" | sudo tee -a /etc/crontab
+    echo "0 0 */2 * * root /usr/sbin/auditctl -e 1" | sudo tee -a /etc/crontab
+    echo "0 0 */2 * * root /usr/sbin/auditd -f" | sudo tee -a /etc/crontab
+    echo "0 0 */2 * * root /usr/sbin/auditd -r" | sudo tee -a /etc/crontab
+
 }
-fi
+
+verify_resolv_conf() {
+    
+    if grep -q "nameserver 9.9.9.9" /etc/resolv.conf && grep -q "nameserver 149.112.112.112" /etc/resolv.conf; then
+        echo "[+] resolv.conf is set to Quad9 DNS"
+    else
+        echo "[-] resolv.conf is not set to Quad9 DNS. Updating..."
+        sudo sed -i '/^nameserver /d' /etc/resolv.conf
+        echo "nameserver 9.9.9.9" | sudo tee -a /etc/resolv.conf
+        echo "nameserver 149.112.112.112" | sudo tee -a /etc/resolv.conf
+        echo "[+] resolv.conf has been updated to use Quad9 DNS"
+    fi
+
+   
+    echo "[*] Verifying internet connectivity..."
+    if ping -c 1 8.8.8.8 >/dev/null 2>&1; then
+        echo "[+] Internet connectivity is available"
+
+
+
+    else
+        echo "[-] Internet connectivity is not available. Rolling back to Google DNS..."
+        sudo sed -i '/^nameserver /d' /etc/resolv.conf
+        echo "nameserver 8.8.8.8" | sudo tee -a /etc/resolv.conf
+        echo "nameserver 8.8.4.4" | sudo tee -a /etc/resolv.conf
+        echo "[*] Retesting internet connectivity with Google DNS..."
+
+
+
+
+    if ping -c 1 8.8.8.8 >/dev/null 2>&1; then
+            echo "[+] Internet connectivity restored with Google DNS"
+        else
+            echo "[-] Internet connectivity is still not available. Please check your network settings."
+            return 1
+        fi
+    fi
 }
 
-validate_packages() {
-echo "[+] Validating package configurations..." | tee -a "$LOG_FILE"
+cron_alert() {
+    # build this to monitor aide and lmd for any alerts and create a text file on the user's desktop
+    ALERTS_FILE="$HOME/Desktop/HARD_alerts.txt"
 
-command -v getenforce >/dev/null && [ "$(getenforce)" = "Enforcing" ] &&
-echo "[+] SELinux is enforcing." | tee -a "$LOG_FILE" ||
-{ echo "[-] SELinux not enforcing." | tee -a "$LOG_FILE"; $FIX_MODE && echo "[!] Cannot fix SELinux here." | tee -a "$LOG_FILE"; }
+    echo "========================================" | sudo tee -a /etc/crontab
+    echo "          CRON SETUP - ALERTS           " | sudo tee -a /etc/crontab
+    echo "========================================" | sudo tee -a /etc/crontab
 
-ufw status | grep -q "Status: active" &&
-echo "[+] UFW is active." | tee -a "$LOG_FILE" ||
-{ echo "[-] UFW not active." | tee -a "$LOG_FILE"; $FIX_MODE && ufw enable && echo "[+] UFW enabled." | tee -a "$LOG_FILE"; }
+ 
+    if command -v aide >/dev/null; then
+        echo "[AIDE Alerts]" >> "$ALERTS_FILE"
+        sudo aide --check | grep -i "alert" >> "$ALERTS_FILE" || echo "No alerts from AIDE." >> "$ALERTS_FILE"
+        echo "-------------------------" >> "$ALERTS_FILE"
+    fi
 
-systemctl is-active --quiet fail2ban &&
-echo "[+] Fail2Ban is active." | tee -a "$LOG_FILE" ||
-{ echo "[-] Fail2Ban not running." | tee -a "$LOG_FILE"; $FIX_MODE && systemctl start fail2ban && echo "[+] Fail2Ban started." | tee -a "$LOG_FILE"; }
+    
+    if command -v maldet >/dev/null || [ -x /usr/local/maldetect/maldet ]; then
+        echo "[Maldet Alerts]" >> "$ALERTS_FILE"
+        sudo maldet --report list | grep -i "alert" >> "$ALERTS_FILE" || echo "No alerts from Maldet." >> "$ALERTS_FILE"
+        echo "-------------------------" >> "$ALERTS_FILE"
+    fi
+    
 
-command -v aa-status >/dev/null && systemctl is-active --quiet apparmor &&
-echo "[+] AppArmor is active." | tee -a "$LOG_FILE" ||
-{ echo "[-] AppArmor not active." | tee -a "$LOG_FILE"; $FIX_MODE && systemctl start apparmor && echo "[+] AppArmor started." | tee -a "$LOG_FILE"; }
+    
+    if command -v fail2ban-client >/dev/null; then
+        echo "[Fail2Ban Alerts]" >> "$ALERTS_FILE"
+        sudo fail2ban-client status | grep -i "banned" >> "$ALERTS_FILE" || echo "No alerts from Fail2Ban." >> "$ALERTS_FILE"
+        echo "-------------------------" >> "$ALERTS_FILE"
+    fi
 
-command -v firejail >/dev/null &&
-echo "[+] Firejail is installed." | tee -a "$LOG_FILE" ||
-echo "[-] Firejail missing." | tee -a "$LOG_FILE"
+    
+    if command -v aa-status >/dev/null; then
+        echo "[AppArmor Alerts]" >> "$ALERTS_FILE"
+        sudo aa-status | grep -i "profile" >> "$ALERTS_FILE" || echo "No alerts from AppArmor." >> "$ALERTS_FILE"
+        echo "-------------------------" >> "$ALERTS_FILE"
+    fi
 
-command -v chkrootkit >/dev/null &&
-echo "[+] chkrootkit installed." | tee -a "$LOG_FILE" ||
-echo "[-] chkrootkit missing." | tee -a "$LOG_FILE"
+   
+    echo "[General Security Alerts]" >> "$ALERTS_FILE"
+    sudo grep -i "alert" /var/log/syslog /var/log/auth.log /var/log/kern.log 2>/dev/null >> "$ALERTS_FILE" || echo "No general security alerts found." >> "$ALERTS_FILE"
+    echo "-------------------------" >> "$ALERTS_FILE"
 
-command -v maldet >/dev/null || [ -x /usr/local/maldetect/maldet ] &&
-echo "[+] LMD installed." | tee -a "$LOG_FILE" ||
-echo "[-] LMD not found." | tee -a "$LOG_FILE"
-
-systemctl is-active --quiet auditd &&
-echo "[+] auditd is running." | tee -a "$LOG_FILE" ||
-echo "[-] auditd not running." | tee -a "$LOG_FILE"
+    
+    if [ -s "$ALERTS_FILE" ]; then
+        echo "[+] Alerts have been written to $ALERTS_FILE"
+    else
+        echo "[+] No alerts found. Removing empty alerts file."
+        rm -f "$ALERTS_FILE"
+    fi
 }
 
 validate_configuration() {
-printf "\033[1;31m[+] Validating configuration...\033[0m\n"
-if some_validation_command; then
-printf "\033[1;32m[+] Validation passed.\033[0m\n"
-else
-printf "\033[1;31m[-] Validation failed. Skipping...\033[0m\n"
-return 0 # Prevents script from exiting
-fi
+    printf "\033[1;31m[+] Validating configuration...\033[0m\n"
 
-validate_packages
-validate_stig_hardening
+    validate_packages
+    validate_stig_hardening
+    validate_boot_services
+    cron_clean
+    cron_packages
+    cron_alert
+    verify_resolv_conf
+    print_log_file
 
-echo -e "\033[1;32m[+] ======== VALIDATION COMPLETE =========\033[0m" | tee -a "$LOG_FILE"
-$FIX_MODE && echo -e "\033[1;34m[*] Fix mode was enabled. Auto-remediation attempted.\033[0m" | tee -a "$LOG_FILE"
+    if grep -q "[-]" "$LOG_FILE"; then
+        printf "\033[1;31m[-] Validation failed. Please check the log file at %s for details.\033[0m\n" "$LOG_FILE"
+        printf "\033[1;31m[-] Error Summary:\033[0m\n"
+        grep "[-]" "$LOG_FILE" | nl
+        return 1
+    else
+        printf "\033[1;32m[+] Validation successful. No errors found.\033[0m\n"
+    fi
+
+    echo -e "\033[1;32m[+] ======== VALIDATION COMPLETE =========\033[0m" | tee -a "$LOG_FILE"
 }
 
-# Make setup.sh and packages.sh read and execute only
-PACKAGES_SCRIPT="/home/tim/DEV/HARDN/src/setup/packages.sh" # Define the path to the script
-printf "\033[1;31m[+] Making setup.sh and packages.sh read and execute only...\033[0m\n"
-chmod 555 "$0" 
-chmod 555 "$PACKAGES_SCRIPT" 
-printf "\033[1;32m[+] setup.sh and packages.sh are now read and execute only.\033[0m\n"
 
-main() {
-[[ "$1" == "--fix" ]] && FIX_MODE=true
-initialize_log
-validate_configuration
+print_log_file() {
+    echo -e "\033[1;34m[+] Printing log file contents...\033[0m"
+    echo -e "\033[1;33mHARDN SETUP VALIDATION LOG\033[0m" | tee /dev/stderr
+
+    if [ -f "$LOG_FILE" ]; then
+        cat "$LOG_FILE"
+    else
+        echo -e "\033[1;31m[-] Log file not found: $LOG_FILE\033[0m"
+    fi
+}
+
+sleep 7
 
 
-main "$@"
+
+
+print_ascii_banner
+
+cat << "EOF"
+                                                                      
+                                                   P L E A S E
+                                              R E B O O T   Y O U R
+                                                   S Y S T E M              
+                                       
+                                                     v 1.1.2               
+                                    
+                                                               
+                                  
+EOF
+
 
