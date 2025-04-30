@@ -5,7 +5,7 @@
 ### Added
 - **HARDN-Endpoint**: Introduced enhanced CLI-based support for ensuring STIG compliance on Debian 12.
 - Added automated STIG compliance validation for Debian 12, integrated into the CLI workflow.
-- Replace UFW to IPTables for more granular Firewall control and policies. 
+- Replace UFW with IPTables for more granular Firewall control and policies. 
 - ASCII banner
 
 ### Improved
