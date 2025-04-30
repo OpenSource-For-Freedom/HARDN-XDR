@@ -1,3 +1,66 @@
+# HARDN - Hardened Application for Robust Defense Network
+
+## Quick Start
+
+To start the HARDN system with a single command, use the provided startup script:
+
+```bash
+./start_hardn.sh
+```
+
+This script will:
+1. Launch the backend socket server
+2. Start the proxy server
+3. Serve the GUI on a local HTTP server
+4. Open the GUI in your default browser
+
+The script will continue running to manage all services. Press `Ctrl+C` to stop all components.
+
+## Manual Startup
+
+If you prefer to start components individually:
+
+1. Start the backend socket:
+   ```bash
+   python3 src/backend_socket.py
+   ```
+
+2. Start the proxy server:
+   ```bash
+   python3 src/gui/proxy/proxy.py
+   ```
+
+3. Serve the GUI:
+   ```bash
+   cd src/gui
+   python3 -m http.server 8080
+   ```
+
+4. Open http://localhost:8080 in your browser
+
+## Logging
+
+When using the startup script, logs are saved to:
+- `backend.log` - Backend socket server logs
+- `proxy.log` - Proxy server logs
+- `http.log` - HTTP server logs
+
+## System Requirements
+
+- Linux operating system
+- Python 3.6+
+- Network access to localhost ports (8080-8082)
+
+## Architecture
+
+The HARDN system consists of:
+
+1. **Backend Socket Server**: Provides the core security functionality
+2. **Proxy Server**: Handles HTTP/JSON communication between GUI and backend
+3. **GUI**: Web-based user interface for system interaction
+
+The communication flow is:
+GUI (Browser) ↔ Proxy Server (HTTP, port 8081) ↔ Backend Socket (Unix socket)
 
   ![GitHub release (latest by date)](https://img.shields.io/github/v/release/OpenSource-For-Freedom/HARDN?include_prereleases)
   ![GitHub issues](https://img.shields.io/github/issues/OpenSource-For-Freedom/HARDN)
@@ -16,12 +79,12 @@
 </p>
 
 ## Abstract  
-**HARDN** is an open-source framework built to help secure Debian-based Linux systems. It’s designed with modular automation in mind—making it easier to lock down vulnerabilities without sacrificing performance. Using a combination of Python, shell scripting, and strict security policies, HARDN creates systems that are more resilient and efficient from the ground up. This document outlines where the project stands, what tools it's using, and where it's headed as it prepares for the release of a polished `.deb` package.
+**HARDN** is an open-source framework built to help secure Debian-based Linux systems. It's designed with modular automation in mind—making it easier to lock down vulnerabilities without sacrificing performance. Using a combination of Python, shell scripting, and strict security policies, HARDN creates systems that are more resilient and efficient from the ground up. This document outlines where the project stands, what tools it's using, and where it's headed as it prepares for the release of a polished `.deb` package.
 
 ---
 
 ## Introduction  
-With cyber threats evolving daily, securing Linux systems—especially those based on Debian—has never been more important. **HARDN** steps in as a powerful, yet user-conscious toolset that automates the hardening process without overcomplicating it. It brings together battle-tested security methods, zero-trust principles, and modern tools like Ansible, AppArmor, and Fail2Ban. Whether you’re a sysadmin, developer, or security engineer, HARDN is designed to help you take back control of your system’s security.
+With cyber threats evolving daily, securing Linux systems—especially those based on Debian—has never been more important. **HARDN** steps in as a powerful, yet user-conscious toolset that automates the hardening process without overcomplicating it. It brings together battle-tested security methods, zero-trust principles, and modern tools like Ansible, AppArmor, and Fail2Ban. Whether you're a sysadmin, developer, or security engineer, HARDN is designed to help you take back control of your system's security.
 
 ---
 <p align="center">
@@ -43,20 +106,20 @@ As we approach the `.deb` packaging milestone, the repo has been distilled down 
 - **packages.sh** – A curated package installer that fetches and configures essential tools for firewalling, monitoring, and malware detection.
 - **kernel.c** – A C module that handles kernel optimization and module blacklisting, improving both security and boot-time efficiency.
 
-This minimal setup ensures a lightweight installation that’s secure right out of the gate.
+This minimal setup ensures a lightweight installation that's secure right out of the gate.
 
 ---
 
 ## Key Objectives of HARDN
 
 ### 1. System Hardening Research
-We’ve looked closely at what’s worked in projects like Harbian and STIG enforcement and used that insight to build custom routines tailored for Debian.
+We've looked closely at what's worked in projects like Harbian and STIG enforcement and used that insight to build custom routines tailored for Debian.
 
 ### 2. Tightening File Permissions
 To reduce risk, HARDN identifies and adjusts risky `setuid` and `setgid` permissions—making privilege escalation far less likely.
 
 ### 3. User Group Cleanup
-Inspired by Whonix’s lean permission model, we remove unnecessary group access to lock down privilege escalation paths.
+Inspired by Whonix's lean permission model, we remove unnecessary group access to lock down privilege escalation paths.
 
 ### 4. Locking Down System Configs
 We harden critical files like `/etc/security/` and `/etc/host.conf` to:
@@ -99,7 +162,7 @@ We harden critical files like `/etc/security/` and `/etc/host.conf` to:
 ## Pre-Release Activities
 
 ### 1. Log Monitoring & Threat Detection
-We’re enabling lightweight auditing across important directories and using triggers to detect unusual behavior in real-time.
+We're enabling lightweight auditing across important directories and using triggers to detect unusual behavior in real-time.
 
 ### 2. Reliable Backups & Rollbacks
 Every hardening action has a corresponding recovery path—just in case.
