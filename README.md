@@ -214,6 +214,10 @@ Coming Soon..
 We welcome contributions! 
 </p>
 
+![GitHub stats](https://github-readme-stats.vercel.app/api?username=opensource-for-freedom&show_icons=true&theme=dark)
+![GitHub stats](https://github-readme-stats.vercel.app/api?username=AnonVortex&show_icons=true&theme=dark)
+![GitHub stats](https://github-readme-stats.vercel.app/api?username=LinuxUser255&show_icons=true&theme=dark)
+
 ---
 
 <p align="center">
