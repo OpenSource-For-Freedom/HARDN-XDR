@@ -1,0 +1,111 @@
+### **Packages Installed**
+1. **System Utilities**:
+   - `wget`
+   - `curl`
+   - `git`
+   - `gawk`
+   - `mariadb-common`
+   - `mysql-common`
+   - `policycoreutils`
+   - `python3-matplotlib`
+   - `unixodbc-common`
+   - `firejail`
+   - `python3-pyqt6`
+
+2. **SELinux and AppArmor**:
+   - `selinux-utils`
+   - `selinux-basics`
+   - `policycoreutils`
+   - `policycoreutils-python-utils`
+   - `selinux-policy-default`
+   - `apparmor`
+   - `apparmor-utils`
+   - `apparmor-profiles`
+
+3. **Security Tools**:
+   - `ufw`
+   - `fail2ban`
+   - `tcpd`
+   - `lynis`
+   - `debsums`
+   - `libpam-pwquality`
+   - `libvirt-daemon-system`
+   - `libvirt-clients`
+   - `qemu-system-x86`
+   - `openssh-server`
+   - `openssh-client`
+
+4. **AIDE (Advanced Intrusion Detection Environment)**:
+   - `aide`
+
+5. **Audit Tools**:
+   - `auditd`
+   - `audispd-plugins`
+
+6. **Rootkit and Malware Detection**:
+   - `chkrootkit`
+   - `Linux Malware Detect (LMD)` (installed from GitHub)
+
+7. **Firmware Updates**:
+   - `fwupd`
+
+8. **Rust Programming Language**:
+   - Installed via the official Rust installer.
+
+---
+
+### **Processes Performed**
+1. **System Updates**:
+   - Updates all system packages using `apt update` and `apt upgrade`.
+
+2. **Set Hostname**:
+   - Sets a generic hostname using `hostnamectl`.
+
+3. **Install Package Dependencies**:
+   - Installs essential system utilities and libraries.
+
+4. **Install SELinux**:
+   - Installs and configures SELinux in permissive mode.
+   - Applies SELinux policies and prepares the system for reboot.
+
+5. **Install Security Tools**:
+   - Installs tools like `ufw`, `fail2ban`, `lynis`, and `firejail`.
+   - Configures and enables AppArmor profiles.
+
+6. **Install AIDE**:
+   - Installs AIDE and initializes its database.
+   - Runs an initial AIDE check.
+
+7. **Install Additional Tools**:
+   - Installs `chkrootkit` for rootkit detection.
+   - Installs Linux Malware Detect (LMD) from its GitHub repository.
+
+8. **Install Rust**:
+   - Installs Rust programming language using the official installer.
+
+9. **Apply STIG Hardening**:
+   - Configures password policies using `libpam-pwquality`.
+   - Locks inactive accounts.
+   - Sets login banners for `/etc/issue` and `/etc/issue.net`.
+   - Configures kernel parameters for STIG compliance.
+   - Secures filesystem permissions.
+   - Configures audit rules for critical files.
+   - Disables USB storage devices.
+   - Disables core dumps.
+   - Disables `Ctrl+Alt+Del` key combination.
+   - Disables IPv6.
+   - Configures `iptables` for strict firewall rules.
+   - Enables Address Space Layout Randomization (ASLR).
+   - Enforces AppArmor profiles.
+
+10. **Configure Firejail**:
+    - Configures Firejail for Firefox and Google Chrome.
+
+11. **Enable Services**:
+    - Enables and starts `fail2ban` and AppArmor services.
+
+12. **Firmware Updates**:
+    - Installs `fwupd` and applies firmware updates.
+
+13. **Final Setup**:
+    - Calls `packages.sh` script for additional setup tasks.
