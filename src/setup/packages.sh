@@ -329,20 +329,14 @@ validate_configuration() {
 
 
 print_log_file() {
-    echo -e "\033[1;34m[+] Printing log file as a table...\033[0m"
-    echo -e "\033[1;33mHARDN SETUP VALIDATION\033[0m" | tee /dev/stderr
+    echo -e "\033[1;34m[+] Printing log file contents...\033[0m"
+    echo -e "\033[1;33mHARDN SETUP VALIDATION LOG\033[0m" | tee /dev/stderr
 
-    echo -e "\033[1;32m[+] Validation Results:\033[0m"
-    printf "%-50s | %-10s\n" "Check" "Status"
-    printf "%-50s | %-10s\n" "--------------------------------------------------" "----------"
-    grep -E "\[.\]" "$LOG_FILE" | while read -r line; do
-        status=$(echo "$line" | grep -oE "\[.\]")
-        message=$(echo "$line" | sed -E "s/\[.\] //")
-        printf "%-50s | %-10s\n" "$message" "$status"
-    done
-
-    echo -e "\n\033[1;31m[-] Errors:\033[0m"
-    grep "[-]" "$LOG_FILE" | nl || echo -e "\033[1;32m[+] No errors found.\033[0m"
+    if [ -f "$LOG_FILE" ]; then
+        cat "$LOG_FILE"
+    else
+        echo -e "\033[1;31m[-] Log file not found: $LOG_FILE\033[0m"
+    fi
 }
 
 sleep 7
