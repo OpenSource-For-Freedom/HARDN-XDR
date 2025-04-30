@@ -12,7 +12,7 @@
 - Kernel principles to align with NIST best practices. 
 
 ### Fixed
-- Aide load and datbase directory build
+- Aide load and database directory build
 
 ---
 
