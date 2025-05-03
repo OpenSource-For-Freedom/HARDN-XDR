@@ -20,7 +20,7 @@
 
 
 ### HARDN Endpoint
-- This installation is only for **BARE-METAL INSTALLS of DEBIAN 12 and Ubunut 24.04 BAe Metal and Virtual Machines**
+- This installation is only for **BARE-METAL INSTALLS of DEBIAN 12 and Ubunut 24.04 Bare Metal and Virtual Machines**
 -  Is a robust and secure endpoint management solution designed to simplify and enhance the management of devices in your network. It provides advanced features for monitoring, securing, and maintaining endpoints efficiently.
 - We also bring you with this release `STIG` COMPLIANCE to align with the Security Technical Information Guides provided by the DOD Cyber Exchange.
 
