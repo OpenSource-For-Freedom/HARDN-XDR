@@ -39,8 +39,8 @@ sleep 5
 
 SCRIPT_PATH="$(readlink -f "$0")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
-PACKAGES_SCRIPT="$SCRIPT_DIR/packages.sh"
-GRUB_SCRIPT="$SCRIPT_DIR/grub.sh"
+PACKAGES_SCRIPT="$SCRIPT_DIR/hardn-packages.sh"
+GRUB_SCRIPT="$SCRIPT_DIR/hardn-grub.sh"
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "This script must be run as root. Use: sudo ./setup.sh"
@@ -85,17 +85,17 @@ install_pkgdeps() {
 
 
 call_grub_script() {
-    printf "\033[1;31m[+] Calling grub.sh script...\033[0m\n"
+    printf "\033[1;31m[+] Calling hardn-grub.sh script...\033[0m\n"
     if [ -f "$GRUB_SCRIPT" ]; then
-        printf "\033[1;31m[+] Setting executable permissions for grub.sh...\033[0m\n"
+        printf "\033[1;31m[+] Setting executable permissions for hardn-grub.sh...\033[0m\n"
         chmod +x "$GRUB_SCRIPT"
         sudo "$GRUB_SCRIPT"
         if [ $? -ne 0 ]; then
-            printf "\033[1;31m[-] grub.sh execution failed. Exiting setup.\033[0m\n"
+            printf "\033[1;31m[-] hardn-grub.sh execution failed. Exiting setup.\033[0m\n"
             exit 1
         fi
     else
-        printf "\033[1;31m[-] grub.sh not found at: %s. Exiting setup.\033[0m\n" "$GRUB_SCRIPT"
+        printf "\033[1;31m[-] hardn-grub.sh not found at: %s. Exiting setup.\033[0m\n" "$GRUB_SCRIPT"
         exit 1
     fi
 }
@@ -618,17 +618,17 @@ setup_complete() {
 
 sleep 3
 
-    printf "\033[1;31m[+] Looking for packages.sh at: %s\033[0m\n" "$PACKAGES_SCRIPT"
+    printf "\033[1;31m[+] Looking for hardn-packages.sh at: %s\033[0m\n" "$PACKAGES_SCRIPT"
     if [ -f "$PACKAGES_SCRIPT" ]; then
-        printf "\033[1;31m[+] Setting executable permissions for packages.sh...\033[0m\n"
+        printf "\033[1;31m[+] Setting executable permissions for hardn-packages.sh...\033[0m\n"
         chmod +x "$PACKAGES_SCRIPT"
-        printf "\033[1;31m[+] Setting sudo permissions for packages.sh...\033[0m\n"
-        echo "root ALL=(ALL) NOPASSWD: $PACKAGES_SCRIPT" | sudo tee /etc/sudoers.d/packages-sh > /dev/null
-        sudo chmod 440 /etc/sudoers.d/packages-sh
-        printf "\033[1;31m[+] Calling packages.sh with sudo...\033[0m\n"
+        printf "\033[1;31m[+] Setting sudo permissions for hardn-packages.sh...\033[0m\n"
+        echo "root ALL=(ALL) NOPASSWD: $PACKAGES_SCRIPT" | sudo tee /etc/sudoers.d/hardn-packages-sh > /dev/null
+        sudo chmod 440 /etc/sudoers.d/hardn-packages-sh
+        printf "\033[1;31m[+] Calling hardn-packages.sh with sudo...\033[0m\n"
         sudo "$PACKAGES_SCRIPT"
     else
-        printf "\033[1;31m[-] packages.sh not found at: %s. Skipping...\033[0m\n" "$PACKAGES_SCRIPT"
+        printf "\033[1;31m[-] hardn-packages.sh not found at: %s. Skipping...\033[0m\n" "$PACKAGES_SCRIPT"
     fi
 }
 

@@ -1,0 +1,3 @@
+src/setup/hardn-setup.sh usr/bin
+src/setup/hardn-packages.sh usr/bin
+src/setup/hardn-grub.sh usr/bin

@@ -1,0 +1,5 @@
+hardn (1.1.4) UNRELEASED; urgency=medium
+
+  * build: added debian packaging HEAD
+
+ -- Matei Busui <matei@busui.ro>  Sat, 03 May 2025 18:16:28 +0300

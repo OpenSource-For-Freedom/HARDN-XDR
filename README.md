@@ -49,9 +49,9 @@ HARDN/
 │       └── cybersynapse.png
 ├── src/
 │   └── setup/
-|       |__ grub.sh
-│       ├── packages.sh
-│       └── setup.sh
+|       |__ hardn-grub.sh
+│       ├── hardn-packages.sh
+│       └── hardn-setup.sh
 ```
 
 </p>
@@ -75,8 +75,8 @@ The purpose of HARDN Endpoint is to empower IT administrators and users with the
 2. Navigate to the `src` directory:
  ```bash
   cd HARDN/src/setup
-  sudo chmod +x setup.sh
-  sudo ./setup.sh
+  sudo chmod +x hardn-setup.sh
+  sudo ./hardn-setup.sh
 
   ```
   This will kick off the full setup of HARDN with `STIG` principles. 

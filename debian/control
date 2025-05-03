@@ -1,0 +1,14 @@
+Source: hardn
+Section: base
+Maintainer: Matei Busui <matei@busui.ro>
+Build-Depends: debhelper-compat (= 13), devscripts, git-buildpackage
+Standards-Version: 4.6.0
+Homepage: https://github.com/OpenSource-For-Freedom/HARDN
+Rules-Requires-Root: no
+
+Package: hardn
+Section: base
+Priority: optional
+Architecture: all
+Depends:
+Description: Collection of scripts for security hardening operating systems
