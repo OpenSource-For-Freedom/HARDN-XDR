@@ -118,7 +118,8 @@ update_grub() {
         set +x  
         return 1
     fi
-    set +x  
+    set +x
+}
 
 configure_memory() {
     echo "[INFO] Configuring secure kernel, monitored updates, and protecting RAM and CPU from attacks..."
