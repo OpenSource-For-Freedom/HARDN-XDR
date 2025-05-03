@@ -42,13 +42,14 @@ HARDN/
 ├── .gitignore
 ├── README.md
 ├── changelog.md
-├── docs/
+├── docs/*
 │   ├── LICENSE
 │   └── assets/
 │       ├── HARDN(1).png
 │       └── cybersynapse.png
 ├── src/
 │   └── setup/
+|       |__ grub.sh
 │       ├── packages.sh
 │       └── setup.sh
 ```
