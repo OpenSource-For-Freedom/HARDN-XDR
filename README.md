@@ -92,6 +92,19 @@ The purpose of HARDN Endpoint is to empower IT administrators and users with the
 </p>
 
 <p align="center">
+  MAINTAINERS<br><br>
+</p>
+
+* Building a debian package
+```bash
+debuild -us -uc
+```
+* Clean the repo after building a debian package
+```bash
+debuild -- clean
+```
+
+<p align="center">
   <img src="https://img.shields.io/badge/CONTRIBUTION-white?style=for-the-badge&labelColor=black" alt="CONTRIBUTION"><br><br>
 We welcome contributions! 
 
