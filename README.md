@@ -91,9 +91,7 @@ The purpose of HARDN Endpoint is to empower IT administrators and users with the
 6. Follow any additional setup instructions and information provided in the `docs` directory.
 </p>
 
-<p align="center">
-  MAINTAINERS<br><br>
-</p>
+### MAINTAINERS
 
 * Building a debian package
 ```bash
