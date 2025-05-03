@@ -63,6 +63,7 @@ set_generic_hostname() {
 # call_fips(){
 #     if [ -f "$PACKAGES_SCRIPT" ]; then
 #         echo "[+] Calling FIPS script..." | tee -a "$LOG_FILE"
+#         sudo chmod +x fips.sh
 #         bash "$PACKAGES_SCRIPT"
 #     else
 #         echo "[-] FIPS script not found at $PACKAGES_SCRIPT" | tee -a "$LOG_FILE"
