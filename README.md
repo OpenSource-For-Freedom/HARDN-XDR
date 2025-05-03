@@ -17,8 +17,8 @@
 
 
 ### HARDN Endpoint for Ubuntu
-- This installation is specifically designed for **U B U N T U   P R O  2 4 . 0 4**
-- Currently under testing and evaluaiton and is not at a PRODUCTION state.
+- This installation is specifically designed for **U B U N T U - P R O - 2 4 . 0 4**
+- Currently under testing and evaluation and is not at a PRODUCTION state.
 - HARDN is a robust and secure endpoint management solution designed to simplify and enhance the management of devices in your network. It provides advanced features for monitoring, securing, and maintaining endpoints efficiently.
 - With this release, we bring `STIG` COMPLIANCE to align with the Security Technical Information Guides provided by the DOD Cyber Exchange.
 
