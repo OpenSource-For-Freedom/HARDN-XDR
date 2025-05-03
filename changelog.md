@@ -1,18 +1,21 @@
 # Changelog
 
+## U B U N T U   P R O  2 4 . 0 4
+
 ## Version 1
 
 ### Added
 - **HARDN-Endpoint**: Introduced enhanced CLI-based support for ensuring STIG compliance on Debian 12.
 - Added automated STIG compliance validation for Debian 12, integrated into the CLI workflow.
-- Replace UFW with IPTables for more granular Firewall control and policies. 
-- ASCII banner
+- Replace UFW with IPTables for more granular Firewall control and policies.
+- ASCII banner.
+- Testing support for STIG and FIPS compliance on Ubuntu Pro 24.04.
 
 ### Improved
-- Kernel principles to align with NIST best practices. 
+- Kernel principles to align with NIST best practices.
 
 ### Fixed
-- Aide load and database directory build
+- Aide load and database directory build.
 
 ---
 
