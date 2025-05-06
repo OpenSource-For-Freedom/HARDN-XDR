@@ -12,3 +12,9 @@ main(){
 stig_disable_ctrl_alt_del
 
 }
+
+main(){
+
+stig_disable_ctrl_alt_del
+
+}
