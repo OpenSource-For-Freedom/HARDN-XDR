@@ -13,7 +13,7 @@ print_ascii_banner() {
     CYAN_BOLD="\033[1;36m"
     RESET="\033[0m"
 
-    printf "${CYAN_BOLD}"
+    printf "%s" "${CYAN_BOLD}"
     cat << "EOF"
                               ▄█    █▄       ▄████████    ▄████████ ████████▄  ███▄▄▄▄   
                              ███    ███     ███    ███   ███    ███ ███   ▀███ ███▀▀▀██▄ 
@@ -33,16 +33,12 @@ print_ascii_banner() {
                                        
                                                               
 EOF
-    printf "${RESET}"
+    printf "%s" "${RESET}"
 }
 
 print_ascii_banner
 
 sleep 7
-
-SCRIPT_PATH="$(readlink -f "$0")"
-SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
-PACKAGES_SCRIPT="$SCRIPT_DIR/fips.sh"
 
 
 
@@ -60,10 +56,12 @@ fi
 FIX_MODE=false
 
 initialize_log() {
-    echo "========================================" > "$LOG_FILE"
-    echo " HARDN - Packages Validation Log" >> "$LOG_FILE"
-    echo "========================================" >> "$LOG_FILE"
-    echo "[+] Log initialized at $(date)" >> "$LOG_FILE"
+    {
+        echo "========================================"
+        echo " HARDN - Packages Validation Log"
+        echo "========================================"
+        echo "[+] Log initialized at $(date)"
+    } > "$LOG_FILE"
 }
 
 fix_if_needed() {

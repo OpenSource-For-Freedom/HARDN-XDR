@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 import datetime
 
-SOCKET_PATH = '/tmp/hardn.sock'
+SOCKET_PATH = '/tmp/hardn.sock' # will need to move this socket path < Lets take a look at this
 PORT = 8081
 BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
 
