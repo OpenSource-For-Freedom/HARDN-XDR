@@ -1,20 +1,20 @@
-#!/bin/sh
+#!/bin/bash
+# Authors: 
+# - Chris B. 
+# - Tim B. 
+
+
+
 set -e # Exit on errors
-set -x # Debug mode
-
-
-
-                                               # Author(s):                         
-                                              #- Chris Bingham                    
-                                              #  - Tim Burns                        
-                                  
-                                             # Date: 4/5-12/2025
+LOG_FILE="/dev/null"
 
 
 print_ascii_banner() {
-    cat << "EOF"
+    CYAN_BOLD="\033[1;36m"
+    RESET="\033[0m"
 
-                               S E C U I T Y    I N T E R N A T I O N A L    G R O U P
+    printf "${CYAN_BOLD}"
+    cat << "EOF"
                               ▄█    █▄       ▄████████    ▄████████ ████████▄  ███▄▄▄▄   
                              ███    ███     ███    ███   ███    ███ ███   ▀███ ███▀▀▀██▄ 
                              ███    ███     ███    ███   ███    ███ ███    ███ ███   ███ 
@@ -24,19 +24,26 @@ print_ascii_banner() {
                              ███    ███     ███    ███   ███    ███ ███   ▄███ ███   ███ 
                              ███    █▀      ███    █▀    ███    ███ ████████▀   ▀█   █▀  
                                                          ███    ███ 
+                     
+                                               V A L I D A T I O N
+                                                     
+                                                    v 1.1.2
+                                                                       
                                                                      
                                        
-                                                    v 1.1.2     
-
-                                              V A L I D A T I O N
-                                                               
-                                  
+                                                              
 EOF
+    printf "${RESET}"
 }
 
 print_ascii_banner
 
 sleep 7
+
+SCRIPT_PATH="$(readlink -f "$0")"
+SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
+PACKAGES_SCRIPT="$SCRIPT_DIR/fips.sh"
+
 
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -49,7 +56,7 @@ if [ "$(id -u)" -ne 0 ]; then
     fi
 fi
 
-LOG_FILE="/var/log/hardn_packages.log"
+
 FIX_MODE=false
 
 initialize_log() {
@@ -66,27 +73,37 @@ fix_if_needed() {
     local failure_msg="$4"
 
     if eval "$check_cmd"; then
-        eval "$fix_cmd" && echo "[+] Fixed: $success_msg" | tee -a "$LOG_FILE" || { echo "[-] Failed to fix: $failure_msg" | tee -a "$LOG_FILE"; return 1; }
+        echo "[+] $success_msg" | tee -a "$LOG_FILE"
     else
         echo "[-] $failure_msg" | tee -a "$LOG_FILE"
         if $FIX_MODE; then
             echo "[*] Attempting to fix..." | tee -a "$LOG_FILE"
-            eval "$fix_cmd" && echo "[+] Fixed: $success_msg" | tee -a "$LOG_FILE" || echo "[-] Failed to fix: $failure_msg" | tee -a "$LOG_FILE"
+            if eval "$fix_cmd"; then
+                # Re-check after fix
+                if eval "$check_cmd"; then
+                    echo "[+] Fixed: $success_msg" | tee -a "$LOG_FILE"
+                else
+                    echo "[-] Failed to fix: $failure_msg" | tee -a "$LOG_FILE"
+                fi
+            else
+                echo "[-] Failed to fix: $failure_msg" | tee -a "$LOG_FILE"
+            fi
         fi
     fi
 }
 
+ensure_aide_initialized() {
+    if [ ! -f /var/lib/aide/aide.db ]; then
+        echo "[*] Initializing AIDE database..."
+        sudo aideinit
+        sudo cp /var/lib/aide/aide.db.new /var/lib/aide/aide.db
+        sudo chmod 600 /var/lib/aide/aide.db
+        echo "[+] AIDE database initialized."
+    fi
+}
 
 validate_packages() {
     echo "[+] Validating package configurations..." | tee -a "$LOG_FILE"
-
-    fix_if_needed \
-        "command -v getenforce >/dev/null && [ \"$(getenforce)\" = \"Enforcing\" ]" \
-        "echo '[!] Cannot fix SELinux enforcement automatically.'" \
-        "SELinux is enforcing" \
-        "SELinux not enforcing"
-
-    echo "[*] Checking SELinux enforcement..." | tee -a "$LOG_FILE"
 
     fix_if_needed \
         "! ping -c 1 google.com >/dev/null 2>&1" \
@@ -97,12 +114,12 @@ validate_packages() {
     echo "[*] Checking internet connectivity..." | tee -a "$LOG_FILE"
 
     fix_if_needed \
-        "sudo iptables -L >/dev/null 2>&1" \
-        "sudo apt-get install -y iptables && sudo iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT && sudo iptables -A INPUT -p tcp --dport 22 -j ACCEPT && sudo iptables -A INPUT -j DROP" \
-        "iptables is configured and active" \
-        "iptables is not configured or active"
+        "sudo ufw status | grep -q 'Status: active'" \
+        "sudo apt-get install -y ufw && sudo ufw enable" \
+        "UFW is active" \
+        "UFW is not active"
 
-    echo "[*] Checking iptables configuration..." | tee -a "$LOG_FILE"
+    echo "[*] Checking UFW status..." | tee -a "$LOG_FILE"
 
     fix_if_needed \
         "sudo systemctl is-active --quiet fail2ban" \
@@ -136,13 +153,22 @@ validate_packages() {
 
     echo "[*] Checking chkrootkit installation..." | tee -a "$LOG_FILE"
 
+    # Improved maldet block: checks all locations and installs from GitHub if missing
     fix_if_needed \
-        "command -v maldet >/dev/null || [ -x /usr/local/maldetect/maldet ]" \
-        "sudo apt-get install -y maldet" \
-        "LMD installed" \
-        "LMD not found"
+        "[ -x /usr/local/maldetect/maldet ] || [ -x /usr/local/bin/maldet ] || command -v maldet >/dev/null" \
+        "( [ ! -d /tmp/linux-malware-detect ] && cd /tmp && git clone https://github.com/rfxn/linux-malware-detect.git ) && cd /tmp/linux-malware-detect && sudo ./install.sh && sudo ln -sf /usr/local/maldetect/maldet /usr/local/bin/maldet && ( [ -x /usr/local/maldetect/maldet ] || [ -x /usr/local/bin/maldet ] || command -v maldet >/dev/null )" \
+        "Linux Malware Detect (maldet) is installed" \
+        "Linux Malware Detect (maldet) is not installed"
 
-    echo "[*] Checking LMD (Maldet) installation..." | tee -a "$LOG_FILE"
+    echo "[*] Checking maldet installation..." | tee -a "$LOG_FILE"
+
+    fix_if_needed \
+        "command -v rkhunter >/dev/null" \
+        "sudo apt-get install -y rkhunter" \
+        "rkhunter installed" \
+        "rkhunter missing"
+
+    echo "[*] Checking rkhunter installation..." | tee -a "$LOG_FILE"
 
     fix_if_needed \
         "sudo systemctl is-active --quiet auditd" \
@@ -162,7 +188,7 @@ validate_packages() {
 
     fix_if_needed \
         "sudo aide --check >/dev/null 2>&1" \
-        "sudo aideinit" \
+        "sudo aideinit && sudo cp /var/lib/aide/aide.db.new /var/lib/aide/aide.db" \
         "AIDE database check passed" \
         "AIDE database check failed"
 
@@ -209,18 +235,17 @@ validate_stig_hardening() {
         "Missing randomize_va_space setting"
 
     fix_if_needed \
-        "grep -q 'U.S. Government' /etc/issue" \
+        "grep -q '[SIG]}' /etc/issue" \
         "echo 'You are accessing a SIG Information System (IS)...' | sudo tee /etc/issue" \
         "Login banner exists" \
         "Missing login banner /etc/issue"
 
-        fix_if_needed \
-            "sudo systemctl status ctrl-alt-del.target | grep -q 'Masked'" \
-            "sudo systemctl mask ctrl-alt-del.target" \
-            "Ctrl+Alt+Del is disabled" \
-            "Ctrl+Alt+Del is still active"
-    }
-
+    fix_if_needed \
+        "sudo systemctl status ctrl-alt-del.target | grep -q 'Masked'" \
+        "sudo systemctl mask ctrl-alt-del.target" \
+        "Ctrl+Alt+Del is disabled" \
+        "Ctrl+Alt+Del is still active"
+}
 
 validate_boot_services() {
     echo "[*] Validating boot services..." | tee -a "$LOG_FILE"
@@ -228,7 +253,7 @@ validate_boot_services() {
     # Set fail2ban to start at boot
     echo "[*] Checking if Fail2Ban is enabled at boot..." | tee -a "$LOG_FILE"
     fix_if_needed \
-        "sudo systemctl is-enabled fail2ban | grep -q 'disabled'" \
+        "! sudo systemctl is-enabled fail2ban | grep -q 'enabled'" \
         "sudo systemctl enable fail2ban" \
         "Fail2Ban is enabled at boot" \
         "Fail2Ban is disabled at boot"
@@ -236,7 +261,7 @@ validate_boot_services() {
     # Set auditd to start at boot
     echo "[*] Checking if auditd is enabled at boot..." | tee -a "$LOG_FILE"
     fix_if_needed \
-        "sudo systemctl is-enabled auditd | grep -q 'disabled'" \
+        "! sudo systemctl is-enabled auditd | grep -q 'enabled'" \
         "sudo systemctl enable auditd" \
         "auditd is enabled at boot" \
         "auditd is disabled at boot"
@@ -244,7 +269,7 @@ validate_boot_services() {
     # Set apparmor to start at boot
     echo "[*] Checking if AppArmor is enabled at boot..." | tee -a "$LOG_FILE"
     fix_if_needed \
-        "sudo systemctl is-enabled apparmor | grep -q 'disabled'" \
+        "! sudo systemctl is-enabled apparmor | grep -q 'enabled'" \
         "sudo systemctl enable apparmor" \
         "AppArmor is enabled at boot" \
         "AppArmor is disabled at boot"
@@ -252,13 +277,13 @@ validate_boot_services() {
     # Set sshd to start at boot
     echo "[*] Checking if sshd is enabled at boot..." | tee -a "$LOG_FILE"
     fix_if_needed \
-        "sudo systemctl is-enabled sshd | grep -q 'disabled'" \
+        "! sudo systemctl is-enabled sshd | grep -q 'enabled'" \
         "sudo systemctl enable sshd" \
         "sshd is enabled at boot" \
         "sshd is disabled at boot"
 }
+
 cron_clean() {
-    # setup cron to keep system updated and clean, running at midnight every 2 days
     echo "========================================" | sudo tee -a /etc/crontab
     echo "           CRON SETUP - CLEAN           " | sudo tee -a /etc/crontab
     echo "========================================" | sudo tee -a /etc/crontab
@@ -271,122 +296,145 @@ cron_clean() {
 }
 
 cron_packages() {
-    # build this to validate and keep aide, lmd, apparmor, fail2ban, grub, and auditd up to date
     echo "========================================" | sudo tee -a /etc/crontab
     echo "         CRON SETUP - PACKAGES          " | sudo tee -a /etc/crontab
     echo "========================================" | sudo tee -a /etc/crontab
     echo "0 11 * * * aide --check --config /etc/aide/aide.conf" | sudo tee -a /etc/crontab
-    echo "0 5 * * * root /usr/sbin/aide --check | mail -s 'AIDE Integrity Check' admin@example.com" | sudo tee -a /etc/crontab
     echo "0 0 */2 * * root /usr/bin/maldet --update" | sudo tee -a /etc/crontab
+    echo "0 0 */2 * * root /usr/bin/rkhunter --update" | sudo tee -a /etc/crontab
     echo "0 0 */2 * * root /usr/bin/fail2ban-client -x" | sudo tee -a /etc/crontab
     echo "0 0 */2 * * root /usr/bin/apparmor_parser -r /etc/apparmor.d/*" | sudo tee -a /etc/crontab
     echo "0 0 */2 * * root /usr/sbin/grub-mkconfig -o /boot/grub/grub.cfg" | sudo tee -a /etc/crontab
     echo "0 0 */2 * * root /usr/sbin/auditctl -e 1" | sudo tee -a /etc/crontab
     echo "0 0 */2 * * root /usr/sbin/auditd -f" | sudo tee -a /etc/crontab
     echo "0 0 */2 * * root /usr/sbin/auditd -r" | sudo tee -a /etc/crontab
-
+    echo "0 0 * * * root /usr/local/bin/hardn-packages.sh > /var/log/hardn-packages.log 2>&1" | sudo tee -a /etc/crontab
 }
 
-verify_resolv_conf() {
-    
-    if grep -q "nameserver 9.9.9.9" /etc/resolv.conf && grep -q "nameserver 149.112.112.112" /etc/resolv.conf; then
-        echo "[+] resolv.conf is set to Quad9 DNS"
-    else
-        echo "[-] resolv.conf is not set to Quad9 DNS. Updating..."
-        sudo sed -i '/^nameserver /d' /etc/resolv.conf
-        echo "nameserver 9.9.9.9" | sudo tee -a /etc/resolv.conf
-        echo "nameserver 149.112.112.112" | sudo tee -a /etc/resolv.conf
-        echo "[+] resolv.conf has been updated to use Quad9 DNS"
-    fi
-
-   
-    echo "[*] Verifying internet connectivity..."
-    if ping -c 1 8.8.8.8 >/dev/null 2>&1; then
-        echo "[+] Internet connectivity is available"
-
-
-
-    else
-        echo "[-] Internet connectivity is not available. Rolling back to Google DNS..."
-        sudo sed -i '/^nameserver /d' /etc/resolv.conf
-        echo "nameserver 8.8.8.8" | sudo tee -a /etc/resolv.conf
-        echo "nameserver 8.8.4.4" | sudo tee -a /etc/resolv.conf
-        echo "[*] Retesting internet connectivity with Google DNS..."
-
-
-
-
-    if ping -c 1 8.8.8.8 >/dev/null 2>&1; then
-            echo "[+] Internet connectivity restored with Google DNS"
-        else
-            echo "[-] Internet connectivity is still not available. Please check your network settings."
-            return 1
-        fi
-    fi
-}
 
 cron_alert() {
-    # build this to monitor aide and lmd for any alerts and create a text file on the user's desktop
-    ALERTS_FILE="$HOME/Desktop/HARD_alerts.txt"
+    local ALERTS_FILE="$HOME/Desktop/HARDN_alerts.txt"
+    local ALERTS_DIR
+    ALERTS_DIR="$(dirname "$ALERTS_FILE")"
+    [ -d "$ALERTS_DIR" ] || mkdir -p "$ALERTS_DIR"
+    : > "$ALERTS_FILE"
 
-    echo "========================================" | sudo tee -a /etc/crontab
-    echo "          CRON SETUP - ALERTS           " | sudo tee -a /etc/crontab
-    echo "========================================" | sudo tee -a /etc/crontab
-
- 
-    if command -v aide >/dev/null; then
-        echo "[AIDE Alerts]" >> "$ALERTS_FILE"
-        sudo aide --check | grep -i "alert" >> "$ALERTS_FILE" || echo "No alerts from AIDE." >> "$ALERTS_FILE"
-        echo "-------------------------" >> "$ALERTS_FILE"
-    fi
-
-    
-    if command -v maldet >/dev/null || [ -x /usr/local/maldetect/maldet ]; then
-        echo "[Maldet Alerts]" >> "$ALERTS_FILE"
-        sudo maldet --report list | grep -i "alert" >> "$ALERTS_FILE" || echo "No alerts from Maldet." >> "$ALERTS_FILE"
-        echo "-------------------------" >> "$ALERTS_FILE"
-    fi
-    
-
-    
-    if command -v fail2ban-client >/dev/null; then
-        echo "[Fail2Ban Alerts]" >> "$ALERTS_FILE"
-        sudo fail2ban-client status | grep -i "banned" >> "$ALERTS_FILE" || echo "No alerts from Fail2Ban." >> "$ALERTS_FILE"
-        echo "-------------------------" >> "$ALERTS_FILE"
-    fi
-
-    
-    if command -v aa-status >/dev/null; then
-        echo "[AppArmor Alerts]" >> "$ALERTS_FILE"
-        sudo aa-status | grep -i "profile" >> "$ALERTS_FILE" || echo "No alerts from AppArmor." >> "$ALERTS_FILE"
-        echo "-------------------------" >> "$ALERTS_FILE"
-    fi
-
-   
-    echo "[General Security Alerts]" >> "$ALERTS_FILE"
-    sudo grep -i "alert" /var/log/syslog /var/log/auth.log /var/log/kern.log 2>/dev/null >> "$ALERTS_FILE" || echo "No general security alerts found." >> "$ALERTS_FILE"
+    echo "[Package Installation Alerts]" >> "$ALERTS_FILE"
+    local pkgs=(
+        ufw fail2ban apparmor firejail rkhunter chkrootkit maldet aide auditd lynis
+    )
+    for pkg in "${pkgs[@]}"; do
+        if dpkg -s "$pkg" &>/dev/null; then
+            printf " OK      %s\n" "$pkg" >> "$ALERTS_FILE"
+        else
+            printf " MISSING %s\n" "$pkg" >> "$ALERTS_FILE"
+        fi
+    done
     echo "-------------------------" >> "$ALERTS_FILE"
 
-    
-    if [ -s "$ALERTS_FILE" ]; then
-        echo "[+] Alerts have been written to $ALERTS_FILE"
+    echo "[Service Status Alerts]" >> "$ALERTS_FILE"
+    local svcs=(
+      ufw fail2ban apparmor firejail rkhunter chkrootkit maldet aide auditd lynis
+    )
+    for svc in "${svcs[@]}"; do
+       
+        if ! systemctl list-unit-files "${svc}.service" &>/dev/null; then
+            printf " %s: not installed\n" "$svc" >> "$ALERTS_FILE"
+            continue
+        fi
+
+        systemctl is-active --quiet "$svc" && st="active" || st="inactive"
+        systemctl is-enabled --quiet "$svc" && e="enabled" || e="disabled"
+        printf " %s: %s (%s)\n" "$svc" "$st" "$e" >> "$ALERTS_FILE"
+    done
+    echo "-------------------------" >> "$ALERTS_FILE"
+
+
+    echo "[STIG Settings Alerts]" >> "$ALERTS_FILE"
+    grep -q '^minlen = 14' /etc/security/pwquality.conf \
+        && echo " OK      password minlen=14" >> "$ALERTS_FILE" \
+        || echo " MISSING password minlen=14" >> "$ALERTS_FILE"
+
+    sysctl -n net.ipv6.conf.all.disable_ipv6 | grep -q '^1$' \
+        && echo " OK      IPv6 disabled" >> "$ALERTS_FILE" \
+        || echo " MISSING IPv6 disabled" >> "$ALERTS_FILE"
+
+    systemctl is-enabled ctrl-alt-del.target &>/dev/null \
+        && echo " MISSING Ctrl+Alt+Del disabled" >> "$ALERTS_FILE" \
+        || echo " OK      Ctrl+Alt+Del disabled" >> "$ALERTS_FILE"
+
+    echo "-------------------------" >> "$ALERTS_FILE"
+
+    echo "[Maldet Alerts]" >> "$ALERTS_FILE"
+    if command -v maldet &>/dev/null; then
+        local malist
+        malist=$(sudo maldet --report list | awk '/alert/ {print}')
+        if [ -n "$malist" ]; then
+            printf "%s\n" "$malist" >> "$ALERTS_FILE"
+        else
+            echo " No alerts from maldet" >> "$ALERTS_FILE"
+        fi
+    fi
+    echo "-------------------------" >> "$ALERTS_FILE"
+
+    echo "[Fail2Ban Alerts]" >> "$ALERTS_FILE"
+    if command -v fail2ban-client &>/dev/null && systemctl is-active --quiet fail2ban; then
+        local flist
+        flist=$(sudo fail2ban-client status sshd | awk '/Banned IP list:/ {print substr($0, index($0,$4))}')
+        if [ -n "$flist" ]; then
+            printf " Banned: %s\n" "$flist" >> "$ALERTS_FILE"
+        else
+            echo " No banned IPs" >> "$ALERTS_FILE"
+        fi
     else
-        echo "[+] No alerts found. Removing empty alerts file."
+        echo " Fail2Ban not running" >> "$ALERTS_FILE"
+    fi
+    echo "-------------------------" >> "$ALERTS_FILE"
+
+    echo "[AppArmor Alerts]" >> "$ALERTS_FILE"
+    if command -v aa-status &>/dev/null; then
+        local alist
+        alist=$(sudo aa-status | awk '/profile/ {print}')
+        if [ -n "$alist" ]; then
+            printf "%s\n" "$alist" >> "$ALERTS_FILE"
+        else
+            echo " No AppArmor profile events" >> "$ALERTS_FILE"
+        fi
+    fi
+    echo "-------------------------" >> "$ALERTS_FILE"
+
+    echo "[AIDE Alerts]" >> "$ALERTS_FILE"
+    if sudo aide --check >/dev/null 2>&1; then
+        echo " No deviations detected by AIDE" >> "$ALERTS_FILE"
+    else
+        echo " Deviations detected by AIDE" >> "$ALERTS_FILE"
+    fi
+    echo "-------------------------" >> "$ALERTS_FILE"
+
+    echo "[General Alerts]" >> "$ALERTS_FILE"
+    if sudo grep -i alert /var/log/syslog /var/log/auth.log /var/log/kern.log &>/dev/null; then
+        sudo grep -i alert /var/log/syslog /var/log/auth.log /var/log/kern.log >> "$ALERTS_FILE"
+    else
+        echo " No general alerts" >> "$ALERTS_FILE"
+    fi
+
+    if [ -s "$ALERTS_FILE" ]; then
+        echo "[+] Alerts written to $ALERTS_FILE"
+    else
+        echo "[+] No alerts found; removing empty alerts file."
         rm -f "$ALERTS_FILE"
     fi
 }
 
-validate_configuration() {
+main() {
     printf "\033[1;31m[+] Validating configuration...\033[0m\n"
-
+    ensure_aide_initialized
     validate_packages
     validate_stig_hardening
     validate_boot_services
     cron_clean
     cron_packages
     cron_alert
-    verify_resolv_conf
-    print_log_file
 
     if grep -q "[-]" "$LOG_FILE"; then
         printf "\033[1;31m[-] Validation failed. Please check the log file at %s for details.\033[0m\n" "$LOG_FILE"
@@ -397,38 +445,11 @@ validate_configuration() {
         printf "\033[1;32m[+] Validation successful. No errors found.\033[0m\n"
     fi
 
-    echo -e "\033[1;32m[+] ======== VALIDATION COMPLETE =========\033[0m" | tee -a "$LOG_FILE"
+    
+    sleep 3
+    print_ascii_banner
+    echo -e "\033[1;32m[+] ======== VALIDATION COMPLETE PLEASE REBOOT YOUR SYSTEM=========\033[0m" | tee -a "$LOG_FILE"
+    
 }
 
-
-print_log_file() {
-    echo -e "\033[1;34m[+] Printing log file contents...\033[0m"
-    echo -e "\033[1;33mHARDN SETUP VALIDATION LOG\033[0m" | tee /dev/stderr
-
-    if [ -f "$LOG_FILE" ]; then
-        cat "$LOG_FILE"
-    else
-        echo -e "\033[1;31m[-] Log file not found: $LOG_FILE\033[0m"
-    fi
-}
-
-sleep 7
-
-
-
-
-print_ascii_banner
-
-cat << "EOF"
-                                                                      
-                                                   P L E A S E
-                                              R E B O O T   Y O U R
-                                                   S Y S T E M              
-                                       
-                                                     v 1.1.2               
-                                    
-                                                               
-                                  
-EOF
-
-
+main
