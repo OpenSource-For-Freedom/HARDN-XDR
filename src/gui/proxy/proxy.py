@@ -10,8 +10,12 @@ from ratelimit import limits, sleep_and_retry
 from pathlib import Path
 import datetime
 
+<<<<<<< HEAD
 # Constants
 SOCKET_PATH = '/tmp/hardn.sock'
+=======
+SOCKET_PATH = '/tmp/hardn.sock' # will need to move this socket path < Lets take a look at this
+>>>>>>> 8476171ece892a945fa8f35384c0e87d9c361742
 PORT = 8081
 SSL_CERT_FILE = '/etc/hardn/cert.pem'
 SSL_KEY_FILE = '/etc/hardn/key.pem'

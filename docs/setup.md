@@ -1,26 +1,54 @@
-# Updated Setup Instructions for HARDN
+# HARDN: Updated Build and Run Process
 
-## Installation Steps
+## Updated Build Process
 
-1. Download the Debian package:
-   ```bash
-   wget https://example.com/hardn_<version>.deb
-   ```
+1. Ensure all dependencies are installed:
+    ```bash
+    sudo apt-get update
+    sudo apt-get install -y build-essential cargo python3 python3-pyqt6 debhelper devscripts git
+    ```
 
-2. Install the package:
-   ```bash
-   sudo dpkg -i hardn_<version>.deb
-   ```
+2. Build the Debian package:
+    ```bash
+    cd c:\dev\linux\HARDN
+    dpkg-buildpackage -us -uc
+    ```
 
-3. Resolve any missing dependencies:
-   ```bash
-   sudo apt-get install -f
-   ```
+3. The `.deb` package will be created in the parent directory. Install it:
+    ```bash
+    sudo dpkg -i ../hardn_<version>.deb
+    ```
 
-4. Run the HARDN application:
-   ```bash
-   HARDN
-   ```
+4. Resolve any missing dependencies:
+    ```bash
+    sudo apt-get install -f
+    ```
+
+## Updated Run Process
+
+1. Launch the HARDN application with the GUI:
+    ```bash
+    HARDN
+    ```
+
+2. Use the GUI to perform tasks such as:
+    - Validating packages.
+    - Applying STIG hardening.
+    - Configuring GRUB.
+
+3. For advanced users, CLI scripts are still available:
+    - Validate packages:
+      ```bash
+      sudo /usr/bin/hardn-packages.sh
+      ```
+    - Apply STIG hardening:
+      ```bash
+      sudo /usr/bin/hardn-setup.sh
+      ```
+    - Configure GRUB:
+      ```bash
+      sudo /usr/bin/hardn-grub.sh
+      ```
 
 ## Features
 

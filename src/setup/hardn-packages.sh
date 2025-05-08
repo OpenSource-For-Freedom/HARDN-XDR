@@ -13,7 +13,7 @@ print_ascii_banner() {
     CYAN_BOLD="\033[1;36m"
     RESET="\033[0m"
 
-    printf "${CYAN_BOLD}"
+    printf "%s" "${CYAN_BOLD}"
     cat << "EOF"
                               ▄█    █▄       ▄████████    ▄████████ ████████▄  ███▄▄▄▄   
                              ███    ███     ███    ███   ███    ███ ███   ▀███ ███▀▀▀██▄ 
@@ -33,19 +33,23 @@ print_ascii_banner() {
                                        
                                                               
 EOF
-    printf "${RESET}"
+    printf "%s" "${RESET}"
 }
 
 print_ascii_banner
 
 sleep 7
 
+<<<<<<< HEAD
 SCRIPT_PATH="$(readlink -f "$0")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 PACKAGES_SCRIPT="$SCRIPT_DIR/fips.sh"
 
 SCRIPT_DIR_TOOLS="$SCRIPT_DIR/../tools"
 STIG_DIR="$SCRIPT_DIR_TOOLS/stig"
+=======
+
+>>>>>>> 8476171ece892a945fa8f35384c0e87d9c361742
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "This script must be run as root. Re-running with sudo..."
@@ -61,10 +65,12 @@ fi
 FIX_MODE=false
 
 initialize_log() {
-    echo "========================================" > "$LOG_FILE"
-    echo " HARDN - Packages Validation Log" >> "$LOG_FILE"
-    echo "========================================" >> "$LOG_FILE"
-    echo "[+] Log initialized at $(date)" >> "$LOG_FILE"
+    {
+        echo "========================================"
+        echo " HARDN - Packages Validation Log"
+        echo "========================================"
+        echo "[+] Log initialized at $(date)"
+    } > "$LOG_FILE"
 }
 
 fix_if_needed() {
