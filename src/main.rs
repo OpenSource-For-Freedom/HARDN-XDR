@@ -10,9 +10,14 @@ use std::time::Duration;
 use notify::{Watcher, RecursiveMode};
 use serde::{Serialize};
 use serde_json::{json, Value};
+use actix_web::{web, App, HttpServer};
+use std::collections::HashMap;
+use rand::{distributions::Alphanumeric, Rng};
 //use std::os::unix::fs::PermissionsExt;
 //use std::fs;
 
+mod gui_api;
+mod setup;
 
 // =================== Constants ===================
 const LOG_FILE: &str = "/var/log/hardn.log";
@@ -91,15 +96,24 @@ struct AuthResult {
     user: Option<String>,
     message: String,
 }
-struct AuthService;
+struct AuthService {
+    tokens: Mutex<HashMap<String, String>>, // Maps tokens to usernames
+}
+
 impl AuthService {
-    fn new() -> Self { Self }
+    fn new() -> Self {
+        Self {
+            tokens: Mutex::new(HashMap::new()),
+        }
+    }
+
     fn authenticate(&self, username: &str, password: &str) -> AuthResult {
         if username == "admin" && password == "hardn123" {
+            let token = self.generate_token(username);
             AuthResult {
                 success: true,
                 user: Some(username.to_string()),
-                message: "Login successful".into(),
+                message: token,
             }
         } else {
             AuthResult {
@@ -108,6 +122,21 @@ impl AuthService {
                 message: "Invalid credentials".into(),
             }
         }
+    }
+
+    fn generate_token(&self, username: &str) -> String {
+        let token: String = rand::thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(30)
+            .map(char::from)
+            .collect();
+
+        self.tokens.lock().unwrap().insert(token.clone(), username.to_string());
+        token
+    }
+
+    fn validate_token(&self, token: &str) -> bool {
+        self.tokens.lock().unwrap().contains_key(token)
     }
 }
 
@@ -206,7 +235,6 @@ fn set_executable_permissions(base_dir: &str) {
     let files = vec![
         format!("{}/src/setup/setup.sh", base_dir),
         format!("{}/src/setup/packages.sh", base_dir),
-        format!("{}/src/kernel.c", base_dir),
         format!("{}/src/gui/main.py", base_dir),
     ];
 
@@ -238,25 +266,9 @@ fn run_script(script_name: &str) {
         exit(1);
     }
 }
-fn run_kernel(base_dir: &str) {
-    let kernel_file = format!("{}/kernel.c", base_dir);
-    let output_file = format!("{}/kernel", base_dir);
-    let compile_status = ProcessCommand::new("gcc")
-        .arg(kernel_file.as_str())
-        .arg("-o")
-        .arg(output_file.as_str())
-        .status()
-        .expect("Failed to execute gcc");
-    if !compile_status.success() {
-        eprintln!("Error compiling kernel");
-        exit(1);
-    }
-    let run_status = ProcessCommand::new(&output_file).status().unwrap();
-    if !run_status.success() {
-        eprintln!("Kernel execution failed");
-        exit(1);
-    }
-}
+
+// Removed run_kernel function
+
 fn launch_gui(base_dir: &str) {
     let gui_file = format!("{}/gui/main.py", base_dir);
     let status = ProcessCommand::new("python3").arg(&gui_file).status().unwrap();
@@ -307,7 +319,6 @@ fn create_systemd_service(exec_path: &str) {
 fn install_systemd_timers(base_dir: &str) {
     let timers = [
         ("hardn-packages", format!("{}/setup/packages.sh", base_dir)),
-        ("hardn-kernel", format!("{}/kernel", base_dir)),
     ];
     for (name, path) in timers.iter() {
         fs::write(
@@ -328,7 +339,7 @@ fn install_systemd_timers(base_dir: &str) {
 }
 
 fn remove_systemd_timers() {
-    for name in ["hardn-packages", "hardn-kernel"] {
+    for name in ["hardn-packages"] {
         ProcessCommand::new("systemctl")
             .args(["disable", "--now", &format!("{}.timer", name)])
             .status()
@@ -385,96 +396,21 @@ fn log_message(message: &str) {
 }
 
 // =================== Main ===================
-fn main() {
-    let matches = ClapCommand::new("HARDN")
-        .version("1.1.1")
-        .author("SIG")
-        .about("Secure Linux automation & GUI integration")
-        .arg(Arg::new("setup").long("setup").action(ArgAction::SetTrue))
-        .arg(Arg::new("kernel").long("kernel").action(ArgAction::SetTrue))
-        .arg(Arg::new("gui").long("gui").action(ArgAction::SetTrue))
-        .arg(Arg::new("monitor").long("monitor").action(ArgAction::SetTrue))
-        .arg(Arg::new("all").long("all").action(ArgAction::SetTrue))
-        .arg(Arg::new("install-service").long("install-service").action(ArgAction::SetTrue))
-        .arg(Arg::new("install-timers").long("install-timers").action(ArgAction::SetTrue))
-        .arg(Arg::new("remove-cron").long("remove-cron").action(ArgAction::SetTrue))
-        .get_matches();
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    // Initialize application state
+    let app_state = Arc::new(Mutex::new(AppState::new()));
 
-    if matches.get_flag("setup") {
-        println!("Setup flag detected");
-    }
+    // Launch the GUI
+    gui_api::launch_gui();
 
-    if matches.get_flag("setup") {
-        let base_dir = env::current_dir().unwrap().canonicalize().unwrap();
-        let setup_script = format!("{}/setup.sh", base_dir.to_str().unwrap());
-        let packages_script = format!("{}/packages.sh", base_dir.to_str().unwrap());
-        let kernel_file = format!("{}/kernel.c", base_dir.to_str().unwrap());
-
-        run_script(&setup_script);
-        run_script(&packages_script);
-        run_kernel(&base_dir.to_str().unwrap());
-        run_script(&setup_script);
-        run_script(&packages_script);
-        run_kernel(&base_dir.to_str().unwrap());
-    }
-    }
-        //let main_script = format!("{}/src/main.rs", base_dir.to_str().unwrap());
-
-        run_script(&setup_script);
-        run_script(&packages_script);
-    }
-
-    let base_dir = env::current_dir().unwrap().canonicalize().unwrap();
-    let base_str = base_dir.to_str().unwrap().to_string();
-
-    validate_environment();
-
-    // Lock down all referenced files
-    set_executable_permissions(&base_str);
-
-    if matches.get_flag("install-service") {
-        let path = std::env::current_exe().unwrap();
-        create_systemd_service(path.to_str().unwrap());
-        return;
-    }
-
-    if matches.get_flag("install-timers") {
-        install_systemd_timers(&base_str);
-        return;
-    }
-
-    if matches.get_flag("remove-cron") {
-        remove_systemd_timers();
-        return;
-    }
-
-    if matches.get_flag("setup") || matches.get_flag("all") {
-        run_script(&format!("{}/setup/setup.sh", base_str));
-        run_script(&format!("{}/setup/packages.sh", base_str));
-    }
-
-    if matches.get_flag("kernel") || matches.get_flag("all") {
-        run_kernel(&base_str);
-    }
-
-    if matches.get_flag("gui") || matches.get_flag("all") {
-        let state = Arc::new(AppState::new());
-
-        let net = Arc::clone(&state.network_monitor);
-        let threat = Arc::clone(&state.threat_detector);
-        let ipc_state = Arc::clone(&state);
-
-        std::thread::spawn(move || net.lock().unwrap().start_monitoring());
-        std::thread::spawn(move || threat.lock().unwrap().watch_threats());
-        std::thread::spawn(move || start_ipc_server(ipc_state));
-
-        launch_gui(&base_str);
-    }
-
-    if matches.get_flag("monitor") || matches.get_flag("all") {
-        monitor_system();
-    }
-
-    log_message("HARDN orchestration completed successfully.");
-    println!("HARDN orchestration completed successfully.");
+    // Start REST API server
+    HttpServer::new(move || {
+        App::new()
+            .app_data(web::Data::new(app_state.clone()))
+            .configure(gui_api::configure_routes)
+    })
+    .bind("127.0.0.1:8080")?
+    .run()
+    .await
 }

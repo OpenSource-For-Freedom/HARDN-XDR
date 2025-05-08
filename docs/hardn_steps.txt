@@ -1,111 +1,66 @@
-### **Packages Installed**
-1. **System Utilities**:
-   - `wget`
-   - `curl`
-   - `git`
-   - `gawk`
-   - `mariadb-common`
-   - `mysql-common`
-   - `policycoreutils`
-   - `python3-matplotlib`
-   - `unixodbc-common`
-   - `firejail`
-   - `python3-pyqt6`
+# HARDN: Included Packages and Settings
 
-2. **SELinux and AppArmor**:
-   - `selinux-utils`
-   - `selinux-basics`
-   - `policycoreutils`
-   - `policycoreutils-python-utils`
-   - `selinux-policy-default`
-   - `apparmor`
-   - `apparmor-utils`
-   - `apparmor-profiles`
+## Packages Installed:
+- **ufw** (Uncomplicated Firewall)  
+- **fail2ban**  
+- **apparmor**, **apparmor-profiles**, **apparmor-utils**  
+- **firejail**  
+- **tcpd**  
+- **lynis**  
+- **debsums**  
+- **libpam-pwquality**  
+- **libvirt-daemon-system**, **libvirt-clients**  
+- **qemu-system-x86**  
+- **openssh-server**, **openssh-client**  
+- **rkhunter**  
+- **chkrootkit**  
+- **linux-malware-detect** (maldet)  
+- **aide**, **aide-common**  
+- **wget**, **curl**, **git**, **gawk**  
+- **mariadb-common**, **mysql-common**  
+- **policycoreutils**  
+- **python3-matplotlib**, **python3-pyqt6**  
+- **unixodbc-common**  
+- **fwupd**  
 
-3. **Security Tools**:
-   - `ufw`
-   - `fail2ban`
-   - `tcpd`
-   - `lynis`
-   - `debsums`
-   - `libpam-pwquality`
-   - `libvirt-daemon-system`
-   - `libvirt-clients`
-   - `qemu-system-x86`
-   - `openssh-server`
-   - `openssh-client`
+## Security Tools/Services Enabled:
+- **UFW firewall** (with strict outbound/inbound rules)  
+- **Fail2Ban** (with SSH jail and custom ban settings)  
+- **AppArmor** (enabled and profiles reset)  
+- **Firejail** (sandboxing for Firefox and Chrome)  
+- **rkhunter** (rootkit scanner, auto-updated)  
+- **chkrootkit** (rootkit scanner)  
+- **maldet** (Linux Malware Detect)  
+- **AIDE** (Advanced Intrusion Detection Environment, initialized and scheduled)  
+- **auditd** (system auditing, with custom rules)  
+- **Lynis** (security auditing tool)  
 
-4. **AIDE (Advanced Intrusion Detection Environment)**:
-   - `aide`
+## System Hardening & STIG Settings:
+- Password policy (**minlen=14**, complexity, retry, enforce_for_root)  
+- Inactive account lock (**35 days**)  
+- Login banners (**issue**, **issue.net**)  
+- Filesystem permissions (**passwd**, **shadow**, etc.)  
+- Audit rules for sensitive files  
+- Kernel parameters:  
+    - ASLR  
+    - exec-shield  
+    - panic  
+    - kptr_restrict  
+    - dmesg_restrict  
+    - hardlink/symlink protection  
+    - ICMP  
+    - TCP  
+    - source routing  
+    - IP forwarding  
+- USB storage disabled (via **modprobe**)  
+- Core dumps disabled  
+- Ctrl+Alt+Del disabled  
+- IPv6 disabled  
+- Outbound firewall rules for updates, DNS, NTP only  
+- Randomize VA space (**ASLR**)  
+- Firmware updates enabled (**fwupd**)  
+- Cron jobs for regular **auditd** runs and system updates  
 
-5. **Audit Tools**:
-   - `auditd`
-   - `audispd-plugins`
-
-6. **Rootkit and Malware Detection**:
-   - `chkrootkit`
-   - `Linux Malware Detect (LMD)` (installed from GitHub)
-
-7. **Firmware Updates**:
-   - `fwupd`
-
-8. **Rust Programming Language**:
-   - Installed via the official Rust installer.
-
----
-
-### **Processes Performed**
-1. **System Updates**:
-   - Updates all system packages using `apt update` and `apt upgrade`.
-
-2. **Set Hostname**:
-   - Sets a generic hostname using `hostnamectl`.
-
-3. **Install Package Dependencies**:
-   - Installs essential system utilities and libraries.
-
-4. **Install SELinux**:
-   - Installs and configures SELinux in permissive mode.
-   - Applies SELinux policies and prepares the system for reboot.
-
-5. **Install Security Tools**:
-   - Installs tools like `ufw`, `fail2ban`, `lynis`, and `firejail`.
-   - Configures and enables AppArmor profiles.
-
-6. **Install AIDE**:
-   - Installs AIDE and initializes its database.
-   - Runs an initial AIDE check.
-
-7. **Install Additional Tools**:
-   - Installs `chkrootkit` for rootkit detection.
-   - Installs Linux Malware Detect (LMD) from its GitHub repository.
-
-8. **Install Rust**:
-   - Installs Rust programming language using the official installer.
-
-9. **Apply STIG Hardening**:
-   - Configures password policies using `libpam-pwquality`.
-   - Locks inactive accounts.
-   - Sets login banners for `/etc/issue` and `/etc/issue.net`.
-   - Configures kernel parameters for STIG compliance.
-   - Secures filesystem permissions.
-   - Configures audit rules for critical files.
-   - Disables USB storage devices.
-   - Disables core dumps.
-   - Disables `Ctrl+Alt+Del` key combination.
-   - Disables IPv6.
-   - Configures `iptables` for strict firewall rules.
-   - Enables Address Space Layout Randomization (ASLR).
-   - Enforces AppArmor profiles.
-
-10. **Configure Firejail**:
-    - Configures Firejail for Firefox and Google Chrome.
-
-11. **Enable Services**:
-    - Enables and starts `fail2ban` and AppArmor services.
-
-12. **Firmware Updates**:
-    - Installs `fwupd` and applies firmware updates.
-
-13. **Final Setup**:
-    - Calls `packages.sh` script for additional setup tasks.
+## Monitoring & Reporting:
+- Alerts and validation logs written to `~/Desktop/HARDN_alerts.txt`  
+- Cron setup for periodic security checks and updates  

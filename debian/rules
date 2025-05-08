@@ -1,31 +1,4 @@
 #!/usr/bin/make -f
 
-export DH_VERBOSE=1
-
 %:
 	dh $@
-
-override_dh_auto_build:
-	echo "Building HARDN endpoint..."
-	mkdir -p build
-	if [ -f src/hardn-endpoint.c ]; then \
-		gcc -o build/hardn-endpoint src/hardn-endpoint.c; \
-	else \
-		echo "Error: src/hardn-endpoint.c not found!"; \
-		exit 1; \
-	fi
-
-
-
-
-
-override_dh_auto_install:
-	echo "Installing HARDN endpoint binary..."
-	install -Dm755 build/hardn-endpoint $(DESTDIR)/usr/local/bin/hardn-endpoint
-
-
-
-
-override_dh_auto_clean:
-	echo "Cleaning build artifacts..."
-	rm -rf build

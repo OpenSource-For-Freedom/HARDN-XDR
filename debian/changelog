@@ -1,9 +1,8 @@
-hardn (1.0.0) stable; urgency=medium
+hardn (1.1.4) UNRELEASED; urgency=medium
 
-  * Initial release of HARDN endpoint deployment.
-  * Added core functionality for endpoint communication.
-  * Implemented secure authentication mechanisms.
-  * Enhanced logging and monitoring features.
-  * Fixed minor bugs and improved performance.
+  * Added GUI root login prompt for enhanced security.
+  * Integrated HARDN logo into the GUI header.
+  * Updated Debian packaging to include the HARDN logo.
+  * Enhanced GUI functionality to require root credentials on application launch.
 
- -- Tim <cyborgcreations01gmail.com>  Fri, 18 Apr 2025 12:00:00 +0000
+ -- Tim Burns <cyborcreations01@gmail.com>  Thu, 08 May 2025 12:00:00 +0300

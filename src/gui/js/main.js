@@ -6,18 +6,62 @@
 // Current active section
 let currentSection = 'dashboard';
 
+// Add token management
+let authToken = null;
+
 // Initialize the application when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('HARDN GUI Initializing...');
+  const loginPrompt = document.createElement('div');
+  loginPrompt.className = 'login-prompt';
+  loginPrompt.innerHTML = `
+    <div class="login-container">
+      <h2>Root Login Required</h2>
+      <form id="login-form">
+        <label for="username">Username:</label>
+        <input type="text" id="username" name="username" required>
+        <label for="password">Password:</label>
+        <input type="password" id="password" name="password" required>
+        <button type="submit">Login</button>
+      </form>
+    </div>
+  `;
+  document.body.appendChild(loginPrompt);
+
+  const loginForm = document.getElementById('login-form');
+  loginForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const username = document.getElementById('username').value;
+    const password = document.getElementById('password').value;
+
+    try {
+      const response = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        authToken = data.message; // Store the token
+        loginPrompt.remove();
+        console.log('HARDN GUI Initializing...');
   
-  // Set up navigation
-  setupNavigation();
+        // Set up navigation
+        setupNavigation();
   
-  // Load dashboard by default
-  loadSection('dashboard');
+        // Load dashboard by default
+        loadSection('dashboard');
   
-  // Add status bar text updater
-  setupStatusBar();
+        // Add status bar text updater
+        setupStatusBar();
+      } else {
+        alert('Invalid credentials. Please try again.');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      alert('An error occurred. Please try again.');
+    }
+  });
 });
 
 /**
@@ -1281,4 +1325,18 @@ function initializeHARDNModules() {
         break;
     }
   });
-} 
+}
+
+// Update fetch logic to include token
+async function fetchWithAuth(url, options = {}) {
+  if (!authToken) {
+    throw new Error('No authentication token available');
+  }
+
+  options.headers = {
+    ...options.headers,
+    Authorization: authToken
+  };
+
+  return fetch(url, options);
+}

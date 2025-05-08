@@ -4,19 +4,34 @@ import socket
 import json
 import subprocess
 import os
-import sys
-import shutil
-import re
+import ssl
+import logging
+from ratelimit import limits, sleep_and_retry
 from pathlib import Path
 import datetime
 
+# Constants
 SOCKET_PATH = '/tmp/hardn.sock'
 PORT = 8081
+SSL_CERT_FILE = '/etc/hardn/cert.pem'
+SSL_KEY_FILE = '/etc/hardn/key.pem'
+RATE_LIMIT_CALLS = 100  # Max 100 requests
+RATE_LIMIT_PERIOD = 60  # Per 60 seconds
 BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
 
 # Setup script paths
 SETUP_SCRIPT = BASE_DIR / "src" / "setup" / "setup.sh"
 PACKAGES_SCRIPT = BASE_DIR / "src" / "setup" / "packages.sh"
+
+# Logging setup
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger('HARDN Proxy')
+
+# Rate limiting decorator
+@sleep_and_retry
+@limits(calls=RATE_LIMIT_CALLS, period=RATE_LIMIT_PERIOD)
+def rate_limit():
+    pass
 
 # VM detection function
 def is_running_in_vm():
@@ -609,19 +624,27 @@ USER_ACTIONS = {
     )
 }
 
-class Handler(http.server.BaseHTTPRequestHandler):
+class SecureHandler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
+        rate_limit()  # Enforce rate limiting
+
         if self.path != '/api':
-            self.send_error(404)
+            self.send_error(404, 'Endpoint not found')
             return
-            
+
         length = int(self.headers.get('Content-Length', 0))
         body = self.rfile.read(length)
-        
+
         try:
             request = json.loads(body)
             action = request.get('action', '')
-            
+
+            # Validate token
+            token = self.headers.get('Authorization')
+            if not self.validate_token(token):
+                self.send_error(401, 'Unauthorized')
+                return
+
             # Check if this is a setup-related action
             if action in SETUP_ACTIONS:
                 response = SETUP_ACTIONS[action]()
@@ -644,8 +667,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(json.dumps(response).encode())
                 return
-            
-            # Otherwise forward to Unix socket (backend)
+
+            # Forward to Unix socket (backend)
             client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             try:
                 client.connect(SOCKET_PATH)
@@ -669,32 +692,28 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(lines[0])
             except (FileNotFoundError, ConnectionRefusedError):
-                # Backend socket not available - return error
-                self.send_response(503)
-                self.send_header('Content-Type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.end_headers()
-                self.wfile.write(json.dumps({
-                    'error': f'Backend not available: {SOCKET_PATH} not found or connection refused'
-                }).encode())
+                self.send_error(503, 'Backend not available')
             except Exception as e:
-                self.send_response(500)
-                self.send_header('Content-Type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.end_headers()
-                self.wfile.write(json.dumps({'error': str(e)}).encode())
+                logger.error(f'Error forwarding request: {e}')
+                self.send_error(500, 'Internal server error')
         except json.JSONDecodeError:
-            self.send_response(400)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': 'Invalid JSON'}).encode())
+            self.send_error(400, 'Invalid JSON')
         except Exception as e:
-            self.send_response(500)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': str(e)}).encode())
+            logger.error(f'Unexpected error: {e}')
+            self.send_error(500, 'Internal server error')
+
+    def validate_token(self, token):
+        """Validate the provided token."""
+        # Replace with actual token validation logic
+        valid_tokens = ['secure-token-123']
+        return token in valid_tokens
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.end_headers()
 
     def do_GET(self):
         """Handle GET requests for various endpoints"""
@@ -714,13 +733,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.end_headers()
         self.wfile.write(json.dumps(data).encode())
-
-    def do_OPTIONS(self):
-        self.send_response(204)
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.end_headers()
 
     def handle_get_status(self):
         """Handle GET /status endpoint to check backend status"""
@@ -795,14 +807,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_json_response(result)
 
 if __name__ == '__main__':
-    # Print proxy information
-    print(f'HARDN Proxy Server')
-    print(f'Environment: {"Virtual Machine" if IS_VM_ENVIRONMENT else "Physical Machine"}')
-    print(f'Backend Socket: {SOCKET_PATH}')
-    print(f'Setup Script: {SETUP_SCRIPT}')
-    print(f'Packages Script: {PACKAGES_SCRIPT}')
-    
-    # Start server
-    with socketserver.TCPServer(('127.0.0.1', PORT), Handler) as httpd:
-        print(f'Serving on http://127.0.0.1:{PORT}')
-        httpd.serve_forever() 
+    logger.info('Starting HARDN Proxy Server')
+
+    # Check SSL certificate and key
+    if not Path(SSL_CERT_FILE).exists() or not Path(SSL_KEY_FILE).exists():
+        logger.error('SSL certificate or key file not found. Exiting.')
+        exit(1)
+
+    # Start server with SSL
+    httpd = socketserver.TCPServer(('127.0.0.1', PORT), SecureHandler)
+    httpd.socket = ssl.wrap_socket(httpd.socket, certfile=SSL_CERT_FILE, keyfile=SSL_KEY_FILE, server_side=True)
+
+    logger.info(f'Serving on https://127.0.0.1:{PORT}')
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        logger.info('Shutting down server')
+        httpd.server_close()

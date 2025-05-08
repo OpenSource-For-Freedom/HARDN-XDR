@@ -589,3 +589,15 @@ main() {
 }
 
 main
+
+# HARDN Setup Script
+
+# Call hardn-grub.sh
+./hardn-grub.sh
+
+# Call hardn-packages.sh
+./hardn-packages.sh
+
+# Export CLI output to GUI
+export HARDN_CLI_OUTPUT="/var/log/hardn-cli-output.log"
+echo "CLI output exported to $HARDN_CLI_OUTPUT"
