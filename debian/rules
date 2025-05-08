@@ -2,3 +2,11 @@
 
 %:
 	dh $@
+
+override_dh_auto_install:
+	dh_auto_install
+	install -m 755 src/setup/*.sh debian/hardn/usr/bin/
+	install -m 755 src/tools/*.sh debian/hardn/usr/bin/
+	install -m 755 src/tools/stig/*.sh debian/hardn/usr/bin/stig/
+	install -m 644 docs/assets/* debian/hardn/usr/share/hardn/assets/
+	install -m 644 src/gui/* debian/hardn/usr/share/hardn/gui/

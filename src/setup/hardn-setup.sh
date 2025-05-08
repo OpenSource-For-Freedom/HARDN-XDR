@@ -16,7 +16,7 @@ print_ascii_banner() {
     CYAN_BOLD="\033[1;36m"
     RESET="\033[0m"
 
-    printf "${CYAN_BOLD}"
+    printf "%s" "${CYAN_BOLD}"
     cat << "EOF"
                               ▄█    █▄       ▄████████    ▄████████ ████████▄  ███▄▄▄▄   
                              ███    ███     ███    ███   ███    ███ ███   ▀███ ███▀▀▀██▄ 
@@ -32,7 +32,7 @@ print_ascii_banner() {
                                                    
                                                     v 1.1.2
 EOF
-    printf "${RESET}"
+    printf "%s" "${RESET}"
 }
 
 print_ascii_banner
@@ -65,6 +65,40 @@ set_generic_hostname() {
 
 
 
+detect_os() {
+    if [ -f /etc/os-release ] && [ -r /etc/os-release ]; then
+        . /etc/os-release
+        export OS_NAME="$NAME"
+        export OS_VERSION="$VERSION_ID"
+
+        case "$OS_NAME" in
+            "Debian GNU/Linux")
+                if [[ "$OS_VERSION" == "11" || "$OS_VERSION" == "12" ]]; then
+                    echo "Detected supported OS: $OS_NAME $OS_VERSION"
+                else
+                    echo "Unsupported Debian version: $OS_VERSION. Exiting."
+                    exit 1
+                fi
+                ;;
+            "Ubuntu")
+                if [[ "$OS_VERSION" == "22.04" || "$OS_VERSION" == "24.04" ]]; then
+                    echo "Detected supported OS: $OS_NAME $OS_VERSION"
+                else
+                    echo "Unsupported Ubuntu version: $OS_VERSION. Exiting."
+                    exit 1
+                fi
+                ;;
+            *)
+                echo "Unsupported OS: $OS_NAME. Exiting."
+                exit 1
+                ;;
+        esac
+    else
+        echo "Unable to read /etc/os-release. Exiting."
+        exit 1
+    fi
+}
+
 
 update_system_packages() {
     printf "\033[1;31m[+] Updating system packages...\033[0m\n"
@@ -79,8 +113,8 @@ update_system_packages() {
 
 install_pkgdeps() {
     printf "\033[1;31m[+] Installing package dependencies...\033[0m\n"
-    apt install -y wget curl git gawk mariadb-common mysql-common policycoreutils \
-        unixodbc-common firejail python3-pyqt6 fonts-liberation
+    apt install -y git gawk mariadb-common policycoreutils \
+        unixodbc-common firejail python3-pyqt6 fonts-liberation libpam-pwquality
 }
 
 
@@ -145,20 +179,20 @@ enable_apparmor() {
         return 1
     }
 
-  
-    systemctl restart apparmor || {
-        printf "\033[1;31m[-] Failed to restart AppArmor service.\033[0m\n"
-        return 1
-    }
 
     systemctl enable --now apparmor || {
         printf "\033[1;31m[-] Failed to enable AppArmor service.\033[0m\n"
         return 1
     }
 
-    printf "\033[1;32m[+] AppArmor successfully installed and reloaded.\033[0m\n"
-}
 
+    aa-complain /etc/apparmor.d/* || {
+        printf "\033[1;31m[-] Failed to set profiles to complain mode. Continuing...\033[0m\n"
+    }
+
+    printf "\033[1;32m[+] AppArmor installed. Profiles are in complain mode for testing.\033[0m\n"
+    printf "\033[1;33m[!] Review profile behavior before switching to enforce mode.\033[0m\n"
+}
 
 
 
@@ -222,8 +256,6 @@ enable_rkhunter(){
 
 
 
-
-
 configure_firejail() {
     printf "\033[1;31m[+] Configuring Firejail for Firefox and Chrome...\033[0m\n"
 
@@ -260,13 +292,20 @@ configure_firejail() {
    
 
 stig_password_policy() {
-    apt install -y libpam-pwquality
-    sed -i 's/^# minlen.*/minlen = 14/' /etc/security/pwquality.conf
-    sed -i 's/^# dcredit.*/dcredit = -1/' /etc/security/pwquality.conf
-    sed -i 's/^# ucredit.*/ucredit = -1/' /etc/security/pwquality.conf
-    sed -i 's/^# ocredit.*/ocredit = -1/' /etc/security/pwquality.conf
-    sed -i 's/^# lcredit.*/lcredit = -1/' /etc/security/pwquality.conf
-    sed -i '/pam_pwquality.so/ s/$/ retry=3 enforce_for_root/' /etc/pam.d/common-password || true
+
+    sed -i 's/^#\? *minlen *=.*/minlen = 14/' /etc/security/pwquality.conf
+    sed -i 's/^#\? *dcredit *=.*/dcredit = -1/' /etc/security/pwquality.conf
+    sed -i 's/^#\? *ucredit *=.*/ucredit = -1/' /etc/security/pwquality.conf
+    sed -i 's/^#\? *ocredit *=.*/ocredit = -1/' /etc/security/pwquality.conf
+    sed -i 's/^#\? *lcredit *=.*/lcredit = -1/' /etc/security/pwquality.conf
+
+
+    if command -v pam-auth-update > /dev/null; then
+        pam-auth-update --package
+        echo "[+] pam_pwquality profile activated via pam-auth-update"
+    else
+        echo "[!] pam-auth-update not found. Install 'libpam-runtime' to manage PAM profiles safely."
+    fi
 }
 
 
@@ -276,7 +315,7 @@ stig_password_policy() {
 
 stig_lock_inactive_accounts() {
     useradd -D -f 35
-    for user in $(awk -F: '$3 >= 1000 && $1 != "nobody" {print $1}' /etc/passwd); do
+    awk -F: '$3 >= 1000 && $1 != "nobody" {print $1}' /etc/passwd | while read -r user; do
         chage --inactive 35 "$user"
     done
 }
@@ -491,20 +530,19 @@ update_firmware() {
 apply_stig_hardening() {
     printf "\033[1;31m[+] Applying STIG hardening tasks...\033[0m\n"
 
-    
-    stig_password_policy || { printf "\033[1;31m[-] Failed to apply password policy.\033[0m\n"; exit 1; }
-    stig_lock_inactive_accounts || { printf "\033[1;31m[-] Failed to lock inactive accounts.\033[0m\n"; exit 1; }
-    stig_login_banners || { printf "\033[1;31m[-] Failed to set login banners.\033[0m\n"; exit 1; }
-    stig_kernel_setup || { printf "\033[1;31m[-] Failed to configure kernel parameters.\033[0m\n"; exit 1; }
-    stig_secure_filesystem || { printf "\033[1;31m[-] Failed to secure filesystem permissions.\033[0m\n"; exit 1; }
-    stig_disable_usb || { printf "\033[1;31m[-] Failed to disable USB storage.\033[0m\n"; exit 1; }
-    stig_disable_core_dumps || { printf "\033[1;31m[-] Failed to disable core dumps.\033[0m\n"; exit 1; }
-    stig_disable_ctrl_alt_del || { printf "\033[1;31m[-] Failed to disable Ctrl+Alt+Del.\033[0m\n"; exit 1; }
-    stig_disable_ipv6 || { printf "\033[1;31m[-] Failed to disable IPv6.\033[0m\n"; exit 1; }
-    stig_configure_firewall || { printf "\033[1;31m[-] Failed to configure firewall.\033[0m\n"; exit 1; }
-    stig_set_randomize_va_space || { printf "\033[1;31m[-] Failed to set randomize_va_space.\033[0m\n"; exit 1; }
-    update_firmware || { printf "\033[1;31m[-] Failed to update firmware.\033[0m\n"; exit 1; }
-
+    printf "\033[1;31m[+] Applying STIG hardening to system\033[0m\n"
+    # Call individual STIG scripts
+    bash "$SCRIPT_DIR/tools/stig/stig_password_policy.sh"
+    bash "$SCRIPT_DIR/tools/stig/stig_lock_inactive_accounts.sh"
+    bash "$SCRIPT_DIR/tools/stig/stig_login_banners.sh"
+    bash "$SCRIPT_DIR/tools/stig/stig_secure_filesystem.sh"
+    bash "$SCRIPT_DIR/tools/stig/stig_kernel_setup.sh"
+    bash "$SCRIPT_DIR/tools/stig/stig_disable_usb.sh"
+    bash "$SCRIPT_DIR/tools/stig/stig_disable_core_dumps.sh"
+    bash "$SCRIPT_DIR/tools/stig/stig_disable_ctrl_alt_del.sh"
+    bash "$SCRIPT_DIR/tools/stig/stig_disable_ipv6.sh"
+    bash "$SCRIPT_DIR/tools/stig/stig_configure_firewall.sh"
+    bash "$SCRIPT_DIR/tools/stig/stig_set_randomize_va_space.sh"
     printf "\033[1;32m[+] STIG hardening tasks applied successfully.\033[0m\n"
 }
 
@@ -543,8 +581,14 @@ sleep 3
 }
 
 
+
+
+
+
+
 main() {
     printf "\033[1;31m[+] Updating system packages...\033[0m\n"
+    detect_os
     update_system_packages
 
     printf "\033[1;31m[+] Setting generic hostname...\033[0m\n"
@@ -589,15 +633,3 @@ main() {
 }
 
 main
-
-# HARDN Setup Script
-
-# Call hardn-grub.sh
-./hardn-grub.sh
-
-# Call hardn-packages.sh
-./hardn-packages.sh
-
-# Export CLI output to GUI
-export HARDN_CLI_OUTPUT="/var/log/hardn-cli-output.log"
-echo "CLI output exported to $HARDN_CLI_OUTPUT"

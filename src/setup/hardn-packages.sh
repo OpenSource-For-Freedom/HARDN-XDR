@@ -44,7 +44,8 @@ SCRIPT_PATH="$(readlink -f "$0")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 PACKAGES_SCRIPT="$SCRIPT_DIR/fips.sh"
 
-
+SCRIPT_DIR_TOOLS="$SCRIPT_DIR/../tools"
+STIG_DIR="$SCRIPT_DIR_TOOLS/stig"
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "This script must be run as root. Re-running with sudo..."
@@ -93,158 +94,34 @@ fix_if_needed() {
 }
 
 ensure_aide_initialized() {
-    if [ ! -f /var/lib/aide/aide.db ]; then
-        echo "[*] Initializing AIDE database..."
-        sudo aideinit
-        sudo cp /var/lib/aide/aide.db.new /var/lib/aide/aide.db
-        sudo chmod 600 /var/lib/aide/aide.db
-        echo "[+] AIDE database initialized."
-    fi
+    bash "$SCRIPT_DIR_TOOLS/enable_aide.sh"
 }
 
 validate_packages() {
     echo "[+] Validating package configurations..." | tee -a "$LOG_FILE"
 
-    fix_if_needed \
-        "! ping -c 1 google.com >/dev/null 2>&1" \
-        "sudo systemctl restart networking && sudo dhclient" \
-        "Internet connectivity is restored" \
-        "Internet connectivity is not available"
-
-    echo "[*] Checking internet connectivity..." | tee -a "$LOG_FILE"
-
-    fix_if_needed \
-        "sudo ufw status | grep -q 'Status: active'" \
-        "sudo apt-get install -y ufw && sudo ufw enable" \
-        "UFW is active" \
-        "UFW is not active"
-
-    echo "[*] Checking UFW status..." | tee -a "$LOG_FILE"
-
-    fix_if_needed \
-        "sudo systemctl is-active --quiet fail2ban" \
-        "sudo systemctl start fail2ban" \
-        "Fail2Ban is active" \
-        "Fail2Ban not running"
-
-    echo "[*] Checking Fail2Ban status..." | tee -a "$LOG_FILE"
-
-    fix_if_needed \
-        "command -v aa-status >/dev/null && sudo systemctl is-active --quiet apparmor" \
-        "sudo systemctl start apparmor" \
-        "AppArmor is active" \
-        "AppArmor not active"
-
-    echo "[*] Checking AppArmor status..." | tee -a "$LOG_FILE"
-
-    fix_if_needed \
-        "command -v firejail >/dev/null" \
-        "sudo apt-get install -y firejail" \
-        "Firejail is installed" \
-        "Firejail missing"
-
-    echo "[*] Checking Firejail installation..." | tee -a "$LOG_FILE"
-
-    fix_if_needed \
-        "command -v chkrootkit >/dev/null" \
-        "sudo apt-get install -y chkrootkit" \
-        "chkrootkit installed" \
-        "chkrootkit missing"
-
-    echo "[*] Checking chkrootkit installation..." | tee -a "$LOG_FILE"
-
-    # Improved maldet block: checks all locations and installs from GitHub if missing
-    fix_if_needed \
-        "[ -x /usr/local/maldetect/maldet ] || [ -x /usr/local/bin/maldet ] || command -v maldet >/dev/null" \
-        "( [ ! -d /tmp/linux-malware-detect ] && cd /tmp && git clone https://github.com/rfxn/linux-malware-detect.git ) && cd /tmp/linux-malware-detect && sudo ./install.sh && sudo ln -sf /usr/local/maldetect/maldet /usr/local/bin/maldet && ( [ -x /usr/local/maldetect/maldet ] || [ -x /usr/local/bin/maldet ] || command -v maldet >/dev/null )" \
-        "Linux Malware Detect (maldet) is installed" \
-        "Linux Malware Detect (maldet) is not installed"
-
-    echo "[*] Checking maldet installation..." | tee -a "$LOG_FILE"
-
-    fix_if_needed \
-        "command -v rkhunter >/dev/null" \
-        "sudo apt-get install -y rkhunter" \
-        "rkhunter installed" \
-        "rkhunter missing"
-
-    echo "[*] Checking rkhunter installation..." | tee -a "$LOG_FILE"
-
-    fix_if_needed \
-        "sudo systemctl is-active --quiet auditd" \
-        "sudo systemctl start auditd" \
-        "auditd is running" \
-        "auditd not running"
-
-    echo "[*] Checking auditd status..." | tee -a "$LOG_FILE"
-
-    fix_if_needed \
-        "command -v aide >/dev/null" \
-        "sudo apt-get install -y aide" \
-        "AIDE is installed" \
-        "AIDE not installed"
-
-    echo "[*] Checking AIDE installation..." | tee -a "$LOG_FILE"
-
-    fix_if_needed \
-        "sudo aide --check >/dev/null 2>&1" \
-        "sudo aideinit && sudo cp /var/lib/aide/aide.db.new /var/lib/aide/aide.db" \
-        "AIDE database check passed" \
-        "AIDE database check failed"
-
-    echo "[*] Performing AIDE database check..." | tee -a "$LOG_FILE"
+    bash "$SCRIPT_DIR_TOOLS/update_system_packages.sh"
+    bash "$SCRIPT_DIR_TOOLS/install_pkgdeps.sh"
+    bash "$SCRIPT_DIR_TOOLS/enable_fail2ban.sh"
+    bash "$SCRIPT_DIR_TOOLS/enable_apparmor.sh"
+    bash "$SCRIPT_DIR_TOOLS/configure_firejail.sh"
+    bash "$SCRIPT_DIR_TOOLS/install_security_tools.sh"
 }
 
 validate_stig_hardening() {
     echo "[+] Validating STIG compliance..." | tee -a "$LOG_FILE"
 
-    fix_if_needed \
-        "grep -q 'minlen = 14' /etc/security/pwquality.conf" \
-        "sudo sed -i 's/^#\\? *minlen.*/minlen = 14/' /etc/security/pwquality.conf" \
-        "Password policy minlen is set" \
-        "Password policy minlen missing or wrong"
-
-    fix_if_needed \
-        "stat -c '%a' /etc/shadow | grep -q 000" \
-        "sudo chmod 000 /etc/shadow" \
-        "/etc/shadow permissions are 000" \
-        "Incorrect /etc/shadow permissions"
-
-    fix_if_needed \
-        "grep -q 'net.ipv6.conf.all.disable_ipv6 = 1' /etc/sysctl.d/99-sysctl.conf" \
-        "echo 'net.ipv6.conf.all.disable_ipv6 = 1' | sudo tee -a /etc/sysctl.d/99-sysctl.conf && sudo sysctl -w net.ipv6.conf.all.disable_ipv6=1" \
-        "IPv6 is disabled" \
-        "IPv6 not disabled"
-
-    fix_if_needed \
-        "grep -q 'fs.suid_dumpable = 0' /etc/sysctl.d/99-coredump.conf" \
-        "echo 'fs.suid_dumpable = 0' | sudo tee /etc/sysctl.d/99-coredump.conf && sudo sysctl -w fs.suid_dumpable=0" \
-        "Core dumps are disabled" \
-        "Core dumps enabled"
-
-    fix_if_needed \
-        "grep -q 'install usb-storage /bin/false' /etc/modprobe.d/hardn-blacklist.conf" \
-        "echo 'install usb-storage /bin/false' | sudo tee /etc/modprobe.d/hardn-blacklist.conf" \
-        "USB storage blocked via modprobe" \
-        "USB storage not blocked"
-
-    fix_if_needed \
-        "grep -q 'kernel.randomize_va_space = 2' /etc/sysctl.d/hardn.conf" \
-        "echo 'kernel.randomize_va_space = 2' | sudo tee -a /etc/sysctl.d/hardn.conf && sudo sysctl -w kernel.randomize_va_space=2" \
-        "randomize_va_space = 2 present" \
-        "Missing randomize_va_space setting"
-
-    fix_if_needed \
-        "grep -q '[SIG]}' /etc/issue" \
-        "echo 'You are accessing a SIG Information System (IS)...' | sudo tee /etc/issue" \
-        "Login banner exists" \
-        "Missing login banner /etc/issue"
-
-    fix_if_needed \
-        "sudo systemctl status ctrl-alt-del.target | grep -q 'Masked'" \
-        "sudo systemctl mask ctrl-alt-del.target" \
-        "Ctrl+Alt+Del is disabled" \
-        "Ctrl+Alt+Del is still active"
+    bash "$STIG_DIR/stig_password_policy.sh"
+    bash "$STIG_DIR/stig_lock_inactive_accounts.sh"
+    bash "$STIG_DIR/stig_login_banners.sh"
+    bash "$STIG_DIR/stig_secure_filesystem.sh"
+    bash "$STIG_DIR/stig_kernel_setup.sh"
+    bash "$STIG_DIR/stig_disable_usb.sh"
+    bash "$STIG_DIR/stig_disable_core_dumps.sh"
+    bash "$STIG_DIR/stig_disable_ctrl_alt_del.sh"
+    bash "$STIG_DIR/stig_disable_ipv6.sh"
+    bash "$STIG_DIR/stig_configure_firewall.sh"
+    bash "$STIG_DIR/stig_set_randomize_va_space.sh"
 }
 
 validate_boot_services() {
@@ -300,17 +177,13 @@ cron_packages() {
     echo "         CRON SETUP - PACKAGES          " | sudo tee -a /etc/crontab
     echo "========================================" | sudo tee -a /etc/crontab
     echo "0 11 * * * aide --check --config /etc/aide/aide.conf" | sudo tee -a /etc/crontab
-    echo "0 0 */2 * * root /usr/bin/maldet --update" | sudo tee -a /etc/crontab
-    echo "0 0 */2 * * root /usr/bin/rkhunter --update" | sudo tee -a /etc/crontab
-    echo "0 0 */2 * * root /usr/bin/fail2ban-client -x" | sudo tee -a /etc/crontab
-    echo "0 0 */2 * * root /usr/bin/apparmor_parser -r /etc/apparmor.d/*" | sudo tee -a /etc/crontab
-    echo "0 0 */2 * * root /usr/sbin/grub-mkconfig -o /boot/grub/grub.cfg" | sudo tee -a /etc/crontab
-    echo "0 0 */2 * * root /usr/sbin/auditctl -e 1" | sudo tee -a /etc/crontab
-    echo "0 0 */2 * * root /usr/sbin/auditd -f" | sudo tee -a /etc/crontab
-    echo "0 0 */2 * * root /usr/sbin/auditd -r" | sudo tee -a /etc/crontab
-    echo "0 0 * * * root /usr/local/bin/hardn-packages.sh > /var/log/hardn-packages.log 2>&1" | sudo tee -a /etc/crontab
+    echo "0 0 */2 * * root bash $SCRIPT_DIR_TOOLS/update_system_packages.sh" | sudo tee -a /etc/crontab
+    echo "0 0 */2 * * root bash $SCRIPT_DIR_TOOLS/install_pkgdeps.sh" | sudo tee -a /etc/crontab
+    echo "0 0 */2 * * root bash $SCRIPT_DIR_TOOLS/enable_fail2ban.sh" | sudo tee -a /etc/crontab
+    echo "0 0 */2 * * root bash $SCRIPT_DIR_TOOLS/enable_apparmor.sh" | sudo tee -a /etc/crontab
+    echo "0 0 */2 * * root bash $SCRIPT_DIR_TOOLS/configure_firejail.sh" | sudo tee -a /etc/crontab
+    echo "0 0 */2 * * root bash $SCRIPT_DIR_TOOLS/install_security_tools.sh" | sudo tee -a /etc/crontab
 }
-
 
 cron_alert() {
     local ALERTS_FILE="$HOME/Desktop/HARDN_alerts.txt"

@@ -10,5 +10,5 @@ Package: hardn
 Section: base
 Priority: optional
 Architecture: all
-Depends:
+Depends: python3, python3-pyqt6, ufw, fail2ban, apparmor, firejail, rkhunter, chkrootkit, maldet, aide, auditd, lynis, libgtk-3-dev, libwebkit2gtk-4.0-dev, libssl-dev, fonts-liberation, gawk, wget, curl, git
 Description: Collection of scripts for security hardening operating systems

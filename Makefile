@@ -28,10 +28,16 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
 build-rust:
 	cargo build --release
 
+# Update the install target to include all scripts and tools
 install: $(TARGET) build-rust
 	@mkdir -p $(DESTDIR)$(bindir)
 	install -m 755 $(TARGET) $(DESTDIR)$(bindir)/hardn-c
 	install -m 755 $(RUST_TARGET) $(DESTDIR)$(bindir)/hardn
+	install -m 755 src/setup/*.sh $(DESTDIR)$(bindir)/
+	install -m 755 src/tools/*.sh $(DESTDIR)$(bindir)/
+	install -m 755 src/tools/stig/*.sh $(DESTDIR)$(bindir)/stig
+	install -m 644 docs/assets/* $(DESTDIR)/usr/share/hardn/assets/
+	install -m 644 src/gui/* $(DESTDIR)/usr/share/hardn/gui/
 
 uninstall:
 	rm -f $(DESTDIR)$(bindir)/hardn
