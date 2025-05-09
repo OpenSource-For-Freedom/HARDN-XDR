@@ -32,7 +32,7 @@ sleep 5
 
 SCRIPT_PATH="$(readlink -f "$0")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
-PACKAGES_SCRIPT="$SCRIPT_DIR/hardn-packages.sh"
+PACKAGES_SCRIPT="$SCRIPT_DIR/ubuntu-packages.sh"
 
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -74,6 +74,19 @@ detect_os() {
         exit 1
     fi
 }
+
+verify_license() {
+    if [ ! -f /etc/ubuntu-pro/license ]; then
+        echo "License file not found. Please install Ubuntu Pro and accept the license."
+        exit 1
+    fi
+
+    if ! grep -q "Ubuntu Pro" /etc/ubuntu-pro/license; then
+        echo "Invalid license file. Please install Ubuntu Pro and accept the license."
+        exit 1
+    fi
+}
+
 
 
 update_system_packages() {
@@ -415,20 +428,15 @@ setup_complete() {
 
     sleep 3
 
-    printf "\033[1;31m[+] Looking for hardn-packages.sh at: %s\033[0m\n" "$PACKAGES_SCRIPT"
+    printf "\033[1;31m[+] Looking for hubuntu-packages.sh at: %s\033[0m\n" "$PACKAGES_SCRIPT"
     if [ -f "$PACKAGES_SCRIPT" ]; then
-        printf "\033[1;31m[+] Setting executable permissions for hardn-packages.sh...\033[0m\n"
+        printf "\033[1;31m[+] Setting executable permissions for ubuntu-packages.sh...\033[0m\n"
         chmod +x "$PACKAGES_SCRIPT"
 
-        printf "\033[1;31m[+] Setting sudo permissions for hardn-packages.sh...\033[0m\n"
-        echo "root ALL=(ALL) NOPASSWD: $PACKAGES_SCRIPT" \
-          | sudo tee /etc/sudoers.d/hardn-packages-sh > /dev/null
-        sudo chmod 440 /etc/sudoers.d/hardn-packages-sh
-
-        printf "\033[1;31m[+] Calling hardn-packages.sh with sudo...\033[0m\n"
+        printf "\033[1;31m[+] Calling ubuntu-packages.sh with sudo...\033[0m\n"
         sudo "$PACKAGES_SCRIPT"
     else
-        printf "\033[1;31m[-] hardn-packages.sh not found at: %s. Skipping...\033[0m\n" "$PACKAGES_SCRIPT"
+        printf "\033[1;31m[-] ubuntu-packages.sh not found at: %s. Skipping...\033[0m\n" "$PACKAGES_SCRIPT"
     fi
 }
 
@@ -437,6 +445,7 @@ main() {
     printf "\033[1;31m             [+] HARDN - Updating and Detecting OS      \033[0m\n"
     printf "\033[1;31m========================================================\033[0m\n"
     detect_os
+    verify_license
     update_system_packages
     install_pkgdeps
     grub_security

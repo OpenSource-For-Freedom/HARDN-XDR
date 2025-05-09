@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Enhanced Ubuntu Pro 24.04 FIPS 140-2 Compliance Script (Safe Mode)
-# Authors: Tim Burns, Kiumarz Hashemi
+# Authors: Tim Burns
 # Date: 2025-05-03
 # Version: 1.7
 # Description:
@@ -14,11 +14,25 @@ LOG_FILE="/var/log/fips-setup.log"
 BACKUP_DIR="/var/backups/fips"
 DRY_RUN=false
 
+
+if [[ ! -t 0 || ! -t 1 ]]; then
+    echo "[ERROR] This script must be run in an interactive shell (not at login or as part of an automated process)."
+    sleep 3
+    exit 1
+fi
+
+
+read -p $'\e[1;31mWARNING: This script will make system-level changes for FIPS compliance.\nIt may affect boot, kernel, and cryptography.\nAre you sure you want to continue? (yes/NO): \e[0m' CONFIRM
+if [[ ! "$CONFIRM" =~ ^([yY][eE][sS]|[yY])$ ]]; then
+    echo "[INFO] Aborted by user. No changes made."
+    sleep 2
+    exit 0
+fi
+
 # Enable logging
 exec > >(tee -a "$LOG_FILE") 2>&1
 
-# Dry-run support
-[[ "${1:-}" == "--dry-run" ]] && DRY_RUN=true && echo "[DRY RUN MODE ENABLED]"
+
 
 print_ascii_banner() {
     CYAN_BOLD="\033[1;36m"
@@ -39,10 +53,10 @@ print_ascii_banner() {
                                            
                                           U B U N T U   P R O  2 4 . 0 4
 
-                                           F I P S  C O M P L I A N C E
+                                           F I P S  -  C O M P L I A N C E
 
 
-                                                   v 1.7 SAFE
+                                                      v 1.7 
 EOF
     printf "${RESET}"
 }
@@ -107,6 +121,31 @@ backup_grub_settings() {
     mkdir -p "$BACKUP_DIR"
     cp /etc/default/grub "$BACKUP_DIR/grub.bak.$(date +%s)"
     echo "[OK] GRUB configuration backed up."
+}
+
+setup_fips_license() {
+    echo "[STEP] Checking Ubuntu Pro license status..."
+    if ! command -v ua &>/dev/null; then
+        echo "[ERROR] Ubuntu Advantage (ua) tool is not installed. Please install 'ubuntu-advantage-tools' and try again."
+        return 1
+    fi
+    local status
+    status=$(ua status 2>/dev/null | grep -i 'Attached to' || true)
+    if [[ -z "$status" ]]; then
+        echo "[INFO] This system is not attached to Ubuntu Pro."
+        read -p $'\e[1;33mEnter your Ubuntu Pro token to attach this machine (or leave blank to skip): \e[0m' UA_TOKEN
+        if [[ -n "$UA_TOKEN" ]]; then
+            if ua attach "$UA_TOKEN"; then
+                echo "[OK] Successfully attached to Ubuntu Pro."
+            else
+                echo "[ERROR] Failed to attach to Ubuntu Pro. FIPS enable will likely fail."
+            fi
+        else
+            echo "[WARNING] Skipping Ubuntu Pro attach. FIPS enable may fail if not already licensed."
+        fi
+    else
+        echo "[OK] Ubuntu Pro is already attached."
+    fi
 }
 
 setup_fips_compliance() {
@@ -207,6 +246,7 @@ main() {
 
     [[ $EUID -ne 0 ]] && echo "[ERROR] Run this script as root." && exit 1
     
+    setup_fips_license
     fips_compatible
     check_nic_modules
     backup_grub_settings

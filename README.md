@@ -1,4 +1,3 @@
-
 <p align="center">
   <img src="https://img.shields.io/badge/OS: UBUNTU 24.04-red?style=for-the-badge&labelColor=grey" alt="OS: UBUNTU 24.04"><br><br>
 </p>
@@ -41,14 +40,18 @@ HARDN/
 ├── README.md
 ├── changelog.md
 ├── docs/
+│   ├── HARDN.md
 │   ├── LICENSE
+│   ├── ubnt_fips.md
+│   ├── ubnt_stig.md
 │   └── assets/
 │       ├── HARDN(1).png
 │       └── cybersynapse.png
 ├── src/
 │   └── setup/
-│       ├── packages.sh
-│       └── setup.sh
+│       ├── ubuntu-setup.sh
+│       ├── ubuntu-fips.sh
+│       └── ubuntu-packages.sh
 ```
 
 </p>
@@ -71,12 +74,25 @@ The purpose of HARDN Endpoint is to empower IT administrators and users with the
   ```
 2. Navigate to the `src` directory:
  ```bash
-  cd HARDN/src/setup
-  sudo chmod +x setup.sh
-  sudo ./setup.sh
+  cd HARDN/src/ubuntu-setup
+  sudo chmod +x ubuntu-setup.sh
+  sudo ./ubuntu-setup.sh
 
   ```
-  This will kick off the full setup of HARDN with `STIG` principles. 
+
+3. Executing `ubuntu-fips.sh`:
+
+Navigate to the `src` directory:
+
+ ```bash
+  cd HARDN/src/setup
+  sudo chmod +x ubuntu-fips.sh
+  sudo ./ubuntu-fips.sh
+  ```
+
+  This will kick off the full setup of HARDN with `FIPS-140` principles. 
+
+  **THIS DOES MAKE SIGNIFICANT KERNEL MODIFICATIONS** Execute with caution. You will need an **Ubuntu-Pro License** to fully interact with the FIPS components. 
   ### NOTE: 
 
   
@@ -93,8 +109,6 @@ The purpose of HARDN Endpoint is to empower IT administrators and users with the
 We welcome contributions! 
 
 ![GitHub stats](https://github-readme-stats.vercel.app/api?username=opensource-for-freedom&show_icons=true&theme=dark)
-![GitHub stats](https://github-readme-stats.vercel.app/api?username=AnonVortex&show_icons=true&theme=dark)
-![GitHub stats](https://github-readme-stats.vercel.app/api?username=LinuxUser255&show_icons=true&theme=dark)
 
 </p>
 
