@@ -107,10 +107,13 @@ The purpose of HARDN Endpoint is to empower IT administrators and users with the
 <p align="center">
   <img src="https://img.shields.io/badge/CONTRIBUTION-white?style=for-the-badge&labelColor=black" alt="CONTRIBUTION"><br><br>
 We welcome contributions! 
-
+  
+![GitHub stats](https://github-readme-stats.vercel.app/api?username=bmatei&show_icons=true&theme=dark)
 ![GitHub stats](https://github-readme-stats.vercel.app/api?username=opensource-for-freedom&show_icons=true&theme=dark)
 ![GitHub stats](https://github-readme-stats.vercel.app/api?username=AnonVortex&show_icons=true&theme=dark)
 ![GitHub stats](https://github-readme-stats.vercel.app/api?username=LinuxUser255&show_icons=true&theme=dark)
+
+bmatei 
 
 </p>
 
