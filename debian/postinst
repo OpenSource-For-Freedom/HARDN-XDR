@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# Rename hardn-setup.sh to hardn
+
 mv /usr/bin/hardn-setup.sh /usr/bin/hardn
 chmod +x /usr/bin/hardn
 
