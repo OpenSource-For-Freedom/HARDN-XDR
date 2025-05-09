@@ -2,20 +2,11 @@
 set -e # Exit on errors
 
 
-
-
-                                                 # Author(s):                         
-                                              #- Chris Bingham                    
-                                              #  - Tim Burns                        
-                                  
-                                              #Date: 4/5-12/2025   
-
 print_ascii_banner() {
     CYAN_BOLD="\033[1;36m"
     RESET="\033[0m"
-
-    printf "${CYAN_BOLD}"
-    cat << "EOF"
+    cat <<EOF
+${CYAN_BOLD}
                               ▄█    █▄       ▄████████    ▄████████ ████████▄  ███▄▄▄▄   
                              ███    ███     ███    ███   ███    ███ ███   ▀███ ███▀▀▀██▄ 
                              ███    ███     ███    ███   ███    ███ ███    ███ ███   ███ 
@@ -25,15 +16,14 @@ print_ascii_banner() {
                              ███    ███     ███    ███   ███    ███ ███   ▄███ ███   ███ 
                              ███    █▀      ███    █▀    ███    ███ ████████▀   ▀█   █▀  
                                                          ███    ███ 
-                                    
-                                        U B U N T U   P R O  2 4 . 0 4
-                                                
 
+                                         U B U N T U   P R O   2 4.0 4
+                                         
                                                    S E T U P
                                                    
-                                                    v 1.1.2
+                                                    v 1.1.4
+${RESET}
 EOF
-    printf "${RESET}"
 }
 
 print_ascii_banner
@@ -42,254 +32,171 @@ sleep 5
 
 SCRIPT_PATH="$(readlink -f "$0")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
-PACKAGES_SCRIPT="$SCRIPT_DIR/packages.sh"
+PACKAGES_SCRIPT="$SCRIPT_DIR/hardn-packages.sh"
+
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "This script must be run as root. Use: sudo ./setup.sh"
     exit 1
 fi
 
-set_generic_hostname() {
-    printf "\033[1;31m[+] Setting a generic hostname...\033[0m\n"
-    sudo hostnamectl set-hostname "MY-PC"
-    echo "127.0.1.1 MY-PC" | sudo tee -a /etc/hosts
-    if [ $? -eq 0 ]; then
-        printf "\033[1;32m[+] Hostname successfully changed to MY-PC.\033[0m\n"
+
+detect_os() {
+    if [ -f /etc/os-release ] && [ -r /etc/os-release ]; then
+        . /etc/os-release
+        export OS_NAME="$NAME"
+        export OS_VERSION="$VERSION_ID"
+
+        case "$OS_NAME" in
+            "Debian GNU/Linux")
+                if [[ "$OS_VERSION" == "11" || "$OS_VERSION" == "12" ]]; then
+                    echo "Detected supported OS: $OS_NAME $OS_VERSION"
+                else
+                    echo "Unsupported Debian version: $OS_VERSION. Exiting."
+                    exit 1
+                fi
+                ;;
+            "Ubuntu")
+                if [[ "$OS_VERSION" == "22.04" || "$OS_VERSION" == "24.04" ]]; then
+                    echo "Detected supported OS: $OS_NAME $OS_VERSION"
+                else
+                    echo "Unsupported Ubuntu version: $OS_VERSION. Exiting."
+                    exit 1
+                fi
+                ;;
+            *)
+                echo "Unsupported OS: $OS_NAME. Exiting."
+                exit 1
+                ;;
+        esac
     else
-        printf "\033[1;31m[-] Failed to change hostname. Ensure you have the necessary permissions.\033[0m\n"
+        echo "Unable to read /etc/os-release. Exiting."
+        exit 1
     fi
-
-
-# call_fips(){
-#     if [ -f "$PACKAGES_SCRIPT" ]; then
-#         echo "[+] Calling FIPS script..." | tee -a "$LOG_FILE"
-#         sudo chmod +x fips.sh
-#         bash "$PACKAGES_SCRIPT"
-#     else
-#         echo "[-] FIPS script not found at $PACKAGES_SCRIPT" | tee -a "$LOG_FILE"
-#     fi
-# }
-
-
-
 }
-
-
-
-
 
 
 update_system_packages() {
     printf "\033[1;31m[+] Updating system packages...\033[0m\n"
-    sudo apt update -y && apt upgrade -y
+    apt update -y && apt upgrade -y
+    sudo apt-get install -f
+    apt --fix-broken install -y
 }
-
-
-
-
-
 
 install_pkgdeps() {
     printf "\033[1;31m[+] Installing package dependencies...\033[0m\n"
-    sudo apt install -y wget curl git gawk mariadb-common mysql-common policycoreutils \
-        python3-matplotlib unixodbc-common firejail python3-pyqt6
+    apt install -y git gawk mariadb-common policycoreutils dpkg-dev \
+        unixodbc-common firejail python3-pyqt6 fonts-liberation libpam-pwquality
 }
-
-
 
 
 install_security_tools() {
     printf "\033[1;31m[+] Installing required system security tools...\033[0m\n"
-    sudo apt install -y ufw fail2ban apparmor apparmor-profiles apparmor-utils firejail tcpd lynis debsums \
+    apt install -y ufw fail2ban apparmor apparmor-profiles apparmor-utils firejail tcpd lynis debsums \
         libpam-pwquality libvirt-daemon-system libvirt-clients qemu-system-x86 openssh-server openssh-client rkhunter 
 }
 
 
-
 enable_fail2ban() {
-    printf "\033[1;31m[+] Resetting Fail2Ban settings for Debian 12...\033[0m\n"
-    sudo systemctl stop fail2ban
-    if [ -f /etc/fail2ban/jail.local ]; then
-        sudo rm -f /etc/fail2ban/jail.local
-    fi
-    sudo cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local
+    printf "\033[1;31m[+] Installing and enabling Fail2Ban...\033[0m\n"
+    apt install -y fail2ban
+    systemctl enable --now fail2ban
+    printf "\033[1;32m[+] Fail2Ban installed and enabled successfully.\033[0m\n"
 
-    printf "\033[1;31m[+] Configuring Fail2Ban securely for user-based machines...\033[0m\n"
-    sudo sed -i 's/^bantime = .*/bantime = 3600/' /etc/fail2ban/jail.local
-    sudo sed -i 's/^findtime = .*/findtime = 600/' /etc/fail2ban/jail.local
-    sudo sed -i 's/^maxretry = .*/maxretry = 3/' /etc/fail2ban/jail.local
-    sudo sed -i 's/^#ignoreip = 127.0.0.1\/8/ignoreip = 127.0.0.1\/8/' /etc/fail2ban/jail.local
-
-    printf "\033[1;31m[+] Enabling and starting Fail2Ban...\033[0m\n"
-    sudo systemctl enable --now fail2ban
-    sudo systemctl restart fail2ban
-    sudo sed -i 's/^#*PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
-    sudo systemctl reload sshd
-    echo '-a always,exit -F arch=b64 -F euid=0 -S execve -k rootcmd' | sudo tee -a /etc/audit/rules.d/root-activity.rules
-    sudo augenrules --load
-
-    printf "\033[1;31m[+] Enabling SSH jail in Fail2Ban...\033[0m\n"
-    sudo tee -a /etc/fail2ban/jail.local > /dev/null <<EOF
+    printf "\033[1;31m[+] Configuring Fail2Ban for SSH...\033[0m\n"
+    cat << EOF > /etc/fail2ban/jail.local
 [sshd]
 enabled = true
 port = ssh
 logpath = /var/log/auth.log
-maxretry = 3
+maxretry = 5
 bantime = 3600
-findtime = 600
 EOF
-    sudo systemctl restart fail2ban
+
+    systemctl restart fail2ban
+    printf "\033[1;32m[+] Fail2Ban configured and restarted successfully.\033[0m\n"
 }
-
-
-
-
-
-
-
 
 enable_apparmor() {
-    printf "\033[1;31m[+] Installing and enabling AppArmor...\033[0m\n"
-    sudo apt install -y apparmor apparmor-utils || { printf "\033[1;31m[-] Failed to install AppArmor.\033[0m\n"; return 1; }
-    sudo systemctl restart apparmor || printf "\033[1;31m[-] Failed to restart AppArmor service.\033[0m\n"
-    sudo systemctl enable --now apparmor || printf "\033[1;31m[-] Failed to enable AppArmor service.\033[0m\n"
-    printf "\033[1;31m[+] AppArmor successfully installed, reset, and reloaded.\033[0m\n"
-    printf "\033[1;31m[+] Resetting AppArmor profiles...\033[0m\n"
-    sudo apparmor_parser -R /etc/apparmor.d/* || printf "\033[1;31m[-] Failed to reset AppArmor profiles.\033[0m\n"
-    
-}
-
-
-
-install_additional_tools() {
-    printf "\033[1;31m[+] Installing chkrootkit, LMD, and rkhunter as sudo...\033[0m\n"
-    
-    
-    sudo apt install -y chkrootkit
-    if [ $? -ne 0 ]; then
-        printf "\033[1;31m[-] Failed to install chkrootkit. Please check your package manager.\033[0m\n"
+    printf "\033[1;31m[+] Installing and enabling AppArmor…\033[0m\n"
+    apt install -y apparmor apparmor-utils apparmor-profiles || {
+        printf "\033[1;31m[-] Failed to install AppArmor.\033[0m\n"
         return 1
-    fi
-    printf "\033[1;31m[+] chkrootkit installed successfully.\033[0m\n"
-    
-   
-    temp_dir=$(mktemp -d)
-    cd "$temp_dir" || { printf "\033[1;31m[-] Failed to create temp directory\033[0m\n"; return 1; }
-    if sudo git clone https://github.com/rfxn/linux-malware-detect.git; then
-        cd linux-malware-detect || { printf "\033[1;31m[-] Could not enter maldetect dir\033[0m\n"; return 1; }
-        sudo chmod +x install.sh
-        sudo ./install.sh
-        sudo systemctl enable maldet
-        printf "\033[1;32m[+] Maldet installed and enabled.\033[0m\n"
-    else
-        printf "\033[1;31m[-] Failed to clone maldetect repo\033[0m\n"
-    fi
-    cd /tmp || true
-    sudo rm -rf "$temp_dir"
-    
-    
+    }
+
+    systemctl enable --now apparmor || {
+        printf "\033[1;31m[-] Failed to enable AppArmor service.\033[0m\n"
+        return 1
+    }
+
+    aa-complain /etc/apparmor.d/* || {
+        printf "\033[1;31m[-] Failed to set profiles to complain mode. Continuing...\033[0m\n"
+    }
+
+    printf "\033[1;32m[+] AppArmor installed. Profiles are in complain mode for testing.\033[0m\n"
+    printf "\033[1;33m[!] Review profile behavior before switching to enforce mode.\033[0m\n"
 }
 
 
+enable_aide() {
+    printf "\033[1;31m[+] Installing AIDE and initializing database…\033[0m\n"
+    apt install -y aide aide-common || {
+        printf "\033[1;31m[-] Failed to install AIDE.\033[0m\n"
+        return 1
+    }
+    aideinit || {
+        printf "\033[1;31m[-] Failed to initialize AIDE database.\033[0m\n"
+        return 1
+    }
+    mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db || {
+        printf "\033[1;31m[-] Failed to replace AIDE database.\033[0m\n"
+        return 1
+    }
+
+    printf "\033[1;32m[+] AIDE successfully installed and configured.\033[0m\n"
+}
 
 
 enable_rkhunter(){
     printf "\033[1;31m[+] Installing rkhunter...\033[0m\n"
-    if ! sudo apt install -y rkhunter; then
+    if ! apt install -y rkhunter; then
         printf "\033[1;33m[-] rkhunter install failed, skipping rkhunter setup.\033[0m\n"
         return 0
     fi
 
-   
-    sudo sed -i 's|^WEB_CMD=.*|#WEB_CMD=|' /etc/rkhunter.conf
+    sed -i 's|^WEB_CMD=.*|#WEB_CMD=|' /etc/rkhunter.conf
+    sed -i 's|^MIRRORS_MODE=.*|MIRRORS_MODE=1|' /etc/rkhunter.conf
+    chown -R root:root /var/lib/rkhunter
+    chmod -R 755 /var/lib/rkhunter
 
-    
-    sudo sed -i 's|^MIRRORS_MODE=.*|MIRRORS_MODE=1|' /etc/rkhunter.conf
-
-    
-    sudo chown -R root:root /var/lib/rkhunter
-    sudo chmod -R 755 /var/lib/rkhunter
-
-    
-    if ! sudo rkhunter --update; then
+    if ! rkhunter --update; then
         printf "\033[1;33m[-] rkhunter update failed, skipping propupd.\033[0m\n"
         return 0
     fi
 
-    sudo rkhunter --propupd
+    rkhunter --propupd
     printf "\033[1;32m[+] rkhunter installed and updated.\033[0m\n"
 }
-
-
-
-
-install_aide() {
-    printf "\033[1;31m[+] Installing and configuring AIDE...\033[0m\n"
-
-    # Install AIDE and its dependencies
-    if ! sudo apt install -y aide aide-common; then
-        printf "\033[1;31m[-] Failed to install AIDE. Please check your package manager.\033[0m\n"
-        return 1
-    fi
-
-    # Exclude problematic directories and files
-    printf "\033[1;31m[+] Updating AIDE configuration to exclude unnecessary paths...\033[0m\n"
-    sudo tee -a /etc/aide/aide.conf > /dev/null <<EOF
-!/run/user/1000/doc/.*
-!/run/user/1000/gvfs/.*
-!/home/tim/.config/Code/User/globalStorage/.*
-!/home/tim/.config/Code/User/workspaceStorage/.*
-!/home/tim/.config/Code/logs/.*
-EOF
-
-    # Initialize AIDE database
-    printf "\033[1;31m[+] Initializing AIDE database...\033[0m\n"
-    if echo "y" | sudo aideinit; then
-        if [ -f /var/lib/aide/aide.db.new ]; then
-            sudo cp /var/lib/aide/aide.db.new /var/lib/aide/aide.db
-            sudo chmod 600 /var/lib/aide/aide.db
-            printf "\033[1;32m[+] AIDE initialization completed successfully.\033[0m\n"
-        else
-            printf "\033[1;31m[-] AIDE database initialization failed. Please check the logs.\033[0m\n"
-            return 1
-        fi
-    else
-        printf "\033[1;31m[-] AIDE initialization command failed. Please check the logs.\033[0m\n"
-        return 1
-    fi
-
-    # Enable and start AIDE service
-    printf "\033[1;31m[+] Enabling and starting AIDE service...\033[0m\n"
-    sudo systemctl enable aidecheck.timer || printf "\033[1;31m[-] Failed to enable AIDE timer.\033[0m\n"
-    sudo systemctl start aidecheck.timer || printf "\033[1;31m[-] Failed to start AIDE timer.\033[0m\n"
-}
-
-
-
-
 
 
 configure_firejail() {
     printf "\033[1;31m[+] Configuring Firejail for Firefox and Chrome...\033[0m\n"
 
-   
     if ! command -v firejail > /dev/null 2>&1; then
         printf "\033[1;31m[-] Firejail is not installed. Please install it first.\033[0m\n"
         return 1
     fi
 
-    
     if command -v firefox > /dev/null 2>&1; then
         printf "\033[1;31m[+] Setting up Firejail for Firefox...\033[0m\n"
-        sudo ln -sf /usr/bin/firejail /usr/local/bin/firefox
+        ln -sf /usr/bin/firejail /usr/local/bin/firefox
     else
         printf "\033[1;31m[-] Firefox is not installed. Skipping Firejail setup for Firefox.\033[0m\n"
     fi
 
-    
     if command -v google-chrome > /dev/null 2>&1; then
         printf "\033[1;31m[+] Setting up Firejail for Google Chrome...\033[0m\n"
-        sudo ln -sf /usr/bin/firejail /usr/local/bin/google-chrome
+        ln -sf /usr/bin/firejail /usr/local/bin/google-chrome
     else
         printf "\033[1;31m[-] Google Chrome is not installed. Skipping Firejail setup for Chrome.\033[0m\n"
     fi
@@ -298,258 +205,196 @@ configure_firejail() {
 }
 
 
-
-
-
-
-   
-
 stig_password_policy() {
-    sudo apt install -y libpam-pwquality
-    sudo sed -i 's/^# minlen.*/minlen = 14/' /etc/security/pwquality.conf
-    sudo sed -i 's/^# dcredit.*/dcredit = -1/' /etc/security/pwquality.conf
-    sudo sed -i 's/^# ucredit.*/ucredit = -1/' /etc/security/pwquality.conf
-    sudo sed -i 's/^# ocredit.*/ocredit = -1/' /etc/security/pwquality.conf
-    sudo sed -i 's/^# lcredit.*/lcredit = -1/' /etc/security/pwquality.conf
-    sudo sed -i '/pam_pwquality.so/ s/$/ retry=3 enforce_for_root/' /etc/pam.d/common-password || true
+    sed -i 's/^#\? *minlen *=.*/minlen = 14/' /etc/security/pwquality.conf
+    sed -i 's/^#\? *dcredit *=.*/dcredit = -1/' /etc/security/pwquality.conf
+    sed -i 's/^#\? *ucredit *=.*/ucredit = -1/' /etc/security/pwquality.conf
+    sed -i 's/^#\? *ocredit *=.*/ocredit = -1/' /etc/security/pwquality.conf
+    sed -i 's/^#\? *lcredit *=.*/lcredit = -1/' /etc/security/pwquality.conf
+
+    if command -v pam-auth-update > /dev/null; then
+        pam-auth-update --package
+        echo "[+] pam_pwquality profile activated via pam-auth-update"
+    else
+        echo "[!] pam-auth-update not found. Install 'libpam-runtime' to manage PAM profiles safely."
+    fi
 }
-
-
-
-
 
 
 stig_lock_inactive_accounts() {
-    sudo useradd -D -f 35
-    for user in $(awk -F: '$3 >= 1000 && $1 != "nobody" {print $1}' /etc/passwd); do
-        sudo chage --inactive 35 "$user"
+    useradd -D -f 35
+    awk -F: '$3 >= 1000 && $1 != "nobody" {print $1}' /etc/passwd | while read -r user; do
+        chage --inactive 35 "$user"
     done
 }
-
-
-
-
 
 
 stig_login_banners() {
     echo "You are accessing a fully secured SIG Information System (IS)..." > /etc/issue
     echo "Use of this IS constitutes consent to monitoring..." > /etc/issue.net
-    sudo chmod 644 /etc/issue /etc/issue.net
-
+    chmod 644 /etc/issue /etc/issue.net
 }
-
-
-
-
 
 stig_secure_filesystem() {
     printf "\033[1;31m[+] Securing filesystem permissions...\033[0m\n"
-    sudo chown root:root /etc/passwd /etc/group /etc/gshadow
-    sudo chmod 644 /etc/passwd /etc/group
-    sudo chown root:shadow /etc/shadow /etc/gshadow
-    sudo chmod 000 /etc/shadow
-    sudo chmod 640 /etc/gshadow
-}
+    chown root:root /etc/passwd /etc/group /etc/gshadow
+    chmod 644 /etc/passwd
+    chmod 640 /etc/group  # safer for PAM modules
 
+    chown root:shadow /etc/shadow /etc/gshadow
+    chmod 640 /etc/shadow /etc/gshadow
 
-
-
-
-stig_audit_rules() {
-    sudo apt install -y auditd audispd-plugins
-    sudo tee /etc/audit/rules.d/stig.rules > /dev/null <<EOF
+    printf "\033[1;31m[+] Configuring audit rules...\033[0m\n"
+    apt install -y auditd audispd-plugins
+    tee /etc/audit/rules.d/stig.rules > /dev/null <<EOF
 -w /etc/passwd -p wa -k identity
 -w /etc/shadow -p wa -k identity
 -w /etc/group -p wa -k identity
 -w /etc/gshadow -p wa -k identity
 -w /etc/security/opasswd -p wa -k identity
--e 2
-
+# -e 2  # Immutable mode. Uncomment only for production.
 EOF
 
-    # Ensure correct permissions for audit rules and log directory
-    sudo chown root:root /etc/audit/rules.d/*.rules
-    sudo chmod 600 /etc/audit/rules.d/*.rules
-    sudo chown -R root:root /var/log/audit
-    sudo chmod 700 /var/log/audit
+    chown root:root /etc/audit/rules.d/*.rules
+    chmod 600 /etc/audit/rules.d/*.rules
+    mkdir -p /var/log/audit
+    chown -R root:root /var/log/audit
+    chmod 700 /var/log/audit
 
-    sudo augenrules --load
-    sudo systemctl enable --now auditd
-    sudo systemctl restart auditd
-    sudo auditctl -e 1 || printf "\033[1;31m[-] Failed to enable auditd.\033[0m\n"
+    augenrules --load
+    systemctl enable auditd || { printf "\033[1;31m[-] Failed to enable auditd.\033[0m\n"; return 1; }
+    systemctl start auditd || { printf "\033[1;31m[-] Failed to start auditd.\033[0m\n"; return 1; }
+    systemctl restart auditd || { printf "\033[1;31m[-] Failed to restart auditd.\033[0m\n"; return 1; }
+    auditctl -e 1 || printf "\033[1;31m[-] Failed to enable auditd.\033[0m\n"
 }
 
 
-
-
-
-   
 stig_kernel_setup() {
-    printf "\033[1;31m[+] Setting up STIG-compliant kernel parameters...\033[0m\n"
-    sudo tee /etc/sysctl.d/stig-kernel.conf > /dev/null <<EOF
+    printf "\033[1;31m[+] Setting up STIG-compliant kernel parameters (login-safe)...\033[0m\n"
+    tee /etc/sysctl.d/stig-kernel-safe.conf > /dev/null <<EOF
+kernel.randomize_va_space = 2
+kernel.kptr_restrict = 2
+kernel.dmesg_restrict = 1
+fs.protected_hardlinks = 1
+fs.protected_symlinks = 1
 
-
-
-kernel.randomize_va_space = 2         # Enable address space layout randomization (ASLR)
-kernel.exec-shield = 1               # Enable ExecShield protection
-kernel.panic_on_oops = 1             # Panic on kernel oops
-kernel.panic = 10                    # Reboot after 10 seconds on panic
-kernel.kptr_restrict = 2             # Restrict access to kernel pointers
-kernel.dmesg_restrict = 1            # Restrict access to dmesg logs
-fs.protected_hardlinks = 1           # Protect hardlinks
-fs.protected_symlinks = 1            # Protect symlinks
-net.ipv4.conf.all.rp_filter = 1      # Enable reverse path filtering
+net.ipv4.conf.all.rp_filter = 1
 net.ipv4.conf.default.rp_filter = 1
-net.ipv4.conf.all.accept_redirects = 0  # Disable ICMP redirects
+net.ipv4.conf.all.accept_redirects = 0
 net.ipv4.conf.default.accept_redirects = 0
-net.ipv4.conf.all.secure_redirects = 0  # Disable secure ICMP redirects
+net.ipv4.conf.all.secure_redirects = 0
 net.ipv4.conf.default.secure_redirects = 0
-net.ipv4.conf.all.send_redirects = 0    # Disable sending of ICMP redirects
+net.ipv4.conf.all.send_redirects = 0
 net.ipv4.conf.default.send_redirects = 0
-net.ipv4.tcp_syncookies = 1            # Enable TCP SYN cookies
-net.ipv4.conf.all.log_martians = 1     # Log packets with impossible addresses
+net.ipv4.tcp_syncookies = 1
+net.ipv4.conf.all.log_martians = 1
 net.ipv4.conf.default.log_martians = 1
-net.ipv4.icmp_echo_ignore_broadcasts = 1  # Ignore ICMP broadcast requests
-net.ipv4.icmp_ignore_bogus_error_responses = 1  # Ignore bogus ICMP error responses
-net.ipv4.tcp_rfc1337 = 1                 # Enable TCP RFC1337 protections
-net.ipv4.conf.all.accept_source_route = 0  # Disable source routing
+net.ipv4.icmp_echo_ignore_broadcasts = 1
+net.ipv4.icmp_ignore_bogus_error_responses = 1
+net.ipv4.tcp_rfc1337 = 1
+net.ipv4.conf.all.accept_source_route = 0
 net.ipv4.conf.default.accept_source_route = 0
-net.ipv4.conf.all.forwarding = 0         # Disable IP forwarding
-net.ipv4.conf.default.forwarding = 0
-
-
 EOF
 
-    
-    sudo sysctl --system || printf "\033[1;31m[-] Failed to reload sysctl settings.\033[0m\n"
+    sysctl --system || printf "\033[1;31m[-] Failed to reload sysctl settings.\033[0m\n"
+    sysctl -w kernel.randomize_va_space=2 || printf "\033[1;31m[-] Failed to set kernel.randomize_va_space.\033[0m\n"
 }
 
-
-
-
+grub_security() {
+    cp /boot/grub/grub.cfg /boot/grub/grub.cfg.bak
+    printf "\033[1;31m[+] Configuring GRUB security settings...\033[0m\n"
+    sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT="/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash security=1 /' /etc/default/grub
+    sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=5/' /etc/default/grub || echo "GRUB_TIMEOUT=5" >> /etc/default/grub
+    update-grub || printf "\033[1;31m[-] Failed to update GRUB.\033[0m\n"
+    chmod 600 /boot/grub/grub.cfg
+    chown root:root /boot/grub/grub.cfg
+}
 
 
 stig_disable_usb() {
     echo "install usb-storage /bin/false" > /etc/modprobe.d/hardn-blacklist.conf
-    sudo update-initramfs -u || printf "\033[1;31m[-] Failed to update initramfs.\033[0m\n"
+    update-initramfs -u || printf "\033[1;31m[-] Failed to update initramfs.\033[0m\n"
 }
-
-
-
-
 
 
 stig_disable_core_dumps() {
-    echo "* hard core 0" | sudo tee -a /etc/security/limits.conf > /dev/null
-    echo "fs.suid_dumpable = 0" | sudo tee /etc/sysctl.d/99-coredump.conf > /dev/null
-    sudo sysctl -w fs.suid_dumpable=0
+    echo "* hard core 0" | tee -a /etc/security/limits.conf > /dev/null
+    echo "fs.suid_dumpable = 0" | tee /etc/sysctl.d/99-coredump.conf > /dev/null
+    sysctl -w fs.suid_dumpable=0
 }
-
-
-
-
-
 
 stig_disable_ctrl_alt_del() {
-    sudo systemctl mask ctrl-alt-del.target
-    sudo systemctl daemon-reexec
+    systemctl mask ctrl-alt-del.target
+    systemctl daemon-reexec
 }
-
-
-
-
-
-
 
 stig_disable_ipv6() {
-    sudo echo "net.ipv6.conf.all.disable_ipv6 = 1" >> /etc/sysctl.d/99-sysctl.conf
-    sudo echo "net.ipv6.conf.default.disable_ipv6 = 1" >> /etc/sysctl.d/99-sysctl.conf
-    sudo sysctl -p
+    echo "net.ipv6.conf.all.disable_ipv6 = 1" >> /etc/sysctl.d/99-sysctl.conf
+    echo "net.ipv6.conf.default.disable_ipv6 = 1" >> /etc/sysctl.d/99-sysctl.conf
+    sysctl -p
 }
-
-
-
-
-
-
 
 stig_configure_firewall() {
     printf "\033[1;31m[+] Configuring UFW...\033[0m\n"
 
     if ! command -v ufw > /dev/null 2>&1; then
         printf "\033[1;31m[-] UFW is not installed. Installing UFW...\033[0m\n"
-        sudo apt install -y ufw || { printf "\033[1;31m[-] Failed to install UFW.\033[0m\n"; return 1; }
+        apt install -y ufw || { printf "\033[1;31m[-] Failed to install UFW.\033[0m\n"; return 1; }
     fi
 
-    
     printf "\033[1;31m[+] Resetting UFW to default settings...\033[0m\n"
-    sudo ufw --force reset || { printf "\033[1;31m[-] Failed to reset UFW.\033[0m\n"; return 1; }
+    ufw --force reset || { printf "\033[1;31m[-] Failed to reset UFW.\033[0m\n"; return 1; }
 
-   
     printf "\033[1;31m[+] Setting UFW default policies...\033[0m\n"
-    sudo ufw default deny incoming
-    sudo ufw default allow outgoing
+    ufw default deny incoming
+    ufw default allow outgoing
 
-    
     printf "\033[1;31m[+] Allowing outbound HTTP and HTTPS traffic...\033[0m\n"
-    sudo ufw allow out 80/tcp
-    sudo ufw allow out 443/tcp
+    ufw allow out 80/tcp
+    ufw allow out 443/tcp
 
-    # Allow Debian updates, app updates, and dependency updates
     printf "\033[1;31m[+] Allowing traffic for Debian updates and app dependencies...\033[0m\n"
-    sudo ufw allow out 53/udp  # DNS resolution
-    sudo ufw allow out 53/tcp  # DNS resolution
-    sudo ufw allow out 123/udp # NTP (time synchronization)
-    sudo ufw allow out to archive.debian.org port 80 proto tcp
-sudo ufw allow out to security.debian.org port 443 proto tcp
+    ufw allow out 53/udp  # DNS resolution
+    ufw allow out 53/tcp  # DNS resolution
+    ufw allow out 123/udp # NTP (time synchronization)
+    ufw allow out to archive.debian.org port 80 proto tcp
+    ufw allow out to security.debian.org port 443 proto tcp
 
-    
     printf "\033[1;31m[+] Enabling and reloading UFW...\033[0m\n"
-    echo "y" | sudo ufw enable || { printf "\033[1;31m[-] Failed to enable UFW.\033[0m\n"; return 1; }
-    sudo ufw reload || { printf "\033[1;31m[-] Failed to reload UFW.\033[0m\n"; return 1; }
+    echo "y" | ufw enable || { printf "\033[1;31m[-] Failed to enable UFW.\033[0m\n"; return 1; }
+    ufw reload || { printf "\033[1;31m[-] Failed to reload UFW.\033[0m\n"; return 1; }
 
     printf "\033[1;32m[+] UFW configuration completed successfully.\033[0m\n"
 }
 
-
-
-
-
-
 stig_set_randomize_va_space() {
     printf "\033[1;31m[+] Setting kernel.randomize_va_space...\033[0m\n"
     echo "kernel.randomize_va_space = 2" > /etc/sysctl.d/hardn.conf
-    sudo sysctl -w kernel.randomize_va_space=2 || printf "\033[1;31m[-] Failed to set randomize_va_space.\033[0m\n"
-    sudo sysctl --system || printf "\033[1;31m[-] Failed to reload sysctl settings.\033[0m\n"
+    sysctl -w kernel.randomize_va_space=2 || printf "\033[1;31m[-] Failed to set randomize_va_space.\033[0m\n"
+    sysctl --system || printf "\033[1;31m[-] Failed to reload sysctl settings.\033[0m\n"
 }
-
-
-
 
 update_firmware() {
     printf "\033[1;31m[+] Checking for firmware updates...\033[0m\n"
-    sudo apt install -y fwupd
-    sudo fwupdmgr refresh || printf "\033[1;31m[-] Failed to refresh firmware metadata.\033[0m\n"
-    sudo fwupdmgr get-updates || printf "\033[1;31m[-] Failed to check for firmware updates.\033[0m\n"
+    apt install -y fwupd
+    fwupdmgr refresh || printf "\033[1;31m[-] Failed to refresh firmware metadata.\033[0m\n"
+    fwupdmgr get-updates || printf "\033[1;31m[-] Failed to check for firmware updates.\033[0m\n"
     if fwupdmgr update; then
         printf "\033[1;32m[+] Firmware updates applied successfully.\033[0m\n"
     else
         printf "\033[1;33m[+] No firmware updates available or update process skipped.\033[0m\n"
     fi
-    sudo apt update -y
+    apt update -y
 }
-
 
 apply_stig_hardening() {
     printf "\033[1;31m[+] Applying STIG hardening tasks...\033[0m\n"
 
-    
     stig_password_policy || { printf "\033[1;31m[-] Failed to apply password policy.\033[0m\n"; exit 1; }
     stig_lock_inactive_accounts || { printf "\033[1;31m[-] Failed to lock inactive accounts.\033[0m\n"; exit 1; }
     stig_login_banners || { printf "\033[1;31m[-] Failed to set login banners.\033[0m\n"; exit 1; }
     stig_kernel_setup || { printf "\033[1;31m[-] Failed to configure kernel parameters.\033[0m\n"; exit 1; }
     stig_secure_filesystem || { printf "\033[1;31m[-] Failed to secure filesystem permissions.\033[0m\n"; exit 1; }
-    stig_audit_rules || { printf "\033[1;31m[-] Failed to configure audit rules.\033[0m\n"; exit 1; }
     stig_disable_usb || { printf "\033[1;31m[-] Failed to disable USB storage.\033[0m\n"; exit 1; }
     stig_disable_core_dumps || { printf "\033[1;31m[-] Failed to disable core dumps.\033[0m\n"; exit 1; }
     stig_disable_ctrl_alt_del || { printf "\033[1;31m[-] Failed to disable Ctrl+Alt+Del.\033[0m\n"; exit 1; }
@@ -561,13 +406,6 @@ apply_stig_hardening() {
     printf "\033[1;32m[+] STIG hardening tasks applied successfully.\033[0m\n"
 }
 
-
-
-
-
-
-
-
 setup_complete() {
     echo "======================================================="
     echo "             [+] HARDN - Setup Complete                "
@@ -575,57 +413,50 @@ setup_complete() {
     echo "                                                       "
     echo "======================================================="
 
-sleep 3
+    sleep 3
 
-    printf "\033[1;31m[+] Looking for packages.sh at: %s\033[0m\n" "$PACKAGES_SCRIPT"
+    printf "\033[1;31m[+] Looking for hardn-packages.sh at: %s\033[0m\n" "$PACKAGES_SCRIPT"
     if [ -f "$PACKAGES_SCRIPT" ]; then
-        printf "\033[1;31m[+] Setting executable permissions for packages.sh...\033[0m\n"
+        printf "\033[1;31m[+] Setting executable permissions for hardn-packages.sh...\033[0m\n"
         chmod +x "$PACKAGES_SCRIPT"
-        printf "\033[1;31m[+] Setting sudo permissions for packages.sh...\033[0m\n"
-        echo "root ALL=(ALL) NOPASSWD: $PACKAGES_SCRIPT" | sudo tee /etc/sudoers.d/packages-sh > /dev/null
-        sudo chmod 440 /etc/sudoers.d/packages-sh
-        printf "\033[1;31m[+] Calling packages.sh with sudo...\033[0m\n"
+
+        printf "\033[1;31m[+] Setting sudo permissions for hardn-packages.sh...\033[0m\n"
+        echo "root ALL=(ALL) NOPASSWD: $PACKAGES_SCRIPT" \
+          | sudo tee /etc/sudoers.d/hardn-packages-sh > /dev/null
+        sudo chmod 440 /etc/sudoers.d/hardn-packages-sh
+
+        printf "\033[1;31m[+] Calling hardn-packages.sh with sudo...\033[0m\n"
         sudo "$PACKAGES_SCRIPT"
     else
-        printf "\033[1;31m[-] packages.sh not found at: %s. Skipping...\033[0m\n" "$PACKAGES_SCRIPT"
+        printf "\033[1;31m[-] hardn-packages.sh not found at: %s. Skipping...\033[0m\n" "$PACKAGES_SCRIPT"
     fi
 }
 
 main() {
-    printf "\033[1;31m[+] Updating system packages...\033[0m\n"
+    printf "\033[1;31m========================================================\033[0m\n"
+    printf "\033[1;31m             [+] HARDN - Updating and Detecting OS      \033[0m\n"
+    printf "\033[1;31m========================================================\033[0m\n"
+    detect_os
     update_system_packages
-    #call_fips
-
-    printf "\033[1;31m[+] Setting generic hostname...\033[0m\n"
-    set_generic_hostname
-
-    printf "\033[1;31m========================================================\033[0m\n"
-    printf "\033[1;31m             [+] HARDN - Setting Up                     \033[0m\n"
-    printf "\033[1;31m       [+] Installing required Security Services        \033[0m\n"
-    printf "\033[1;31m========================================================\033[0m\n"
     install_pkgdeps
+    grub_security
     
-    
-
     printf "\033[1;31m========================================================\033[0m\n"
     printf "\033[1;31m            [+] HARDN - Installing Security Tools       \033[0m\n"
     printf "\033[1;31m                [+] Applying Security Settings          \033[0m\n"
     printf "\033[1;31m========================================================\033[0m\n"
     install_security_tools
-    install_additional_tools
-    install_aide
+    enable_aide
     enable_apparmor
     configure_firejail
     enable_fail2ban
     enable_rkhunter
-    
-    
+
     printf "\033[1;31m========================================================\033[0m\n"
     printf "\033[1;31m             [+] HARDN - STIG Hardening                 \033[0m\n"
     printf "\033[1;31m       [+] Applying STIG hardening to system            \033[0m\n"
     printf "\033[1;31m========================================================\033[0m\n"
     apply_stig_hardening
-    
 
     printf "\033[1;31m========================================================\033[0m\n"
     printf "\033[1;31m             [+] HARDN - Enable services                \033[0m\n"
@@ -635,5 +466,4 @@ main() {
     setup_complete
 
 }
-
 main
