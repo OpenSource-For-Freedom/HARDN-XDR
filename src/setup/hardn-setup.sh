@@ -298,16 +298,39 @@ EOF
     sysctl -w kernel.randomize_va_space=2 || printf "\033[1;31m[-] Failed to set kernel.randomize_va_space.\033[0m\n"
 }
 
-grub_security() {
-    cp /boot/grub/grub.cfg /boot/grub/grub.cfg.bak
-    printf "\033[1;31m[+] Configuring GRUB security settings...\033[0m\n"
-    sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT="/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash security=1 /' /etc/default/grub
-    sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=5/' /etc/default/grub || echo "GRUB_TIMEOUT=5" >> /etc/default/grub
-    update-grub || printf "\033[1;31m[-] Failed to update GRUB.\033[0m\n"
-    chmod 600 /boot/grub/grub.cfg
-    chown root:root /boot/grub/grub.cfg
-}
 
+grub_security() {
+    # Skip if UEFI < VM support 
+    if [ -d /sys/firmware/efi ]; then
+        echo "[*] UEFI system detected. Skipping GRUB configuration..."
+        return 0
+    fi
+
+    # Detect GRUB path < support grub2
+    if [ -f /boot/grub/grub.cfg ]; then
+        GRUB_CFG="/boot/grub/grub.cfg"
+        GRUB_DIR="/boot/grub"
+    elif [ -f /boot/grub2/grub.cfg ]; then
+        GRUB_CFG="/boot/grub2/grub.cfg"
+        GRUB_DIR="/boot/grub2"
+    else
+        echo "[-] GRUB config not found. Exiting..."
+        return 1
+    fi
+
+    echo "[+] Configuring GRUB security settings..."
+    cp "$GRUB_CFG" "$GRUB_CFG.bak"
+
+    sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT="/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash security=1 /' /etc/default/grub
+    grep -q '^GRUB_TIMEOUT=' /etc/default/grub && \
+        sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=5/' /etc/default/grub || \
+        echo "GRUB_TIMEOUT=5" >> /etc/default/grub
+
+    update-grub || grub2-mkconfig -o "$GRUB_CFG" || echo "[-] Failed to update GRUB."
+
+    chmod 600 "$GRUB_CFG"
+    chown root:root "$GRUB_CFG"
+}
 
 stig_disable_usb() {
     echo "install usb-storage /bin/false" > /etc/modprobe.d/hardn-blacklist.conf
