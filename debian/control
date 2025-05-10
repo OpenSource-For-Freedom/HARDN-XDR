@@ -12,4 +12,4 @@ Priority: optional
 Architecture: all
 Depends: ufw, fail2ban, apparmor, firejail, rkhunter, chkrootkit, aide, fwupd, git, gawk, policycoreutils, python3-pyqt6, libpam-pwquality, dpkg-dev, mysql-common, fonts-liberation, mariadb-common, unixodbc-common
 Description: Collection of scripts for security hardening operating systems
-This package includes tools for ensuring STIG compliance, enhancing GRUB security, and optimizing system performance.
+  This package includes tools for ensuring STIG compliance, enhancing GRUB security, and optimizing system performance.
