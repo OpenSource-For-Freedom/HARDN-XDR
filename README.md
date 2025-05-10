@@ -93,6 +93,33 @@ The purpose of HARDN Endpoint is to empower IT administrators and users with the
 6. Follow any additional setup instructions and information provided in the `docs` directory.
 </p>
 
+### Quick Start: Install and Run HARDN on Debian/Ubuntu
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/OpenSource-For-Freedom/HARDN.git
+   cd HARDN
+   ```
+2. **Build the Debian package:**
+   ```bash
+   sudo dpkg-buildpackage -us -uc
+   ```
+3. **Install the package:**
+   ```bash
+   sudo dpkg -i ../hardn_*.deb
+   ```
+4. **Run the setup:**
+   ```bash
+   sudo hardn
+   ```
+
+After installation, you can always start the hardening setup by running `sudo hardn` from any directory.
+
+> **Note:**
+> - The package installs system-wide and is available as the `hardn` command.
+> - All dependencies are handled by the package.
+> - For help, run: `hardn --help`
+
 ### Updates in Version 1.1.5
 - Built and tested Debian packaging.
 - Enhanced GRUB security to respect GUI changes and user-defined settings in setup.

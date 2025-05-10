@@ -1,6 +1,12 @@
 #!/bin/bash
 set -e # Exit on errors
 
+# Usage/help message
+if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+    echo "Usage: sudo hardn [options]"
+    echo "Runs the HARDN system hardening setup."
+    exit 0
+fi
 
 print_ascii_banner() {
     CYAN_BOLD="\033[1;36m"
@@ -34,7 +40,7 @@ PACKAGES_SCRIPT="$SCRIPT_DIR/hardn-packages.sh"
 
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo "This script must be run as root. Use: sudo ./setup.sh"
+    echo "This script must be run as root. Use: sudo hardn"
     exit 1
 fi
 
@@ -158,18 +164,21 @@ enable_aide() {
 enable_rkhunter(){
     printf "\033[1;31m[+] Installing rkhunter...\033[0m\n"
     if ! apt install -y rkhunter; then
-        printf "\033[1;33m[-] rkhunter install failed, skipping rkhunter setup.\033[0m\n"
         return 0
     fi
 
-    sed -i 's|^WEB_CMD=.*|#WEB_CMD=|' /etc/rkhunter.conf
-    sed -i 's|^MIRRORS_MODE=.*|MIRRORS_MODE=1|' /etc/rkhunter.conf
-    chown -R root:root /var/lib/rkhunter
-    chmod -R 755 /var/lib/rkhunter
+    # Fix permissions for rkhunter data directory
+    sudo chown -R root:root /var/lib/rkhunter
+    sudo chmod -R 755 /var/lib/rkhunter
 
+    # Ensure mirrors and update settings are correct
+    sed -i 's|^#*MIRRORS_MODE=.*|MIRRORS_MODE=1|' /etc/rkhunter.conf
+    sed -i 's|^#*UPDATE_MIRRORS=.*|UPDATE_MIRRORS=1|' /etc/rkhunter.conf
+    sed -i 's|^WEB_CMD=.*|#WEB_CMD=|' /etc/rkhunter.conf
+
+    # Try to update rkhunter data files
     if ! rkhunter --update; then
-        printf "\033[1;33m[-] rkhunter update failed, skipping propupd.\033[0m\n"
-        return 0
+        printf "\033[1;33m[!] rkhunter update failed. Check your network connection or proxy settings.\033[0m\n"
     fi
 
     rkhunter --propupd
@@ -451,6 +460,7 @@ setup_complete() {
     else
         printf "\033[1;31m[-] hardn-packages.sh not found at: %s. Skipping...\033[0m\n" "$PACKAGES_SCRIPT"
     fi
+
 }
 
 main() {
