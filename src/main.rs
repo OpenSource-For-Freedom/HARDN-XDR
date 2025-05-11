@@ -18,6 +18,7 @@ use rand::{distributions::Alphanumeric, Rng};
 
 mod gui_api;
 mod setup;
+mod setup;
 
 // =================== Constants ===================
 const LOG_FILE: &str = "/var/log/hardn.log";
@@ -49,7 +50,6 @@ impl NetworkMonitor {
             Connection { ip: "10.0.0.5".into(), port: 443 },
             Connection { ip: "172.16.0.1".into(), port: 80 },
             Connection { ip: "172.16.0.2".into(), port: 8080 },
-        ]
         ]
     }
 }
