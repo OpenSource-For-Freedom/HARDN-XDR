@@ -1,8 +1,4 @@
 #!/bin/bash
-# Authors: 
-# - Chris B. 
-# - Tim B. 
-
 
 
 set -e # Exit on errors
@@ -12,9 +8,8 @@ LOG_FILE="/dev/null"
 print_ascii_banner() {
     CYAN_BOLD="\033[1;36m"
     RESET="\033[0m"
-
-    printf "%s" "${CYAN_BOLD}"
-    cat << "EOF"
+    cat <<EOF
+${CYAN_BOLD}
                               ▄█    █▄       ▄████████    ▄████████ ████████▄  ███▄▄▄▄   
                              ███    ███     ███    ███   ███    ███ ███   ▀███ ███▀▀▀██▄ 
                              ███    ███     ███    ███   ███    ███ ███    ███ ███   ███ 
@@ -27,29 +22,19 @@ print_ascii_banner() {
                      
                                                V A L I D A T I O N
                                                      
-                                                    v 1.1.2
+                                                    v 1.1.4
                                                                        
                                                                      
                                        
                                                               
+${RESET}
 EOF
-    printf "%s" "${RESET}"
 }
 
 print_ascii_banner
 
-sleep 7
+sleep 5
 
-<<<<<<< HEAD
-SCRIPT_PATH="$(readlink -f "$0")"
-SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
-PACKAGES_SCRIPT="$SCRIPT_DIR/fips.sh"
-
-SCRIPT_DIR_TOOLS="$SCRIPT_DIR/../tools"
-STIG_DIR="$SCRIPT_DIR_TOOLS/stig"
-=======
-
->>>>>>> 8476171ece892a945fa8f35384c0e87d9c361742
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "This script must be run as root. Re-running with sudo..."
@@ -86,7 +71,6 @@ fix_if_needed() {
         if $FIX_MODE; then
             echo "[*] Attempting to fix..." | tee -a "$LOG_FILE"
             if eval "$fix_cmd"; then
-                # Re-check after fix
                 if eval "$check_cmd"; then
                     echo "[+] Fixed: $success_msg" | tee -a "$LOG_FILE"
                 else
@@ -100,40 +84,139 @@ fix_if_needed() {
 }
 
 ensure_aide_initialized() {
-    bash "$SCRIPT_DIR_TOOLS/enable_aide.sh"
+    if [ ! -f /var/lib/aide/aide.db ]; then
+        echo "[*] Initializing AIDE database..."
+        sudo aideinit
+        sudo cp /var/lib/aide/aide.db.new /var/lib/aide/aide.db
+        sudo chmod 600 /var/lib/aide/aide.db
+        echo "[+] AIDE database initialized."
+    fi
 }
 
 validate_packages() {
-    echo "[+] Validating package configurations..." | tee -a "$LOG_FILE"
+    echo "[INFO] Validating package configurations with enhanced error handling..."
 
-    bash "$SCRIPT_DIR_TOOLS/update_system_packages.sh"
-    bash "$SCRIPT_DIR_TOOLS/install_pkgdeps.sh"
-    bash "$SCRIPT_DIR_TOOLS/enable_fail2ban.sh"
-    bash "$SCRIPT_DIR_TOOLS/enable_apparmor.sh"
-    bash "$SCRIPT_DIR_TOOLS/configure_firejail.sh"
-    bash "$SCRIPT_DIR_TOOLS/install_security_tools.sh"
+    fix_if_needed \
+        "! ping -c 1 google.com >/dev/null 2>&1" \
+        "sudo systemctl restart networking && sudo dhclient" \
+        "Internet connectivity is restored" \
+        "Internet connectivity is not available"
+
+    echo "[*] Checking internet connectivity..." | tee -a "$LOG_FILE"
+
+    fix_if_needed \
+        "sudo ufw status | grep -q 'Status: active'" \
+        "sudo apt-get install -y ufw && sudo ufw enable" \
+        "UFW is active" \
+        "UFW is not active. Attempting to fix..."
+
+    echo "[*] Checking UFW status..." | tee -a "$LOG_FILE"
+
+    fix_if_needed \
+        "sudo systemctl is-active --quiet fail2ban" \
+        "sudo systemctl start fail2ban" \
+        "Fail2Ban is active" \
+        "Fail2Ban not running"
+
+    echo "[*] Checking Fail2Ban status..." | tee -a "$LOG_FILE"
+
+    fix_if_needed \
+        "command -v aa-status >/dev/null && sudo systemctl is-active --quiet apparmor" \
+        "sudo systemctl start apparmor" \
+        "AppArmor is active" \
+        "AppArmor not active"
+
+    echo "[*] Checking AppArmor status..." | tee -a "$LOG_FILE"
+
+    fix_if_needed \
+        "command -v firejail >/dev/null" \
+        "sudo apt-get install -y firejail" \
+        "Firejail is installed" \
+        "Firejail missing"
+
+    echo "[*] Checking Firejail installation..." | tee -a "$LOG_FILE"
+
+    fix_if_needed \
+        "command -v chkrootkit >/dev/null" \
+        "sudo apt-get install -y chkrootkit" \
+        "chkrootkit installed" \
+        "chkrootkit missing"
+
+    echo "[*] Checking chkrootkit installation..." | tee -a "$LOG_FILE"
+
+    fix_if_needed \
+        "[ -x /usr/local/maldetect/maldet ] || [ -x /usr/local/bin/maldet ] || command -v maldet >/dev/null" \
+        "( [ ! -d /tmp/linux-malware-detect ] && cd /tmp && git clone https://github.com/rfxn/linux-malware-detect.git ) && cd /tmp/linux-malware-detect && sudo ./install.sh && sudo ln -sf /usr/local/maldetect/maldet /usr/local/bin/maldet && ( [ -x /usr/local/maldetect/maldet ] || [ -x /usr/local/bin/maldet ] || command -v maldet >/dev/null )" \
+        "Linux Malware Detect (maldet) is installed" \
+        "Linux Malware Detect (maldet) is not installed"
+
+    echo "[*] Checking maldet installation..." | tee -a "$LOG_FILE"
+
+    fix_if_needed \
+        "command -v rkhunter >/dev/null" \
+        "sudo apt-get install -y rkhunter" \
+        "rkhunter installed" \
+        "rkhunter missing"
+
+    echo "[*] Checking rkhunter installation..." | tee -a "$LOG_FILE"
+
+    fix_if_needed \
+        "sudo systemctl is-active --quiet auditd" \
+        "sudo systemctl start auditd" \
+        "auditd is running" \
+        "auditd not running"
+
+    echo "[*] Checking auditd status..." | tee -a "$LOG_FILE"
+
+    fix_if_needed \
+        "command -v aide >/dev/null" \
+        "sudo apt-get install -y aide" \
+        "AIDE is installed" \
+        "AIDE not installed"
+
+    echo "[*] Checking AIDE installation..." | tee -a "$LOG_FILE"
+
+    fix_if_needed \
+        "sudo aide --check >/dev/null 2>&1" \
+        "sudo aideinit && sudo cp /var/lib/aide/aide.db.new /var/lib/aide/aide.db" \
+        "AIDE database check passed" \
+        "AIDE database check failed"
+
+    echo "[*] Performing AIDE database check..." | tee -a "$LOG_FILE"
+
+    
+    echo "[INFO] Summary of changes made during validation:" | tee -a "$LOG_FILE"
+    grep "[+]" "$LOG_FILE" | tee -a "$LOG_FILE"
 }
+
 
 validate_stig_hardening() {
     echo "[+] Validating STIG compliance..." | tee -a "$LOG_FILE"
-
-    bash "$STIG_DIR/stig_password_policy.sh"
-    bash "$STIG_DIR/stig_lock_inactive_accounts.sh"
-    bash "$STIG_DIR/stig_login_banners.sh"
-    bash "$STIG_DIR/stig_secure_filesystem.sh"
-    bash "$STIG_DIR/stig_kernel_setup.sh"
-    bash "$STIG_DIR/stig_disable_usb.sh"
-    bash "$STIG_DIR/stig_disable_core_dumps.sh"
-    bash "$STIG_DIR/stig_disable_ctrl_alt_del.sh"
-    bash "$STIG_DIR/stig_disable_ipv6.sh"
-    bash "$STIG_DIR/stig_configure_firewall.sh"
-    bash "$STIG_DIR/stig_set_randomize_va_space.sh"
+    fix_if_needed \
+        "grep -q 'minlen = 14' /etc/security/pwquality.conf" \
+        "sudo sed -i 's/^#\\? *minlen.*/minlen = 14/' /etc/security/pwquality.conf" \
+        "Password policy minlen is set" \
+        "Password policy minlen missing or wrong"
+    fix_if_needed \
+        "[[ $(stat -c '%a' /etc/shadow) -eq 600 ]]" \
+        "sudo chmod 600 /etc/shadow" \
+        "/etc/shadow permissions are 600" \
+        "Incorrect /etc/shadow permissions"
+    fix_if_needed \
+        "grep -q 'net.ipv6.conf.all.disable_ipv6 = 1' /etc/sysctl.d/99-sysctl.conf" \
+        "echo 'net.ipv6.conf.all.disable_ipv6 = 1' | sudo tee -a /etc/sysctl.d/99-sysctl.conf && sudo sysctl -w net.ipv6.conf.all.disable_ipv6=1" \
+        "IPv6 is disabled" \
+        "IPv6 not disabled"
+    fix_if_needed \
+        "grep -q 'fs.suid_dumpable = 0' /etc/sysctl.d/99-coredump.conf" \
+        "echo 'fs.suid_dumpable = 0' | sudo tee /etc/sysctl.d/99-coredump.conf && sudo sysctl -w fs.suid_dumpable=0" \
+        "Core dumps are disabled" \
+        "Core dumps enabled"
 }
 
 validate_boot_services() {
     echo "[*] Validating boot services..." | tee -a "$LOG_FILE"
 
-    # Set fail2ban to start at boot
     echo "[*] Checking if Fail2Ban is enabled at boot..." | tee -a "$LOG_FILE"
     fix_if_needed \
         "! sudo systemctl is-enabled fail2ban | grep -q 'enabled'" \
@@ -141,7 +224,6 @@ validate_boot_services() {
         "Fail2Ban is enabled at boot" \
         "Fail2Ban is disabled at boot"
 
-    # Set auditd to start at boot
     echo "[*] Checking if auditd is enabled at boot..." | tee -a "$LOG_FILE"
     fix_if_needed \
         "! sudo systemctl is-enabled auditd | grep -q 'enabled'" \
@@ -149,7 +231,6 @@ validate_boot_services() {
         "auditd is enabled at boot" \
         "auditd is disabled at boot"
 
-    # Set apparmor to start at boot
     echo "[*] Checking if AppArmor is enabled at boot..." | tee -a "$LOG_FILE"
     fix_if_needed \
         "! sudo systemctl is-enabled apparmor | grep -q 'enabled'" \
@@ -157,7 +238,6 @@ validate_boot_services() {
         "AppArmor is enabled at boot" \
         "AppArmor is disabled at boot"
 
-    # Set sshd to start at boot
     echo "[*] Checking if sshd is enabled at boot..." | tee -a "$LOG_FILE"
     fix_if_needed \
         "! sudo systemctl is-enabled sshd | grep -q 'enabled'" \
@@ -166,7 +246,7 @@ validate_boot_services() {
         "sshd is disabled at boot"
 }
 
-cron_clean() {
+cron_clean(){
     echo "========================================" | sudo tee -a /etc/crontab
     echo "           CRON SETUP - CLEAN           " | sudo tee -a /etc/crontab
     echo "========================================" | sudo tee -a /etc/crontab
@@ -176,6 +256,8 @@ cron_clean() {
     echo "0 0 */2 * * root /usr/bin/apt-get autoclean -y" | sudo tee -a /etc/crontab
     echo "0 0 */2 * * root /usr/bin/apt-get check" | sudo tee -a /etc/crontab
     echo "0 0 */2 * * root /usr/bin/apt-get clean" | sudo tee -a /etc/crontab
+    echo "0 0 */2 * * root /usr/bin/apt update && apt upgrade -y" | sudo tee -a /etc/crontab
+    echo "0 0 */2 * * root /usr/bin/apt full-upgrade" | sudo tee -a /etc/crontab
 }
 
 cron_packages() {
@@ -183,15 +265,24 @@ cron_packages() {
     echo "         CRON SETUP - PACKAGES          " | sudo tee -a /etc/crontab
     echo "========================================" | sudo tee -a /etc/crontab
     echo "0 11 * * * aide --check --config /etc/aide/aide.conf" | sudo tee -a /etc/crontab
-    echo "0 0 */2 * * root bash $SCRIPT_DIR_TOOLS/update_system_packages.sh" | sudo tee -a /etc/crontab
-    echo "0 0 */2 * * root bash $SCRIPT_DIR_TOOLS/install_pkgdeps.sh" | sudo tee -a /etc/crontab
-    echo "0 0 */2 * * root bash $SCRIPT_DIR_TOOLS/enable_fail2ban.sh" | sudo tee -a /etc/crontab
-    echo "0 0 */2 * * root bash $SCRIPT_DIR_TOOLS/enable_apparmor.sh" | sudo tee -a /etc/crontab
-    echo "0 0 */2 * * root bash $SCRIPT_DIR_TOOLS/configure_firejail.sh" | sudo tee -a /etc/crontab
-    echo "0 0 */2 * * root bash $SCRIPT_DIR_TOOLS/install_security_tools.sh" | sudo tee -a /etc/crontab
-}
+    echo "0 0 */2 * * root /usr/bin/maldet --update" | sudo tee -a /etc/crontab
+    echo "0 0 */2 * * root /usr/bin/rkhunter --update" | sudo tee -a /etc/crontab
+    echo "0 0 */2 * * root /usr/bin/fail2ban-client -x" | sudo tee -a /etc/crontab
+    echo "0 0 */2 * * root /usr/bin/apparmor_parser -r /etc/apparmor.d/*" | sudo tee -a /etc/crontab
+    echo "0 0 */2 * * root /usr/sbin/grub-mkconfig -o /boot/grub/grub.cfg" | sudo tee -a /etc/crontab
+    echo "0 0 */2 * * root /usr/sbin/auditctl -e 1" | sudo tee -a /etc/crontab
+    echo "0 0 */2 * * root /usr/sbin/auditd -f" | sudo tee -a /etc/crontab
+    echo "0 0 */2 * * root /usr/sbin/auditd -r" | sudo tee -a /etc/crontab
+    echo "0 0 * * * root /usr/local/bin/hardn-packages.sh > /var/log/hardn-packages.log 2>&1" | sudo tee -a /etc/crontab
+    echo "0 0 * * * root /usr/local/bin/hardn_yara_scan.sh / > /var/log/hardn_yara_scan.log 2>&1" | sudo tee -a /etc/crontab
+  
 
 cron_alert() {
+    if [ "$(id -u)" -ne 0 ]; then
+        echo "This function must be run as root. Exiting..."
+        return 1
+    fi
+
     local ALERTS_FILE="$HOME/Desktop/HARDN_alerts.txt"
     local ALERTS_DIR
     ALERTS_DIR="$(dirname "$ALERTS_FILE")"
@@ -216,7 +307,6 @@ cron_alert() {
       ufw fail2ban apparmor firejail rkhunter chkrootkit maldet aide auditd lynis
     )
     for svc in "${svcs[@]}"; do
-       
         if ! systemctl list-unit-files "${svc}.service" &>/dev/null; then
             printf " %s: not installed\n" "$svc" >> "$ALERTS_FILE"
             continue
@@ -227,7 +317,6 @@ cron_alert() {
         printf " %s: %s (%s)\n" "$svc" "$st" "$e" >> "$ALERTS_FILE"
     done
     echo "-------------------------" >> "$ALERTS_FILE"
-
 
     echo "[STIG Settings Alerts]" >> "$ALERTS_FILE"
     grep -q '^minlen = 14' /etc/security/pwquality.conf \
@@ -283,7 +372,7 @@ cron_alert() {
     echo "-------------------------" >> "$ALERTS_FILE"
 
     echo "[AIDE Alerts]" >> "$ALERTS_FILE"
-    if sudo aide --check >/dev/null 2>&1; then
+    if aide --check >/dev/null 2>&1; then
         echo " No deviations detected by AIDE" >> "$ALERTS_FILE"
     else
         echo " Deviations detected by AIDE" >> "$ALERTS_FILE"
@@ -296,6 +385,19 @@ cron_alert() {
     else
         echo " No general alerts" >> "$ALERTS_FILE"
     fi
+    echo "-------------------------" >> "$ALERTS_FILE"
+
+    echo "[YARA Scan Alerts]" >> "$ALERTS_FILE"
+    if [ -f /log/hardn_yara_scan.log ]; then
+        if grep -qi 'match' /log/hardn_yara_scan.log; then
+            echo " ALERT: Matches found in last scan. See /log/hardn_yara_scan.log" >> "$ALERTS_FILE"
+        else
+            echo " OK: No matches found in last scan." >> "$ALERTS_FILE"
+        fi
+    else
+        echo " WARNING: No scan log found." >> "$ALERTS_FILE"
+    fi
+    echo "-------------------------" >> "$ALERTS_FILE"
 
     if [ -s "$ALERTS_FILE" ]; then
         echo "[+] Alerts written to $ALERTS_FILE"
@@ -324,11 +426,9 @@ main() {
         printf "\033[1;32m[+] Validation successful. No errors found.\033[0m\n"
     fi
 
-    
     sleep 3
     print_ascii_banner
     echo -e "\033[1;32m[+] ======== VALIDATION COMPLETE PLEASE REBOOT YOUR SYSTEM=========\033[0m" | tee -a "$LOG_FILE"
-    
 }
 
 main
