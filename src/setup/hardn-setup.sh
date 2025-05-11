@@ -203,7 +203,7 @@ EOF
 
 
 grub_security() {
-    # Skip if UEFI < VM support 
+    # Skip GRUB configuration on UEFI systems to support virtual machines or UEFI-specific setups
     if [ -d /sys/firmware/efi ]; then
         echo "[*] UEFI system detected. Skipping GRUB configuration..."
         return 0
