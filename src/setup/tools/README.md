@@ -1,0 +1,1 @@
+This directory contains individual scripts for each package and dependency used by hardn-setup.sh and hardn-packages.sh. Each script is responsible for installing or configuring a single package or feature.

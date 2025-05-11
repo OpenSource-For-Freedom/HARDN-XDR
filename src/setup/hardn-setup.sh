@@ -1,7 +1,6 @@
 #!/bin/bash
 set -e # Exit on errors
 
-# Usage/help message
 if [[ "$1" == "-h" || "$1" == "--help" ]]; then
     echo "Usage: sudo hardn [options]"
     echo "Runs the HARDN system hardening setup."
@@ -94,146 +93,41 @@ install_pkgdeps() {
 }
 
 
-install_security_tools() {
-    printf "\033[1;31m[+] Installing required system security tools...\033[0m\n"
-    apt install -y ufw fail2ban apparmor apparmor-profiles apparmor-utils firejail tcpd lynis debsums \
-        libpam-pwquality libvirt-daemon-system libvirt-clients qemu-system-x86 openssh-server openssh-client rkhunter 
-}
-
-
-enable_fail2ban() {
-    printf "\033[1;31m[+] Installing and enabling Fail2Ban...\033[0m\n"
-    apt install -y fail2ban
-    systemctl enable --now fail2ban
-    printf "\033[1;32m[+] Fail2Ban installed and enabled successfully.\033[0m\n"
-
-    printf "\033[1;31m[+] Configuring Fail2Ban for SSH...\033[0m\n"
-    cat << EOF > /etc/fail2ban/jail.local
-[sshd]
-enabled = true
-port = ssh
-logpath = /var/log/auth.log
-maxretry = 5
-bantime = 3600
-EOF
-
-    systemctl restart fail2ban
-    printf "\033[1;32m[+] Fail2Ban configured and restarted successfully.\033[0m\n"
-}
-
-enable_apparmor() {
-    printf "\033[1;31m[+] Installing and enabling AppArmor…\033[0m\n"
-    apt install -y apparmor apparmor-utils apparmor-profiles || {
-        printf "\033[1;31m[-] Failed to install AppArmor.\033[0m\n"
-        return 1
-    }
-
-    systemctl enable --now apparmor || {
-        printf "\033[1;31m[-] Failed to enable AppArmor service.\033[0m\n"
-        return 1
-    }
-
-    aa-complain /etc/apparmor.d/* || {
-        printf "\033[1;31m[-] Failed to set profiles to complain mode. Continuing...\033[0m\n"
-    }
-
-    printf "\033[1;32m[+] AppArmor installed. Profiles are in complain mode for testing.\033[0m\n"
-    printf "\033[1;33m[!] Review profile behavior before switching to enforce mode.\033[0m\n"
-}
-
-
-enable_aide() {
-    printf "\033[1;31m[+] Installing AIDE and initializing database…\033[0m\n"
-    apt install -y aide aide-common || {
-        printf "\033[1;31m[-] Failed to install AIDE.\033[0m\n"
-        return 1
-    }
-    aideinit || {
-        printf "\033[1;31m[-] Failed to initialize AIDE database.\033[0m\n"
-        return 1
-    }
-    mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db || {
-        printf "\033[1;31m[-] Failed to replace AIDE database.\033[0m\n"
-        return 1
-    }
-
-    printf "\033[1;32m[+] AIDE successfully installed and configured.\033[0m\n"
-}
-
-
-enable_rkhunter(){
-    printf "\033[1;31m[+] Installing rkhunter...\033[0m\n"
-    if ! apt install -y rkhunter; then
-        return 0
-    fi
-
-    # Fix permissions for rkhunter data directory
-    sudo chown -R root:root /var/lib/rkhunter
-    sudo chmod -R 755 /var/lib/rkhunter
-
-    # Ensure mirrors and update settings are correct
-    sed -i 's|^#*MIRRORS_MODE=.*|MIRRORS_MODE=1|' /etc/rkhunter.conf
-    sed -i 's|^#*UPDATE_MIRRORS=.*|UPDATE_MIRRORS=1|' /etc/rkhunter.conf
-    sed -i 's|^WEB_CMD=.*|#WEB_CMD=|' /etc/rkhunter.conf
-
-    # Try to update rkhunter data files
-    if ! rkhunter --update; then
-        printf "\033[1;33m[!] rkhunter update failed. Check your network connection or proxy settings.\033[0m\n"
-    fi
-
-    rkhunter --propupd
-    printf "\033[1;32m[+] rkhunter installed and updated.\033[0m\n"
-}
-
-
-configure_firejail() {
-    printf "\033[1;31m[+] Configuring Firejail for Firefox and Chrome...\033[0m\n"
-
-    if ! command -v firejail > /dev/null 2>&1; then
-        printf "\033[1;31m[-] Firejail is not installed. Please install it first.\033[0m\n"
-        return 1
-    fi
-
-    if command -v firefox > /dev/null 2>&1; then
-        printf "\033[1;31m[+] Setting up Firejail for Firefox...\033[0m\n"
-        ln -sf /usr/bin/firejail /usr/local/bin/firefox
-    else
-        printf "\033[1;31m[-] Firefox is not installed. Skipping Firejail setup for Firefox.\033[0m\n"
-    fi
-
-    if command -v google-chrome > /dev/null 2>&1; then
-        printf "\033[1;31m[+] Setting up Firejail for Google Chrome...\033[0m\n"
-        ln -sf /usr/bin/firejail /usr/local/bin/google-chrome
-    else
-        printf "\033[1;31m[-] Google Chrome is not installed. Skipping Firejail setup for Chrome.\033[0m\n"
-    fi
-
-    printf "\033[1;31m[+] Firejail configuration completed.\033[0m\n"
-}
-
-
-stig_password_policy() {
-    sed -i 's/^#\? *minlen *=.*/minlen = 14/' /etc/security/pwquality.conf
-    sed -i 's/^#\? *dcredit *=.*/dcredit = -1/' /etc/security/pwquality.conf
-    sed -i 's/^#\? *ucredit *=.*/ucredit = -1/' /etc/security/pwquality.conf
-    sed -i 's/^#\? *ocredit *=.*/ocredit = -1/' /etc/security/pwquality.conf
-    sed -i 's/^#\? *lcredit *=.*/lcredit = -1/' /etc/security/pwquality.conf
-
-    if command -v pam-auth-update > /dev/null; then
-        pam-auth-update --package
-        echo "[+] pam_pwquality profile activated via pam-auth-update"
-    else
-        echo "[!] pam-auth-update not found. Install 'libpam-runtime' to manage PAM profiles safely."
-    fi
-}
-
-
-stig_lock_inactive_accounts() {
-    useradd -D -f 35
-    awk -F: '$3 >= 1000 && $1 != "nobody" {print $1}' /etc/passwd | while read -r user; do
-        chage --inactive 35 "$user"
+install_tools() {
+    printf "\033[1;31m[+] Installing tools...\033[0m\n"
+    local TOOLS_DIR="$SCRIPT_DIR/tools"
+    local TOOLS=(
+        "install_aide.sh"
+        "install_apparmor_profiles.sh"
+        "install_apparmor.sh"
+        "install_chkrootkit.sh"
+        "install_debsums.sh"
+        "install_fail2ban.sh"
+        "install_firejail.sh"
+        "install_fwupd.sh"
+        "install_libpam_pwquality.sh"
+        "install_libvirt-clients.sh"
+        "install_libvirt-daemon-system.sh"
+        "install_lynis.sh"
+        "install_openssh-client.sh"
+        "install_openssh-server.sh"
+        "install_python3_pyqt6.sh"
+        "install_qemu-system-x86.sh"
+        "install_rkhunter.sh"
+        "install_tcpd.sh"
+        "install_ufw.sh"
+    )
+    for tool in "${TOOLS[@]}"; do
+        if [ -x "$TOOLS_DIR/$tool" ]; then
+            bash "$TOOLS_DIR/$tool" || { printf "\033[1;31m[-] Failed: $tool\033[0m\n"; exit 1; }
+        else
+            printf "\033[1;33m[!] Script not found or not executable: $TOOLS_DIR/$tool\033[0m\n"
+            exit 1
+        fi
     done
+    printf "\033[1;32m[+] Tools installed successfully.\033[0m\n"
 }
+
 
 
 stig_login_banners() {
@@ -417,22 +311,32 @@ update_firmware() {
     apt update -y
 }
 
+
 apply_stig_hardening() {
     printf "\033[1;31m[+] Applying STIG hardening tasks...\033[0m\n"
-
-    stig_password_policy || { printf "\033[1;31m[-] Failed to apply password policy.\033[0m\n"; exit 1; }
-    stig_lock_inactive_accounts || { printf "\033[1;31m[-] Failed to lock inactive accounts.\033[0m\n"; exit 1; }
-    stig_login_banners || { printf "\033[1;31m[-] Failed to set login banners.\033[0m\n"; exit 1; }
-    stig_kernel_setup || { printf "\033[1;31m[-] Failed to configure kernel parameters.\033[0m\n"; exit 1; }
-    stig_secure_filesystem || { printf "\033[1;31m[-] Failed to secure filesystem permissions.\033[0m\n"; exit 1; }
-    stig_disable_usb || { printf "\033[1;31m[-] Failed to disable USB storage.\033[0m\n"; exit 1; }
-    stig_disable_core_dumps || { printf "\033[1;31m[-] Failed to disable core dumps.\033[0m\n"; exit 1; }
-    stig_disable_ctrl_alt_del || { printf "\033[1;31m[-] Failed to disable Ctrl+Alt+Del.\033[0m\n"; exit 1; }
-    stig_disable_ipv6 || { printf "\033[1;31m[-] Failed to disable IPv6.\033[0m\n"; exit 1; }
-    stig_configure_firewall || { printf "\033[1;31m[-] Failed to configure firewall.\033[0m\n"; exit 1; }
-    stig_set_randomize_va_space || { printf "\033[1;31m[-] Failed to set randomize_va_space.\033[0m\n"; exit 1; }
-    update_firmware || { printf "\033[1;31m[-] Failed to update firmware.\033[0m\n"; exit 1; }
-
+    local STIG_DIR="$SCRIPT_DIR/tools/stig"
+    local STIG_STEPS=(
+        "stig_password_policy.sh"
+        "stig_lock_inactive_accounts.sh"
+        "stig_login_banners.sh"
+        "stig_kernel_setup.sh"
+        "stig_secure_filesystem.sh"
+        "stig_disable_usb.sh"
+        "stig_disable_core_dumps.sh"
+        "stig_disable_ctrl_alt_del.sh"
+        "stig_disable_ipv6.sh"
+        "stig_configure_firewall.sh"
+        "stig_set_randomize_va_space.sh"
+        "update_firmware.sh"
+    )
+    for step in "${STIG_STEPS[@]}"; do
+        if [ -x "$STIG_DIR/$step" ]; then
+            bash "$STIG_DIR/$step" || { printf "\033[1;31m[-] Failed: $step\033[0m\n"; exit 1; }
+        else
+            printf "\033[1;33m[!] Script not found or not executable: $STIG_DIR/$step\033[0m\n"
+            exit 1
+        fi
+    done
     printf "\033[1;32m[+] STIG hardening tasks applied successfully.\033[0m\n"
 }
 
@@ -464,36 +368,11 @@ setup_complete() {
 }
 
 main() {
-    printf "\033[1;31m========================================================\033[0m\n"
-    printf "\033[1;31m             [+] HARDN - Updating and Detecting OS      \033[0m\n"
-    printf "\033[1;31m========================================================\033[0m\n"
     detect_os
     update_system_packages
     install_pkgdeps
-    grub_security
-    
-    printf "\033[1;31m========================================================\033[0m\n"
-    printf "\033[1;31m            [+] HARDN - Installing Security Tools       \033[0m\n"
-    printf "\033[1;31m                [+] Applying Security Settings          \033[0m\n"
-    printf "\033[1;31m========================================================\033[0m\n"
-    install_security_tools
-    enable_aide
-    enable_apparmor
-    configure_firejail
-    enable_fail2ban
-    enable_rkhunter
-
-    printf "\033[1;31m========================================================\033[0m\n"
-    printf "\033[1;31m             [+] HARDN - STIG Hardening                 \033[0m\n"
-    printf "\033[1;31m       [+] Applying STIG hardening to system            \033[0m\n"
-    printf "\033[1;31m========================================================\033[0m\n"
+    install_tools
     apply_stig_hardening
-
-    printf "\033[1;31m========================================================\033[0m\n"
-    printf "\033[1;31m             [+] HARDN - Enable services                \033[0m\n"
-    printf "\033[1;31m                 [+] Applying Services                  \033[0m\n"
-    printf "\033[1;31m========================================================\033[0m\n"
-    sleep 3
     setup_complete
 
 }
