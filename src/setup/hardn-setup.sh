@@ -121,6 +121,80 @@ EOF
     printf "\033[1;32m[+] Fail2Ban configured and restarted successfully.\033[0m\n"
 }
 
+setup_yara() {
+    printf "\033[1;34m[+] Installing and configuring YARA...\033[0m\n"
+
+    if ! command -v yara >/dev/null 2>&1; then
+        apt update && apt install -y yara || {
+            printf "\033[1;31m[-] Failed to install YARA.\033[0m\n"
+            return 1
+        }
+    else
+        printf "\033[1;32m[+] YARA is already installed.\033[0m\n"
+    fi
+
+
+    YARA_DIR="/opt/hardn/yara_rules"
+    mkdir -p "$YARA_DIR"
+    chmod 700 "$YARA_DIR"
+    chown root:root "$YARA_DIR"
+
+
+    DEFAULT_RULE="$YARA_DIR/default.yar"
+    if [ ! -f "$DEFAULT_RULE" ]; then
+        cat <<EOF > "$DEFAULT_RULE"
+rule SuspiciousKeyword
+{
+    meta:
+        description = "Detects suspicious keywords"
+    strings:
+        \$a = "malware"
+        \$b = "hacker"
+        \$c = "exploit"
+    condition:
+        any of them
+}
+EOF
+        chmod 600 "$DEFAULT_RULE"
+        chown root:root "$DEFAULT_RULE"
+        printf "\033[1;32m[+] Default YARA rule added.\033[0m\n"
+    fi
+
+
+    SCAN_SCRIPT="/usr/local/bin/hardn_yara_scan.sh"
+    cat <<EOF > "$SCAN_SCRIPT"
+#!/bin/bash
+TARGET=\$1
+if [[ -z "\$TARGET" ]]; then
+    echo "Usage: \$0 /path/to/scan"
+    exit 1
+fi
+
+LOG_DIR="/var/log/hardn"
+LOG="\$LOG_DIR/yara_scan_\$(date +%F_%T).log"
+
+mkdir -p "\$LOG_DIR"
+chmod 700 "\$LOG_DIR"
+
+echo "[+] Scanning \$TARGET with YARA..."
+yara -r $YARA_DIR/*.yar "\$TARGET" | tee "\$LOG"
+EOF
+
+    chmod +x "$SCAN_SCRIPT"
+    chown root:root "$SCAN_SCRIPT"
+    printf "\033[1;32m[+] YARA scan tool installed at $SCAN_SCRIPT\033[0m\n"
+
+
+    if [ -f "$SCAN_SCRIPT" ]; then
+        echo "alias hardn-scan='$SCAN_SCRIPT /'" > /etc/profile.d/hardn-aliases.sh
+        chmod 644 /etc/profile.d/hardn-aliases.sh
+        chown root:root /etc/profile.d/hardn-aliases.sh
+        printf "\033[1;32m[+] Alias 'hardn-scan' registered.\033[0m\n"
+    fi
+
+    printf "\033[1;34m[+] YARA setup complete.\033[0m\n"
+}
+
 enable_apparmor() {
     printf "\033[1;31m[+] Installing and enabling AppArmor…\033[0m\n"
     apt install -y apparmor apparmor-utils apparmor-profiles || {
@@ -167,16 +241,16 @@ enable_rkhunter(){
         return 0
     fi
 
-    # Fix permissions for rkhunter data directory
+
     sudo chown -R root:root /var/lib/rkhunter
     sudo chmod -R 755 /var/lib/rkhunter
 
-    # Ensure mirrors and update settings are correct
+
     sed -i 's|^#*MIRRORS_MODE=.*|MIRRORS_MODE=1|' /etc/rkhunter.conf
     sed -i 's|^#*UPDATE_MIRRORS=.*|UPDATE_MIRRORS=1|' /etc/rkhunter.conf
     sed -i 's|^WEB_CMD=.*|#WEB_CMD=|' /etc/rkhunter.conf
 
-    # Try to update rkhunter data files
+
     if ! rkhunter --update; then
         printf "\033[1;33m[!] rkhunter update failed. Check your network connection or proxy settings.\033[0m\n"
     fi
@@ -505,6 +579,7 @@ main() {
     install_security_tools
     enable_aide
     enable_apparmor
+    setup_yara
     configure_firejail
     enable_fail2ban
     enable_rkhunter
