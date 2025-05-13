@@ -44,15 +44,85 @@ def is_running_in_vm():
             if any(x in dmesg_output for x in ['vmware', 'virtualbox', 'hypervisor', 'virtual machine']):
                 return True
     except Exception:
-        pass
-    
+       pass
+
     return False
 
 IS_VM_ENVIRONMENT = is_running_in_vm()
 
 class SetupActions:
+    get_system_status = None
+
+    @classmethod
+    def _get_status_with_vm_context(cls, param, param1, is_vm):
+        """
+        Return the status message with VM awareness
+        """
+        if is_vm:
+            return f"VM detected: {param}"
+        else:
+            return f"{param} ({param1})"
+
+    def _create_status_response(path, exists, permissions, status, message):
+        """Helper to create a standardized status response"""
+        return {
+            "path": path,
+            "exists": exists,
+            "permissions": permissions,
+            "status": status,
+            "message": message
+        }
+
     @staticmethod
-    def get_system_status():
+    def _get_status_with_vm_context(base_status, base_message, is_vm):
+        """Helper to get status and message with VM context"""
+        status = "warning" if is_vm else "error"
+        vm_suffix = " (acceptable in VM)" if is_vm else ""
+        return status, f"{base_message}{vm_suffix}"
+
+    @staticmethod
+    def _get_file_status(path, expected_perms, is_vm):
+        """Helper to check a file's permissions and return its status"""
+        try:
+            # Check if file exists
+            if not Path(path).exists():
+                status, message = SetupActions._get_status_with_vm_context(
+                    "error", "File not found", is_vm
+                )
+                return SetupActions._create_status_response(
+                    path, False, None, status, message
+                )
+                
+            # Check if we can get permissions
+            result = subprocess.run(['stat', '-c', '%a', path], capture_output=True, text=True)
+            if result.returncode != 0:
+                status, message = SetupActions._get_status_with_vm_context(
+                    "error", "Could not check permissions", is_vm
+                )
+                return SetupActions._create_status_response(
+                    path, True, None, status, message
+                )
+                
+            # Check if permissions match expected
+            perms = result.stdout.strip()
+            if perms == expected_perms:
+                return SetupActions._create_status_response(
+                    path, True, perms, "ok", "Permissions are secure"
+                )
+            else:
+                status, message = SetupActions._get_status_with_vm_context(
+                    "error", f"Permissions are not secure: {perms}", is_vm
+                )
+                return SetupActions._create_status_response(
+                    path, True, perms, status, message
+                )
+                
+        except Exception as e:
+            return SetupActions._create_status_response(
+                path, None, None, "error", f"Error checking permissions: {str(e)}"
+            )
+
+def get_system_status():
         """Get the system security status with VM awareness"""
         status = {
             "selinux": SetupActions._check_selinux(),
@@ -77,282 +147,163 @@ class SetupActions:
             
         return status
     
-    @staticmethod
-    def _check_selinux():
-        """Check SELinux status with VM awareness"""
-        try:
-            result = subprocess.run(['getenforce'], capture_output=True, text=True)
-            if result.returncode != 0:
-                if IS_VM_ENVIRONMENT:
-                    return {
-                        "status": "warning", 
-                        "message": "SELinux not detected, but acceptable in VM environment", 
-                        "enforced": False
-                    }
-                else:
-                    return {
-                        "status": "error", 
-                        "message": "SELinux not detected", 
-                        "enforced": False
-                    }
-                
-            status = result.stdout.strip()
-            if status == "Enforcing":
+def _get_status_message(status_type, is_vm=False):
+    """Helper to get consistent status messages"""
+    messages = {
+        "not_detected": ("SELinux not detected", "SELinux not detected, but acceptable in VM environment"),
+        "permissive": ("SELinux is in permissive mode", "SELinux is in permissive mode (acceptable in VM)"),
+        "disabled": ("SELinux is disabled", "SELinux is disabled (acceptable in VM)"),
+        "not_installed": ("SELinux tools not installed", "SELinux tools not installed (acceptable in VM)")
+    }
+    return messages[status_type][1 if is_vm else 0]
+
+def _get_status_level(status_type, is_vm=False):
+    """Helper to determine status level based on condition and environment"""
+    if status_type == "enforcing":
+        return "ok"
+    if status_type in ["not_detected", "disabled"]:
+        return "warning" if is_vm else "error"
+    return "warning"  # permissive mode is always a warning
+
+def _check_selinux():
+    """Check SELinux status with VM awareness"""
+    try:
+        result = subprocess.run(['getenforce'], capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            status_type = "not_detected"
+        else:
+            selinux_status = result.stdout.strip()
+            if selinux_status == "Enforcing":
                 return {
-                    "status": "ok", 
-                    "message": "SELinux is enforcing", 
+                    "status": "ok",
+                    "message": "SELinux is enforcing",
                     "enforced": True
                 }
-            elif status == "Permissive":
-                if IS_VM_ENVIRONMENT:
-                    return {
-                        "status": "warning", 
-                        "message": "SELinux is in permissive mode (acceptable in VM)", 
-                        "enforced": False
-                    }
-                else:
-                    return {
-                        "status": "warning", 
-                        "message": "SELinux is in permissive mode", 
-                        "enforced": False
-                    }
+            elif selinux_status == "Permissive":
+                status_type = "permissive"
             else:
-                if IS_VM_ENVIRONMENT:
-                    return {
-                        "status": "warning", 
-                        "message": "SELinux is disabled (acceptable in VM)", 
-                        "enforced": False
-                    }
-                else:
-                    return {
-                        "status": "error", 
-                        "message": "SELinux is disabled", 
-                        "enforced": False
-                    }
-        except FileNotFoundError:
-            if IS_VM_ENVIRONMENT:
-                return {
-                    "status": "warning", 
-                    "message": "SELinux tools not installed (acceptable in VM)", 
-                    "enforced": False
-                }
-            else:
-                return {
-                    "status": "error", 
-                    "message": "SELinux tools not installed", 
-                    "enforced": False
-                }
-        except Exception as e:
-            return {
-                "status": "error", 
-                "message": f"Error checking SELinux: {str(e)}", 
-                "enforced": False
-            }
-    
-    @staticmethod
-    def _check_firewall():
+                status_type = "disabled"
+                
+        # Handle all non-enforcing cases
+        return {
+            "status": SetupActions._get_status_level(status_type, IS_VM_ENVIRONMENT),
+            "message": SetupActions._get_status_message(status_type, IS_VM_ENVIRONMENT),
+            "enforced": False
+        }
+            
+    except FileNotFoundError:
+        status_type = "not_installed"
+        return {
+            "status": SetupActions._get_status_level(status_type, IS_VM_ENVIRONMENT),
+            "message": SetupActions._get_status_message(status_type, IS_VM_ENVIRONMENT),
+            "enforced": False
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Error checking SELinux: {str(e)}",
+            "enforced": False
+        }
+
+
+def _check_firewall():
         """Check firewall status with VM awareness"""
         try:
             result = subprocess.run(['systemctl', 'is-active', 'firewalld'], capture_output=True, text=True)
             if result.stdout.strip() == "active":
                 return {
-                    "status": "ok", 
-                    "message": "Firewall is active", 
+                    "status": "ok",
+                    "message": "Firewall is active",
                     "active": True
                 }
             else:
                 if IS_VM_ENVIRONMENT:
                     return {
-                        "status": "warning", 
-                        "message": "Firewall is not active (acceptable in VM)", 
+                        "status": "warning",
+                        "message": "Firewall is not active (acceptable in VM)",
                         "active": False
                     }
                 else:
                     return {
-                        "status": "error", 
-                        "message": "Firewall is not active", 
+                        "status": "error",
+                        "message": "Firewall is not active",
                         "active": False
                     }
         except Exception as e:
             if IS_VM_ENVIRONMENT:
                 return {
-                    "status": "warning", 
-                    "message": f"Error checking firewall (acceptable in VM): {str(e)}", 
+                    "status": "warning",
+                    "message": f"Error checking firewall (acceptable in VM): {str(e)}",
                     "active": False
                 }
             else:
                 return {
-                    "status": "error", 
-                    "message": f"Error checking firewall: {str(e)}", 
+                    "status": "error",
+                    "message": f"Error checking firewall: {str(e)}",
                     "active": False
                 }
-    
-    @staticmethod
-    def _check_apparmor():
+
+
+def _get_apparmor_status(result, is_vm):
+        """Helper to determine AppArmor status and message based on command result"""
+        if result.returncode == 0:
+            if "profiles are loaded" in result.stdout:
+                return {
+                    "status": "ok",
+                    "message": "AppArmor is active with profiles loaded",
+                    "active": True
+                }
+            else:
+                status = "warning"
+                message = "AppArmor is active but no profiles loaded"
+                if is_vm:
+                    message += " (acceptable in VM)"
+                return {
+                    "status": status,
+                    "message": message,
+                    "active": True
+                }
+        else:
+            status = "warning" if is_vm else "error"
+            message = "AppArmor is not active"
+            if is_vm:
+                message += " (acceptable in VM)"
+            return {
+                "status": status,
+                "message": message,
+                "active": False
+            }
+
+
+def _get_apparmor_not_found_status(is_vm):
+        """Helper to create status when AppArmor tools are not found"""
+        status = "warning" if is_vm else "error"
+        message = "AppArmor tools not installed"
+        if is_vm:
+            message += " (acceptable in VM)"
+        return {
+            "status": status,
+            "message": message,
+            "active": False
+        }
+
+
+def _check_apparmor():
         """Check AppArmor status with VM awareness"""
         try:
             result = subprocess.run(['aa-status'], capture_output=True, text=True)
-            if result.returncode == 0:
-                if "profiles are loaded" in result.stdout:
-                    return {
-                        "status": "ok", 
-                        "message": "AppArmor is active with profiles loaded", 
-                        "active": True
-                    }
-                else:
-                    if IS_VM_ENVIRONMENT:
-                        return {
-                            "status": "warning", 
-                            "message": "AppArmor is active but no profiles loaded (acceptable in VM)", 
-                            "active": True
-                        }
-                    else:
-                        return {
-                            "status": "warning", 
-                            "message": "AppArmor is active but no profiles loaded", 
-                            "active": True
-                        }
-            else:
-                if IS_VM_ENVIRONMENT:
-                    return {
-                        "status": "warning", 
-                        "message": "AppArmor is not active (acceptable in VM)", 
-                        "active": False
-                    }
-                else:
-                    return {
-                        "status": "error", 
-                        "message": "AppArmor is not active", 
-                        "active": False
-                    }
+            return SetupActions._get_apparmor_status(result, IS_VM_ENVIRONMENT)
         except FileNotFoundError:
-            if IS_VM_ENVIRONMENT:
-                return {
-                    "status": "warning", 
-                    "message": "AppArmor tools not installed (acceptable in VM)", 
-                    "active": False
-                }
-            else:
-                return {
-                    "status": "error", 
-                    "message": "AppArmor tools not installed", 
-                    "active": False
-                }
+            return SetupActions._get_apparmor_not_found_status(IS_VM_ENVIRONMENT)
         except Exception as e:
             return {
                 "status": "error", 
                 "message": f"Error checking AppArmor: {str(e)}", 
                 "active": False
             }
-    
-    @staticmethod
-    def _check_permissions():
-        """Check file permissions with VM awareness"""
-        # Check permissions for sensitive directories
-        sensitive_dirs = [
-            '/etc/shadow',
-            '/etc/sudoers',
-            '/etc/ssh/sshd_config'
-        ]
-        
-        results = []
-        for path in sensitive_dirs:
-            try:
-                if not Path(path).exists():
-                    results.append({
-                        "path": path,
-                        "exists": False,
-                        "permissions": None,
-                        "status": "warning" if IS_VM_ENVIRONMENT else "error",
-                        "message": f"File not found (acceptable in VM)" if IS_VM_ENVIRONMENT else "File not found"
-                    })
-                    continue
-                    
-                result = subprocess.run(['stat', '-c', '%a', path], capture_output=True, text=True)
-                if result.returncode != 0:
-                    results.append({
-                        "path": path,
-                        "exists": True,
-                        "permissions": None,
-                        "status": "warning" if IS_VM_ENVIRONMENT else "error",
-                        "message": f"Could not check permissions (acceptable in VM)" if IS_VM_ENVIRONMENT 
-                                  else "Could not check permissions"
-                    })
-                    continue
-                    
-                perms = result.stdout.strip()
-                if path == '/etc/shadow' and perms == '640':
-                    results.append({
-                        "path": path,
-                        "exists": True,
-                        "permissions": perms,
-                        "status": "ok",
-                        "message": "Permissions are secure"
-                    })
-                elif path == '/etc/sudoers' and perms == '440':
-                    results.append({
-                        "path": path,
-                        "exists": True,
-                        "permissions": perms,
-                        "status": "ok",
-                        "message": "Permissions are secure"
-                    })
-                elif path == '/etc/ssh/sshd_config' and perms == '600':
-                    results.append({
-                        "path": path,
-                        "exists": True,
-                        "permissions": perms,
-                        "status": "ok",
-                        "message": "Permissions are secure"
-                    })
-                else:
-                    if IS_VM_ENVIRONMENT:
-                        results.append({
-                            "path": path,
-                            "exists": True,
-                            "permissions": perms,
-                            "status": "warning",
-                            "message": f"Permissions are not secure: {perms} (acceptable in VM)"
-                        })
-                    else:
-                        results.append({
-                            "path": path,
-                            "exists": True,
-                            "permissions": perms,
-                            "status": "error",
-                            "message": f"Permissions are not secure: {perms}"
-                        })
-            except Exception as e:
-                results.append({
-                    "path": path,
-                    "exists": None,
-                    "permissions": None,
-                    "status": "error",
-                    "message": f"Error checking permissions: {str(e)}"
-                })
-        
-        # Determine overall permission status
-        if all(r['status'] == 'ok' for r in results):
-            return {
-                "status": "ok",
-                "message": "All file permissions are secure",
-                "details": results
-            }
-        elif IS_VM_ENVIRONMENT and not any(r['status'] == 'error' for r in results):
-            return {
-                "status": "warning",
-                "message": "Some permissions need attention but acceptable in VM",
-                "details": results
-            }
-        else:
-            return {
-                "status": "error",
-                "message": "Some file permissions are not secure",
-                "details": results
-            }
 
-    @staticmethod
-    def check_cpuinfo_for_vm():
+def check_cpuinfo_for_vm():
         """Check CPU info for VM indicators"""
         try:
             with open('/proc/cpuinfo', 'r') as f:
@@ -360,9 +311,9 @@ class SetupActions:
                 return any(x in cpuinfo for x in ['hypervisor', 'vmware', 'virtualbox', 'kvm', 'xen'])
         except:
             return False
-            
-    @staticmethod
-    def check_dmesg_for_vm():
+
+
+def check_dmesg_for_vm():
         """Check dmesg output for VM indicators"""
         try:
             result = subprocess.run(['dmesg'], capture_output=True, text=True)
@@ -372,9 +323,9 @@ class SetupActions:
             return False
         except:
             return False
-            
-    @staticmethod
-    def check_directories_for_vm():
+
+
+def check_directories_for_vm():
         """Check for VM-specific directories"""
         vm_dirs = ['/sys/devices/virtual/dmi/id/product_name', '/sys/hypervisor/type']
         for vm_dir in vm_dirs:
@@ -384,9 +335,10 @@ class SetupActions:
                         content = f.read().lower()
                         if any(x in content for x in ['vmware', 'virtualbox', 'qemu', 'kvm', 'xen']):
                             return True
-                except:
+                except FileNotFoundError:
                     pass
         return False
+
 
 # Sample data for network, threats, and logs
 SAMPLE_DATA = {
@@ -419,13 +371,29 @@ SAMPLE_DATA = {
 }
 
 # Action mapping
-SETUP_ACTIONS = {
-    "get_system_status": SetupActions.get_system_status,
-    "check_selinux": SetupActions._check_selinux,
-    "check_firewall": SetupActions._check_firewall,
-    "check_apparmor": SetupActions._check_apparmor,
-    "check_permissions": SetupActions._check_permissions
-}
+def _check_permissions():
+    """Check critical file permissions with VM awareness"""
+    results = {
+        "passwd": SetupActions._get_file_status("/etc/passwd", "644", IS_VM_ENVIRONMENT),
+        "shadow": SetupActions._get_file_status("/etc/shadow", "640", IS_VM_ENVIRONMENT),
+        "sshd_config": SetupActions._get_file_status("/etc/ssh/sshd_config", "600", IS_VM_ENVIRONMENT),
+        "sudoers": SetupActions._get_file_status("/etc/sudoers", "440", IS_VM_ENVIRONMENT)
+    }
+    
+    # Determine overall status
+    if all(item["status"] == "ok" for item in results.values()):
+        overall_status = "ok"
+        message = "All critical file permissions are secure"
+    else:
+        overall_status = "warning" if IS_VM_ENVIRONMENT else "error"
+        message = "Some file permissions need attention" if IS_VM_ENVIRONMENT else "Insecure file permissions detected"
+    
+    results["overall"] = {
+        "status": overall_status,
+        "message": message
+    }
+    
+    return results
 
 def handle_client(client_socket):
     """Handle client connection"""
@@ -458,6 +426,8 @@ def handle_client(client_socket):
         client_socket.close()
 
 def main():
+    # call the is running in VM function
+    is_running_in_vm()
     """Start the backend Unix socket server"""
     # Remove socket file if it exists
     try:
@@ -491,4 +461,4 @@ def main():
             os.unlink(SOCKET_PATH)
 
 if __name__ == "__main__":
-    main() 
+    main()
