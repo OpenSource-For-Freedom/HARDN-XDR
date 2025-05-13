@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 """
 HARDN Backend Socket
 This implements a real backend socket to handle requests from the GUI proxy.
@@ -486,6 +487,7 @@ def main():
     finally:
         server.close()
         if os.path.exists(SOCKET_PATH):
+            os.unlink(SOCKET_PATH)
             os.unlink(SOCKET_PATH)
 
 if __name__ == "__main__":
