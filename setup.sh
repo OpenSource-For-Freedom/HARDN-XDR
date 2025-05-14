@@ -1,20 +1,46 @@
 #!/bin/sh
 
 ########################################
-#            HARDN - Setup             #
-#  Please have repo cloned before hand #
-#       Installs + Pre-config          #
-#    Must have python-3 loaded already #
+#        HARDN - Auto Rice Script      #
+#            main branch               #
+#                                      #
 #       Author: Chris Bingham          #
 #           Date: 4/5/2025             #
+#         Updated: 5/14/2025           #
+#                                      #
 ########################################
 
+#TODO: Change the name of this script to autorice.sh ???
+# It's job is not the exact same as the original setup.sh
+# Some changes. This auto rice script has been moved to the repo's home directory.
+# makes for easier access and avoids possible naming conflicts,
+# as this repo contains directories and scripts with similar setup names.
+
+# main branch git url: https://github.com/OpenSource-For-Freedom/HARDN.git
 
 # Check for root privileges
 if [ "$(id -u)" -ne 0 ]; then
-   echo "This script must be run as root. Use: sudo ./setup.sh"
+   echo "This script must be run as root."
+   echo "easy use: sh"
+  # curl -LO
+   sh larbs.sh
    exit 1
 fi
+
+# quietly checks if a package is installed, and installs it if not.
+installpkg() {
+    dpkg -s "$1" >/dev/null 2>&1 || sudo apt install -y "$1" >/dev/null 2>&1
+}
+
+
+preinstallmsg() {
+	whiptail --title "Welcome to HARDN. A Linux Security Hardening program." --yes-button "Let's go!" \
+		--no-button "No, nevermind!" \
+		--yesno "The rest of the installation will now be totally automated, so you can sit back and relax.\\n\\nIt will take some time, but when done, you can enjoy your security hardened Linux OS.\\n\\nNow just press <Let's go!> and the system will begin installation!" 13 60 || {
+		clear
+		exit 1
+	}
+}
 
 update_system_packages() {
     printf "\033[1;31m[+] Updating system packages...\033[0m\n"
@@ -267,6 +293,7 @@ setup_complete() {
 # Main function
 main() {
     update_system_packages
+    preinstallmsg
     install_pkgdeps
 
     # Check dependencies

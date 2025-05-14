@@ -5,32 +5,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="1154ff61-838f-499b-adac-1d2601c549c3" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/changelog.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/debian/hardn.install" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/debian/postinst" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/HARDN.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/deb_grub.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/deb_stig.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/setup/hardn-packages.sh" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/setup/hardn-setup.sh" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/HARDN.iml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.vscode/settings.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Src/_init_.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/Src/hardn.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/Src/hardn_dark.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/Src/setup-venv.sh" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/Tests/test_hardn_dark.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/debian/changelog" beforeDir="false" afterPath="$PROJECT_DIR$/debian/changelog" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/debian/control" beforeDir="false" afterPath="$PROJECT_DIR$/debian/control" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/debian/rules" beforeDir="false" afterPath="$PROJECT_DIR$/debian/rules" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/LICENSE" beforeDir="false" afterPath="$PROJECT_DIR$/docs/LICENSE" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/setup/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Setup/setup.sh" beforeDir="false" afterPath="$PROJECT_DIR$/setup.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/setup/setup.sh" beforeDir="false" afterPath="$PROJECT_DIR$/src/setup/setup.sh" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -76,7 +53,8 @@
     "Python.hardn_dark.executor": "Debug",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.git.unshallow": "true",
-    "git-widget-placeholder": "Merging LinuxUser255-main",
+    "RunOnceActivity.rust.reset.selective.auto.import": "true",
+    "git-widget-placeholder": "LinuxUser255-main",
     "last_opened_file_path": "/home/linux/Projects/LinuxThings/HARDN-Repo-Me/HARDN",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
@@ -87,7 +65,34 @@
     "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$" />
+    </key>
+  </component>
   <component name="RunManager">
+    <configuration default="true" type="PythonConfigurationType" factoryName="Python">
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <module name="" />
+      <option name="SCRIPT_NAME" value="" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
     <configuration name="hardn_dark" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="HARDN" />
       <option name="ENV_FILES" value="" />
@@ -109,6 +114,17 @@
       <option name="MODULE_MODE" value="false" />
       <option name="REDIRECT_INPUT" value="false" />
       <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration default="true" type="Tox" factoryName="Tox">
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
       <method v="2" />
     </configuration>
     <recent_temporary>
@@ -159,6 +175,7 @@
       <workItem from="1743989481551" duration="1247000" />
       <workItem from="1744483360878" duration="5440000" />
       <workItem from="1744489814688" duration="751000" />
+      <workItem from="1747248102911" duration="3145000" />
     </task>
     <servers />
   </component>
