@@ -1,4 +1,4 @@
-### Please review and make necessarry changes, as you guys know more about the licensing, etc.. -Alexis
+### Please review and make necessary changes, as you guys know more about the licensing, etc.. -Alexis
 # HARDN - Hardened Active Response Defense Network
 
 HARDN is a comprehensive security hardening and monitoring solution for Linux systems. It provides real-time threat detection, network monitoring, and security configuration management through an intuitive web interface.
