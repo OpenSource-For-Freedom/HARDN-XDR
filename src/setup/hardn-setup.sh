@@ -1,12 +1,102 @@
 #!/bin/bash
 set -e # Exit on errors
 
-# Usage/help message
+# MENU
 if [[ "$1" == "-h" || "$1" == "--help" ]]; then
     echo "Usage: sudo hardn [options]"
-    echo "Runs the HARDN system hardening setup."
+    echo "Options:"
+    echo "  -s, --setup              Run the setup script"
+    echo "  --update                 Update system packages"
+    echo "  --install-security-tools Install security tools"
+    echo "  --disable-security-tools Disable security tools"
+    echo "  --show-tools             Show installed security tools"
+    echo "  --show-stig              Show STIG hardening tasks"
+    echo "  --disable-apparmor       Disable AppArmor"
+    echo "  --enable-fail2ban        Enable Fail2Ban"
+    echo "  --disable-firejail       Disable Firejail"
+    echo "  --disable-rkhunter       Disable RKHunter"
+    echo "  --disable-aide           Disable AIDE"
+    echo "  --disable-ufw            Disable UFW"
+    echo "  --help, -h               Show this help menu"
     exit 0
 fi
+
+# Prevent unintended execution if no arguments are provided
+if [[ -z "$1" ]]; then
+    echo "No arguments provided. Use -h or --help for usage information."
+    exit 1
+fi
+
+# Process flags
+for arg in "$@"; do
+    case $arg in
+        -s|--setup)
+            main
+            ;;
+        --update)
+            update_system_packages
+            ;;
+        --install-security-tools)
+            install_security_tools
+            ;;
+        --disable-security-tools)
+            systemctl disable --now ufw fail2ban apparmor firejail rkhunter aide
+            echo "Security tools disabled."
+            ;;
+        --disable-apparmor)
+            systemctl disable --now apparmor
+            echo "AppArmor disabled."
+            ;;
+        --enable-fail2ban)
+            enable_fail2ban
+            systemctl start fail2ban
+            ;;
+        --disable-firejail)
+            systemctl disable --now firejail
+            echo "Firejail disabled."
+            ;;
+        --disable-rkhunter)
+            systemctl disable --now rkhunter
+            echo "RKHunter disabled."
+            ;;
+        --disable-aide)
+            systemctl disable --now aide
+            echo "AIDE disabled."
+            ;;
+        --disable-ufw)
+            systemctl disable --now ufw
+            echo "UFW disabled."
+            ;;
+        --show-tools)
+            echo "Installed security tools:"
+            echo "  - AppArmor"
+            echo "  - Fail2Ban"
+            echo "  - Firejail"
+            echo "  - RKHunter"
+            echo "  - AIDE"
+            echo "  - UFW"
+            ;;
+        --show-stig)
+            echo "STIG hardening tasks:"
+            echo "  - Password policy"
+            echo "  - Lock inactive accounts"
+            echo "  - Login banners"
+            echo "  - Kernel parameters"
+            echo "  - Secure filesystem permissions"
+            echo "  - Disable USB storage"
+            echo "  - Disable core dumps"
+            echo "  - Disable Ctrl+Alt+Del"
+            echo "  - Disable IPv6"
+            echo "  - Configure firewall (UFW)"
+            echo "  - Set randomize_va_space"
+            ;;
+        *)
+            echo "Unknown option: $arg"
+            echo "Use -h or --help for usage information."
+            exit 1
+            ;;
+    esac
+done
 
 print_ascii_banner() {
     CYAN_BOLD="\033[1;36m"

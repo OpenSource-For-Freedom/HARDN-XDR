@@ -1,5 +1,10 @@
 hardn (1.1.5) UNRELEASED; urgency=medium
 
+  * Added flag-based functionality to `hardn-setup.sh` for enhanced flexibility.
+    - New flags include `--update`, `--install-security-tools`, `--disable-security-tools`, and more.
+
+ -- Tim Burns <cyborgcreations01@gmail.com>  Wed, 14 May 2025 10:00:00 +0500
+
   * build: Tested and confirmed Debian package build 
 
  -- Tim Burns <cyborgcreations01@gmail.com>  Thu, 08 May 2025 23:39:00 +0500
