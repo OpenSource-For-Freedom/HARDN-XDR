@@ -1,15 +1,16 @@
 // Create this as setup.rs in the same directory as your main file
+pub mod setup {
 pub fn initialize() {
-    use std::io::{self, Write};
-    println!("[+] Initializing setup module");
+        println!("Initializing HARDN setup...");
 }
 
 pub fn check_requirements() -> bool {
-    println!("[+] Checking system requirements");
+        println!("Checking system requirements...");
     true
 }
 
 pub fn install_dependencies() -> bool {
-    println!("[+] Installing required dependencies");
+        println!("Installing dependencies...");
     true
+    }
 }

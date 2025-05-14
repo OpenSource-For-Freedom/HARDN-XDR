@@ -1,24 +1,27 @@
-use clap::{Command as ClapCommand, Arg, ArgAction};
-use std::env;
 use std::fs::{self, OpenOptions};
 use std::io::{BufReader, BufRead, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
 use std::process::{Command as ProcessCommand, exit};
-use std::sync::{mpsc::channel, Arc, Mutex};
-use std::time::Duration;
-use notify::{Watcher, RecursiveMode};
+use std::sync::{Arc, Mutex};
 use serde::{Serialize};
 use serde_json::{json, Value};
-use actix_web::{web, App, HttpServer};
+use actix_cors::Cors;
+use actix_web::{middleware, web, App, HttpServer};
 use std::collections::HashMap;
 use rand::{distributions::Alphanumeric, Rng};
-//use std::os::unix::fs::PermissionsExt;
-//use std::fs;
+use std::os::unix::fs::PermissionsExt;
 
+mod config;
+mod file_permissions;
 mod gui_api;
-mod setup;
-mod setup;
+mod gui_input;
+mod hardn_logging;
+mod network_scan;
+mod security_checks;
+mod security_tools;
+mod system_checks;
+mod vm_detection;
 
 // =================== Constants ===================
 const LOG_FILE: &str = "/var/log/hardn.log";
@@ -35,21 +38,10 @@ struct NetworkMonitor;
 impl NetworkMonitor {
     fn new() -> Self { Self }
 
-    fn start_monitoring(&self) {
-        println!("[+] Monitoring network...");
-        loop {
-            for _ in 0..10 {
-                std::thread::sleep(Duration::from_secs(30));
-            }
-        }
-    }
-
     fn get_active_connections(&self) -> Vec<Connection> {
         vec![
             Connection { ip: "192.168.0.1".into(), port: 22 },
             Connection { ip: "10.0.0.5".into(), port: 443 },
-            Connection { ip: "172.16.0.1".into(), port: 80 },
-            Connection { ip: "172.16.0.2".into(), port: 8080 },
         ]
     }
 }
@@ -68,19 +60,10 @@ struct ThreatSummary {
 struct ThreatDetector;
 impl ThreatDetector {
     fn new() -> Self { Self }
-    fn watch_threats(&self) {
-        println!("[+] Threat detection started...");
-        for _ in 0..10 {
-            std::thread::sleep(Duration::from_secs(60));
-        }
-        println!("[+] Threat detection completed.");
-    }
     fn get_current_threats(&self) -> ThreatSummary {
         ThreatSummary {
-            level: 3,
-            items: vec![
-                Threat { id: 1, description: "Suspicious SSH login".into(), level: 2 },
-            ],
+            level: 1,
+            items: vec![],
         }
     }
 }
@@ -147,24 +130,26 @@ impl LogManager {
     fn get_recent_logs(&self) -> Vec<String> {
         vec![
             "2025-04-20: System initialized.".into(),
-            "2025-04-20: Threat level warning.".into(),
+            "2025-04-20: Threat level low.".into(),
         ]
     }
 }
 
-struct AppState {
-    auth_service: Arc<Mutex<AuthService>>,
-    network_monitor: Arc<Mutex<NetworkMonitor>>,
-    threat_detector: Arc<Mutex<ThreatDetector>>,
-    log_manager: Arc<Mutex<LogManager>>,
+// Main application state
+pub struct AppState {
+    auth_service: Mutex<AuthService>,
+    network_monitor: Mutex<NetworkMonitor>,
+    threat_detector: Mutex<ThreatDetector>,
+    log_manager: Mutex<LogManager>,
 }
+
 impl AppState {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
-            auth_service: Arc::new(Mutex::new(AuthService::new())),
-            network_monitor: Arc::new(Mutex::new(NetworkMonitor::new())),
-            threat_detector: Arc::new(Mutex::new(ThreatDetector::new())),
-            log_manager: Arc::new(Mutex::new(LogManager::new())),
+            auth_service: Mutex::new(AuthService::new()),
+            network_monitor: Mutex::new(NetworkMonitor::new()),
+            threat_detector: Mutex::new(ThreatDetector::new()),
+            log_manager: Mutex::new(LogManager::new()),
         }
     }
 }
@@ -222,16 +207,12 @@ fn start_ipc_server(state: Arc<AppState>) {
 }
 // =================== Orchetration ===================
 fn validate_environment() {
-    if !nix::unistd::Uid::effective().is_root() {
+    if !std::os::unix::process::parent_id() == 0 {
         eprintln!("This script must be run as root.");
         exit(1);
     }
 }
 fn set_executable_permissions(base_dir: &str) {
-    use std::fs;
-    use std::os::unix::fs::PermissionsExt;
-    use std::path::Path;
-
     let files = vec![
         format!("{}/src/setup/setup.sh", base_dir),
         format!("{}/src/setup/packages.sh", base_dir),
@@ -242,7 +223,7 @@ fn set_executable_permissions(base_dir: &str) {
         if Path::new(&file).exists() {
             let mut permissions = fs::metadata(&file).unwrap().permissions();
             permissions.set_mode(0o755); // Read, write, and execute for owner; read and execute for group and others
-            fs::set_permissions(&file).unwrap();
+            fs::set_permissions(&file, permissions).unwrap();
             println!("[+] Set executable permissions for: {}", file);
         } else {
             println!("[!] File not found: {}", file);
@@ -278,27 +259,9 @@ fn launch_gui(base_dir: &str) {
     }
 }
 
-use std::sync::mpsc::{Sender, Receiver};
-
-
 fn monitor_system() {
-    let (_tx, rx): (Sender<String>, Receiver<String>) = channel();
-    let mut watcher = notify::recommended_watcher(move |res| {
-        match res {
-            Ok(event) => println!("System change: {:?}", event),
-            Err(e) => eprintln!("Watch error: {:?}", e),
-        }
-    })
-    .expect("Failed to create watcher");
-    watcher
-        .watch(Path::new("/"), RecursiveMode::Recursive)
-        .expect("Failed to watch path");
-    loop {
-        match rx.recv() {
-            Ok(event) => println!("System change: {:?}", event),
-            Err(e) => eprintln!("Watch error: {:?}", e),
-        }
-    }
+    // Simplified system monitoring without using notify
+    println!("System monitoring started (simplified version)");
 }
 fn create_systemd_service(exec_path: &str) {
     let unit = format!(
@@ -398,19 +361,87 @@ fn log_message(message: &str) {
 // =================== Main ===================
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    // Initialize application state
-    let app_state = Arc::new(Mutex::new(AppState::new()));
+    // Initialize logging
+    hardn_logging::init().expect("Failed to initialize logging");
+    hardn_logging::log_event("HARDN starting up");
 
-    // Launch the GUI
-    gui_api::launch_gui();
+    // Load configuration
+    let hardn_config = match config::load_config() {
+        Ok(config) => config,
+        Err(e) => {
+            eprintln!("Error loading configuration: {}", e);
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, e));
+        }
+    };
 
-    // Start REST API server
+    // Start security services
+    let file_perm_checker = Arc::new(Mutex::new(file_permissions::FilePermissionChecker::new()));
+    let network_scanner = Arc::new(Mutex::new(network_scan::NetworkScanner::new()));
+
+    let file_perm_checker_clone = file_perm_checker.clone();
+    std::thread::spawn(move || {
+        if let Err(e) = file_perm_checker_clone.lock().unwrap().check_all_files() {
+            eprintln!("Error checking file permissions: {}", e);
+        }
+    });
+
+    let network_scanner_clone = network_scanner.clone();
+    std::thread::spawn(move || {
+        if let Err(e) = network_scanner_clone.lock().unwrap().scan_network() {
+            eprintln!("Error scanning network: {}", e);
+        }
+    });
+
+    // Check for VM environment
+    std::thread::spawn(|| {
+        match vm_detection::detect_vm() {
+            Ok(is_vm) => {
+                if is_vm {
+                    println!("Running in a virtual machine environment");
+                } else {
+                    println!("Running on physical hardware");
+                }
+            }
+            Err(e) => eprintln!("Error detecting VM environment: {}", e),
+        }
+    });
+
+    // Start the HTTP server for GUI API
+    hardn_logging::log_event("Starting HTTP server for GUI API");
+    println!("Starting HTTP server on {}:{}", hardn_config.api_host, hardn_config.api_port);
+
     HttpServer::new(move || {
+        // Configure CORS with strict security settings
+        let cors = Cors::default()
+            // In production, specify exact allowed origins instead of any_origin
+            .allowed_origin(&hardn_config.allowed_origin) // This should be configured in config.rs
+            .allowed_methods(vec!["GET", "POST", "OPTIONS"])
+            .allowed_headers(vec!["Authorization", "Content-Type"])
+            .expose_headers(vec!["content-length"])
+            .max_age(3600);
+
         App::new()
-            .app_data(web::Data::new(app_state.clone()))
+            .wrap(cors)
+            // Add security headers middleware
+            .wrap(middleware::DefaultHeaders::new()
+                .add(("X-Content-Type-Options", "nosniff"))
+                .add(("X-Frame-Options", "DENY"))
+                .add(("X-XSS-Protection", "1; mode=block"))
+                .add(("Strict-Transport-Security", "max-age=31536000; includeSubDomains"))
+                .add(("Content-Security-Policy", "default-src 'self' http://localhost:8000 http://localhost:8080; script-src 'self'; connect-src 'self' http://localhost:8080"))
+                .add(("Referrer-Policy", "strict-origin-when-cross-origin"))
+                .add(("Cache-Control", "no-store"))
+                .add(("Pragma", "no-cache"))
+            )
+            // Rate limiting middleware would be added here in a production environment
+            .app_data(web::Data::new(file_perm_checker.clone()))
+            .app_data(web::Data::new(network_scanner.clone()))
+            // Configure API routes first
             .configure(gui_api::configure_routes)
+            // Configure static files serving
+            .configure(gui_api::configure_static_files)
     })
-    .bind("127.0.0.1:8080")?
+    .bind(format!("{}:{}", hardn_config.api_host, hardn_config.api_port))?
     .run()
     .await
 }

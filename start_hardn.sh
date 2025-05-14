@@ -1,7 +1,14 @@
 #!/bin/bash
 
 # HARDN System Startup Script
-# This script launches all necessary components for the HARDN GUI system
+# This script launches the HARDN (Hardened Active Response Defense Network) system
+#
+# Architecture:
+# - Rust backend: Provides core security services and API endpoints
+# - Web GUI: Browser-based interface for monitoring and control
+#
+# The architecture has been optimized by removing the Python proxy component,
+# allowing direct communication between the web GUI and Rust backend via HTTP APIs.
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -14,10 +21,9 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
 # Define paths
-BACKEND_SOCKET="$SCRIPT_DIR/src/backend_socket.py"
-PROXY_SERVER="$SCRIPT_DIR/src/gui/proxy/proxy.py"
 GUI_DIR="$SCRIPT_DIR/src/gui"
 LOGS_DIR="$SCRIPT_DIR/src/logs"
+TOOLS_DIR="$SCRIPT_DIR/src/tools"
 
 # Ensure logs directory exists
 if [ ! -d "$LOGS_DIR" ]; then
@@ -28,16 +34,14 @@ fi
 kill_existing_processes() {
     echo -e "${BLUE}Checking for existing HARDN processes...${NC}"
     
-    # Kill existing Python processes for backend and proxy
-    pkill -f "python3 $BACKEND_SOCKET" 2>/dev/null
-    pkill -f "python3 $PROXY_SERVER" 2>/dev/null
+    # Kill existing Rust backend
+    pkill -f "target/debug/hardn" 2>/dev/null
     
     # Kill HTTP server for GUI
     pkill -f "python3 -m http.server.*$(basename "$GUI_DIR")" 2>/dev/null
     
     # Clean up any leftover PID files
     rm -f "$LOGS_DIR"/backend.pid 2>/dev/null
-    rm -f "$LOGS_DIR"/proxy.pid 2>/dev/null
     rm -f "$LOGS_DIR"/http.pid 2>/dev/null
     rm -f "$LOGS_DIR"/http.port 2>/dev/null
     
@@ -55,6 +59,15 @@ check_os() {
         exit 1
     fi
     echo -e "${GREEN}✓ Operating system is Linux.${NC}"
+    
+    # Run the detect_os.sh script to check for supported Linux distributions
+    if [ -f "$TOOLS_DIR/detect_os.sh" ]; then
+        echo -e "${BLUE}Checking Linux distribution compatibility...${NC}"
+        bash "$TOOLS_DIR/detect_os.sh" || {
+            echo -e "${RED}Error: Unsupported Linux distribution.${NC}"
+            exit 1
+        }
+    fi
 }
 
 # Check required software
@@ -74,18 +87,71 @@ check_requirements() {
         exit 1
     fi
     echo -e "${GREEN}✓ Python HTTP server module found.${NC}"
+    
+    # Check for Rust/Cargo
+    if ! command -v cargo &> /dev/null; then
+        echo -e "${RED}Error: Cargo is required but not found.${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}✓ Cargo found.${NC}"
+    
+    # Check for security tools dependencies
+    echo -e "${BLUE}Checking security tool dependencies...${NC}"
+    local missing_deps=()
+    
+    # Check for sudo
+    if ! command -v sudo &> /dev/null; then
+        missing_deps+=("sudo")
+    fi
+    
+    # Check for common security tools
+    for cmd in "ufw" "fail2ban-client" "apparmor_status" "firejail"; do
+        if ! command -v $cmd &> /dev/null; then
+            missing_deps+=("$cmd")
+        fi
+    done
+    
+    if [ ${#missing_deps[@]} -gt 0 ]; then
+        echo -e "${YELLOW}Warning: The following recommended dependencies are missing:${NC}"
+        for dep in "${missing_deps[@]}"; do
+            echo -e "${YELLOW}  - $dep${NC}"
+        done
+        echo -e "${YELLOW}Some security features may not be available.${NC}"
+        echo -e "${YELLOW}Run 'sudo $TOOLS_DIR/install_pkgdeps.sh' to install dependencies.${NC}"
+    else
+        echo -e "${GREEN}✓ All security tool dependencies found.${NC}"
+    fi
 }
 
-# Start the backend socket server
+# Set proper permissions for executable scripts
+set_permissions() {
+    echo -e "${BLUE}Setting permissions for security tools...${NC}"
+    
+    if [ -d "$TOOLS_DIR" ]; then
+        # Make all .sh files executable
+        find "$TOOLS_DIR" -name "*.sh" -exec chmod +x {} \;
+        echo -e "${GREEN}✓ Security tools are now executable.${NC}"
+    else
+        echo -e "${RED}Error: Tools directory not found at $TOOLS_DIR${NC}"
+        exit 1
+    fi
+}
+
+# Start the Rust backend
 start_backend() {
-    echo -e "${BLUE}Starting backend socket server...${NC}"
-    if [ ! -f "$BACKEND_SOCKET" ]; then
-        echo -e "${RED}Error: Backend socket script not found at $BACKEND_SOCKET${NC}"
+    echo -e "${BLUE}Building and starting Rust backend...${NC}"
+    
+    # Build the Rust backend
+    echo -e "${BLUE}Building Rust backend...${NC}"
+    cargo build --quiet
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Error: Failed to build Rust backend.${NC}"
         exit 1
     fi
     
     # Start in background
-    python3 "$BACKEND_SOCKET" > "$LOGS_DIR/backend.log" 2>&1 &
+    echo -e "${BLUE}Starting Rust backend...${NC}"
+    cargo run > "$LOGS_DIR/backend.log" 2>&1 &
     BACKEND_PID=$!
     
     # Store PID
@@ -93,41 +159,16 @@ start_backend() {
     
     # Check if process is running
     if ps -p $BACKEND_PID > /dev/null; then
-        echo -e "${GREEN}✓ Backend socket server started (PID: $BACKEND_PID).${NC}"
+        echo -e "${GREEN}✓ Backend started (PID: $BACKEND_PID).${NC}"
     else
-        echo -e "${RED}Error: Failed to start backend socket server.${NC}"
+        echo -e "${RED}Error: Failed to start backend.${NC}"
         exit 1
     fi
     
     # Give it a moment to initialize
     sleep 2
-}
-
-# Start the proxy server
-start_proxy() {
-    echo -e "${BLUE}Starting proxy server...${NC}"
-    if [ ! -f "$PROXY_SERVER" ]; then
-        echo -e "${RED}Error: Proxy server script not found at $PROXY_SERVER${NC}"
-        exit 1
-    fi
     
-    # Start in background
-    python3 "$PROXY_SERVER" > "$LOGS_DIR/proxy.log" 2>&1 &
-    PROXY_PID=$!
-    
-    # Store PID
-    echo "$PROXY_PID" > "$LOGS_DIR/proxy.pid"
-    
-    # Check if process is running
-    if ps -p $PROXY_PID > /dev/null; then
-        echo -e "${GREEN}✓ Proxy server started (PID: $PROXY_PID).${NC}"
-    else
-        echo -e "${RED}Error: Failed to start proxy server.${NC}"
-        exit 1
-    fi
-    
-    # Give it a moment to initialize
-    sleep 2
+    echo -e "${BLUE}Backend API available at: http://localhost:8080/api${NC}"
 }
 
 # Start the HTTP server for GUI
@@ -138,11 +179,18 @@ start_http_server() {
         exit 1
     fi
     
-    # Find an available port starting from 8080
-    PORT=8080
+    # Find an available port starting from 8000 (different from backend 8080)
+    PORT=8000
+    
+    # Check if netstat is available
+    if command -v netstat &> /dev/null; then
     while netstat -tuln | grep ":$PORT " > /dev/null; do
         PORT=$((PORT+1))
     done
+    else
+        # If netstat is not available, just use default port 8000
+        echo -e "${YELLOW}netstat command not found, using default port 8000${NC}"
+    fi
     
     # Start in background
     cd "$GUI_DIR" && python3 -m http.server $PORT > "$LOGS_DIR/http.log" 2>&1 &
@@ -200,56 +248,38 @@ stop_services() {
         rm "$LOGS_DIR/http.pid"
     fi
     
-    # Stop proxy server
-    if [ -f "$LOGS_DIR/proxy.pid" ]; then
-        PROXY_PID=$(cat "$LOGS_DIR/proxy.pid")
-        if ps -p $PROXY_PID > /dev/null; then
-            kill $PROXY_PID
-            echo -e "${GREEN}✓ Proxy server stopped.${NC}"
-        fi
-        rm "$LOGS_DIR/proxy.pid"
-    fi
-    
-    # Stop backend server
+    # Stop backend
     if [ -f "$LOGS_DIR/backend.pid" ]; then
         BACKEND_PID=$(cat "$LOGS_DIR/backend.pid")
         if ps -p $BACKEND_PID > /dev/null; then
             kill $BACKEND_PID
-            echo -e "${GREEN}✓ Backend server stopped.${NC}"
+            echo -e "${GREEN}✓ Backend stopped.${NC}"
         fi
         rm "$LOGS_DIR/backend.pid"
     fi
     
-    # Clean up port file
-    if [ -f "$LOGS_DIR/http.port" ]; then
-        rm "$LOGS_DIR/http.port"
-    fi
-    
     echo -e "${GREEN}All services stopped.${NC}"
+    exit 0
 }
-
-# Setup trap to catch Ctrl+C and other signals
-trap stop_services EXIT INT TERM
 
 # Main execution
 echo -e "${BLUE}======================================${NC}"
-echo -e "${BLUE}      HARDN System Startup Script      ${NC}"
+echo -e "${BLUE}     HARDN System Startup Script      ${NC}"
 echo -e "${BLUE}======================================${NC}"
 
 kill_existing_processes
 check_os
 check_requirements
+set_permissions
 start_backend
-start_proxy
 start_http_server
 open_gui
 
 echo -e "${BLUE}======================================${NC}"
 echo -e "${GREEN}HARDN system is now running.${NC}"
-echo -e "${YELLOW}Press Ctrl+C to shut down all services.${NC}"
+echo -e "${YELLOW}Press Ctrl+C to shut down all components.${NC}"
 echo -e "${BLUE}======================================${NC}"
 
-# Keep script running to maintain trap functionality
-while true; do
-    sleep 1
-done 
+# Wait for Ctrl+C
+trap stop_services INT TERM
+wait 

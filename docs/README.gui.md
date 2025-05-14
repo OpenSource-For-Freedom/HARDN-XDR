@@ -1,4 +1,4 @@
-## GUI test Quick Start
+## GUI Quick Start
 
 To start the HARDN system with a single command, use the provided startup script:
 
@@ -7,10 +7,9 @@ To start the HARDN system with a single command, use the provided startup script
 ```
 
 This script will:
-1. Launch the backend socket server
-2. Start the proxy server
-3. Serve the GUI on a local HTTP server
-4. Open the GUI in your default browser
+1. Build and launch the Rust backend with API
+2. Serve the GUI on a local HTTP server
+3. Open the GUI in your default browser
 
 The script will continue running to manage all services. Press `Ctrl+C` to stop all components.
 
@@ -18,47 +17,41 @@ The script will continue running to manage all services. Press `Ctrl+C` to stop 
 
 If you prefer to start components individually:
 
-1. Start the backend socket:
+1. Start the Rust backend:
    ```bash
-   python3 src/backend_socket.py
+   cargo run
    ```
 
-2. Start the proxy server:
-   ```bash
-   python3 src/gui/proxy/proxy.py
-   ```
-
-3. Serve the GUI:
+2. Serve the GUI:
    ```bash
    cd src/gui
-   python3 -m http.server 8080
+   python3 -m http.server 8000
    ```
 
-4. Open http://localhost:8080 in your browser
+3. Open http://localhost:8000 in your browser
 
 ## Logging
 
 When using the startup script, logs are saved to:
-- `backend.log` - Backend socket server logs
-- `proxy.log` - Proxy server logs
+- `backend.log` - Rust backend logs
 - `http.log` - HTTP server logs
 
 ## System Requirements
 
 - Linux operating system
+- Rust and Cargo (1.60+)
 - Python 3.6+
-- Network access to localhost ports (8080-8082)
+- Network access to localhost ports (8000, 8080)
 
 ## Architecture
 
 The HARDN system consists of:
 
-1. **Backend Socket Server**: Provides the core security functionality
-2. **Proxy Server**: Handles HTTP/JSON communication between GUI and backend
-3. **GUI**: Web-based user interface for system interaction
+1. **Rust Backend**: Provides the core security functionality and API endpoints
+2. **Web GUI**: Browser-based user interface for system interaction
 
 The communication flow is:
-GUI (Browser) ↔ Proxy Server (HTTP, port 8081) ↔ Backend Socket (Unix socket)
+GUI (Browser) ↔ Backend API Server (HTTP, port 8080)
 
   ![GitHub release (latest by date)](https://img.shields.io/github/v/release/OpenSource-For-Freedom/HARDN?include_prereleases)
   ![GitHub issues](https://img.shields.io/github/issues/OpenSource-For-Freedom/HARDN)

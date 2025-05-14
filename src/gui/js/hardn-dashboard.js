@@ -31,7 +31,7 @@ const HARDNDashboard = {
     // Create dashboard layout
     this.createDashboardLayout();
     
-    // Update dashboard with real data
+    // Update dashboard with real data immediately
     this.updateDashboard();
     
     // Set up refresh button listener
@@ -128,27 +128,61 @@ const HARDNDashboard = {
    */
   async updateDashboard(forceRefresh = false) {
     try {
-      // Check if API is available
-      const isAvailable = await APIClient.checkBackendAvailable();
+      console.log('Updating dashboard, forceRefresh:', forceRefresh);
+      
+      // Add a loading indicator
+      const content = document.getElementById('main-content');
+      if (content) {
+        const loadingIndicator = document.createElement('div');
+        loadingIndicator.id = 'dashboard-loading';
+        loadingIndicator.className = 'loading-indicator';
+        loadingIndicator.innerHTML = '<div class="spinner"></div><p>Loading dashboard data...</p>';
+        content.prepend(loadingIndicator);
+      }
+      
+      // Check if API is available with multiple retries
+      console.log('Checking backend availability...');
+      let isAvailable = false;
+      for (let i = 0; i < 3; i++) {
+        console.log(`Backend check attempt ${i+1}/3`);
+        if (window.APIClient) {
+          isAvailable = await window.APIClient.checkBackendAvailable();
+        } else {
+          console.error('APIClient not available - waiting for initialization');
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        }
+        console.log('Backend available:', isAvailable);
+        if (isAvailable) break;
+        // Wait a moment before retry
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      
+      // Remove loading indicator
+      document.getElementById('dashboard-loading')?.remove();
+      
       if (!isAvailable) {
-        console.warn('Backend connection unavailable, using fallback data');
+        console.warn('Backend connection unavailable after multiple attempts, using fallback data');
         this.useOfflineMode();
         return;
       }
       
-      // Update all sections concurrently
+      console.log('Updating all dashboard sections...');
+      
+      // Use direct data endpoints instead of WebSockets
       await Promise.all([
-        this.updateSystemStatus(forceRefresh),
-        this.updateSecurityStatus(forceRefresh),
-        this.updateThreatLevel(forceRefresh),
-        this.updateSecurityComponents(forceRefresh),
-        this.updateActivityLog(forceRefresh)
+        this.fetchDirectNetworkData(),
+        this.fetchDirectSecurityData(),
+        this.fetchDirectLogsData()
       ]);
       
       // Update last updated timestamp
       this.updateLastUpdatedTime();
+      console.log('Dashboard update complete');
     } catch (error) {
       console.error('Error updating dashboard:', error);
+      // Remove loading indicator if it exists
+      document.getElementById('dashboard-loading')?.remove();
       showToast('Error updating dashboard, using fallback data', 'warning');
       this.useOfflineMode();
     }
@@ -397,65 +431,74 @@ const HARDNDashboard = {
     try {
       // Check cache first
       const now = Date.now();
-      if (!forceRefresh && 
-          this._cache.systemStatus && 
-          (now - this._cache.lastUpdate.systemStatus < this.CACHE_TTL)) {
+      if (!forceRefresh && this._cache.systemStatus && 
+          (now - this._cache.lastUpdate.systemStatus) < this.CACHE_TTL) {
+        this.updateSystemStatusUI(this._cache.systemStatus);
         return;
       }
       
-      const systemStatus = await APIClient.getSystemStatus();
-      this._cache.systemStatus = systemStatus;
+      // Fetch fresh data
+      const data = await APIClient.getSystemStatus();
+      
+      // Update cache
+      this._cache.systemStatus = data;
       this._cache.lastUpdate.systemStatus = now;
       
-      // Extract status data
-      const statusData = {
-        status: systemStatus.overall ? systemStatus.overall.status : 'warning',
-        message: systemStatus.overall ? systemStatus.overall.message : 'Status unknown'
-      };
-      
       // Update UI
-      this.updateSystemStatusUI(statusData);
+      this.updateSystemStatusUI(data.overall);
     } catch (error) {
-      console.error('Error updating system status:', error);
-      this.updateSystemStatusUI({
-        status: 'error',
-        message: 'Error retrieving status'
-      });
+      console.error('Error fetching system status:', error);
+      // Keep using cached data if available
+      if (this._cache.systemStatus) {
+        this.updateSystemStatusUI(this._cache.systemStatus);
+      } else {
+        // Show error state
+        const statusElement = document.getElementById('system-security-status');
+        if (statusElement) {
+          statusElement.classList.remove('loading', 'ok', 'warning');
+          statusElement.classList.add('error');
+          statusElement.textContent = 'Error';
+        }
+      }
     }
   },
   
   /**
-   * Update the security status summary with real data
+   * Update the network status with real data
    * @param {boolean} forceRefresh - Whether to bypass cache
    */
   async updateSecurityStatus(forceRefresh = false) {
     try {
       // Check cache first
       const now = Date.now();
-      if (!forceRefresh && 
-          this._cache.securityStatus && 
-          (now - this._cache.lastUpdate.securityStatus < this.CACHE_TTL)) {
+      if (!forceRefresh && this._cache.securityStatus && 
+          (now - this._cache.lastUpdate.securityStatus) < this.CACHE_TTL) {
+        this.updateNetworkStatusUI(this._cache.securityStatus);
         return;
       }
       
-      const securityStatus = await APIClient.getSecurityStatus();
-      this._cache.securityStatus = securityStatus;
+      // Fetch fresh data
+      const data = await APIClient.getNetworkStatus();
+      
+      // Update cache
+      this._cache.securityStatus = data;
       this._cache.lastUpdate.securityStatus = now;
       
-      // Extract network status data
-      const networkData = {
-        status: (securityStatus && securityStatus.network) ? securityStatus.network.status : 'ok',
-        message: (securityStatus && securityStatus.network) ? securityStatus.network.message : 'Protected'
-      };
-      
       // Update UI
-      this.updateNetworkStatusUI(networkData);
+      this.updateNetworkStatusUI(data);
     } catch (error) {
-      console.error('Error updating security status:', error);
-      this.updateNetworkStatusUI({
-        status: 'warning',
-        message: 'Status unknown'
-      });
+      console.error('Error fetching network status:', error);
+      // Handle error (use cached data or fallback)
+      if (this._cache.securityStatus) {
+        this.updateNetworkStatusUI(this._cache.securityStatus);
+      } else {
+        const networkStatus = document.getElementById('network-status');
+        if (networkStatus) {
+          networkStatus.classList.remove('loading', 'ok', 'warning');
+          networkStatus.classList.add('error');
+          networkStatus.textContent = 'Error';
+        }
+      }
     }
   },
   
@@ -467,95 +510,119 @@ const HARDNDashboard = {
     try {
       // Check cache first
       const now = Date.now();
-      if (!forceRefresh && 
-          this._cache.threatData && 
-          (now - this._cache.lastUpdate.threatData < this.CACHE_TTL)) {
+      if (!forceRefresh && this._cache.threatData && 
+          (now - this._cache.lastUpdate.threatData) < this.CACHE_TTL) {
+        this.updateThreatLevelUI(this._cache.threatData);
         return;
       }
       
-      const threatData = await APIClient.getThreatData();
-      this._cache.threatData = threatData;
+      // Fetch fresh data
+      const data = await APIClient.getThreats();
+      
+      // Update cache
+      this._cache.threatData = data;
       this._cache.lastUpdate.threatData = now;
       
-      // Extract threat data
-      const threatLevel = {
-        level: threatData && threatData.level !== undefined ? threatData.level : 0,
-        status: threatData && threatData.status ? threatData.status : 'ok'
-      };
-      
       // Update UI
-      this.updateThreatLevelUI(threatLevel);
+      this.updateThreatLevelUI(data);
     } catch (error) {
-      console.error('Error updating threat level:', error);
-      this.updateThreatLevelUI({
-        level: 0,
-        status: 'warning'
-      });
+      console.error('Error fetching threat level:', error);
+      // Handle error (use cached data or fallback)
+      if (this._cache.threatData) {
+        this.updateThreatLevelUI(this._cache.threatData);
+      } else {
+        const threatLevel = document.getElementById('threat-level-status');
+        if (threatLevel) {
+          threatLevel.classList.remove('loading', 'ok', 'warning');
+          threatLevel.classList.add('error');
+          threatLevel.textContent = 'Error';
+        }
+      }
     }
   },
   
   /**
-   * Update the security components list with real data
+   * Update the security components with real data
    * @param {boolean} forceRefresh - Whether to bypass cache
    */
   async updateSecurityComponents(forceRefresh = false) {
     try {
-      // Use the system status data already fetched
-      if (forceRefresh || !this._cache.systemStatus) {
-        await this.updateSystemStatus(forceRefresh);
+      // Check cache first
+      const now = Date.now();
+      if (!forceRefresh && this._cache.components &&
+          (now - this._cache.lastUpdate.components) < this.CACHE_TTL) {
+        this.updateSecurityComponentsUI(this._cache.components);
+        return;
       }
       
-      const systemStatus = this._cache.systemStatus;
-      if (!systemStatus) return;
+      // Fetch fresh data
+      const data = await APIClient.getSystemStatus();
       
-      // Prepare components data
+      // Extract component data
       const components = [];
-      
-      // Add SELinux status if available
-      if (systemStatus.selinux) {
-        components.push({
-          name: 'SELinux',
-          status: systemStatus.selinux.enforced ? 'Enforcing' : 'Disabled',
-          statusClass: systemStatus.selinux.status,
-          details: systemStatus.selinux.message
-        });
+      if (data && data.components) {
+        // Add SELinux
+        if (data.components.selinux) {
+          components.push({
+            name: 'SELinux',
+            status: data.components.selinux.message || 'Unknown',
+            statusClass: data.components.selinux.status || 'warning',
+            details: data.components.selinux.enforced ? 'Enforcing mode active' : 'Not in enforcing mode'
+          });
+        }
+        
+        // Add Firewall
+        if (data.components.firewall) {
+          components.push({
+            name: 'Firewall',
+            status: data.components.firewall.message || 'Unknown',
+            statusClass: data.components.firewall.status || 'warning',
+            details: data.components.firewall.active ? 'Firewall is running' : 'Firewall is not active'
+          });
+        }
+        
+        // Add AppArmor
+        if (data.components.apparmor) {
+          components.push({
+            name: 'AppArmor',
+            status: data.components.apparmor.message || 'Unknown',
+            statusClass: data.components.apparmor.status || 'warning',
+            details: data.components.apparmor.active ? 'AppArmor is active' : 'AppArmor is not active'
+          });
+        }
+        
+        // Add Permissions
+        if (data.components.permissions) {
+          components.push({
+            name: 'File Permissions',
+            status: data.components.permissions.message || 'Unknown',
+            statusClass: data.components.permissions.status || 'warning',
+            details: 'Critical file permissions'
+          });
+        }
       }
       
-      // Add Firewall status if available
-      if (systemStatus.firewall) {
-        components.push({
-          name: 'Firewall',
-          status: systemStatus.firewall.active ? 'Active' : 'Inactive',
-          statusClass: systemStatus.firewall.status,
-          details: systemStatus.firewall.message
-        });
-      }
-      
-      // Add AppArmor status if available
-      if (systemStatus.apparmor) {
-        components.push({
-          name: 'AppArmor',
-          status: systemStatus.apparmor.active ? 'Active' : 'Inactive',
-          statusClass: systemStatus.apparmor.status,
-          details: systemStatus.apparmor.message
-        });
-      }
-      
-      // Add Permissions status if available
-      if (systemStatus.permissions) {
-        components.push({
-          name: 'File Permissions',
-          status: systemStatus.permissions.status === 'ok' ? 'Secure' : 'Needs Review',
-          statusClass: systemStatus.permissions.status,
-          details: systemStatus.permissions.message
-        });
-      }
+      // Update cache
+      this._cache.components = components;
+      this._cache.lastUpdate.components = now;
       
       // Update UI
       this.updateSecurityComponentsUI(components);
     } catch (error) {
-      console.error('Error updating security components:', error);
-      this.updateSecurityComponentsUI([]);
+      console.error('Error fetching security components:', error);
+      // Handle error (use cached data or fallback)
+      if (this._cache.components) {
+        this.updateSecurityComponentsUI(this._cache.components);
+      } else {
+        const componentsList = document.getElementById('security-components-list');
+        if (componentsList) {
+          componentsList.innerHTML = `
+            <li class="component-error">
+              Error loading security components
+            </li>
+          `;
+        }
+      }
     }
   },
   
@@ -590,56 +657,49 @@ const HARDNDashboard = {
     try {
       // Check cache first
       const now = Date.now();
-      if (!forceRefresh && 
-          this._cache.activityLog && 
-          (now - this._cache.lastUpdate.activityLog < this.CACHE_TTL)) {
+      if (!forceRefresh && this._cache.activityLog && 
+          (now - this._cache.lastUpdate.activityLog) < this.CACHE_TTL) {
+        this.updateActivityLogUI(this._cache.activityLog);
         return;
       }
       
-      const logs = await APIClient.getSystemLogs(5);
-      this._cache.activityLog = logs;
-      this._cache.lastUpdate.activityLog = now;
+      // Fetch fresh data
+      const data = await APIClient.getLogs();
       
-      // Prepare activities data
-      let activities = [];
-      
-      // Add log entries or defaults if no real data
-      if (logs && logs.entries && logs.entries.length > 0) {
-        activities = logs.entries.map(entry => ({
-          type: entry.type || 'info',
-          message: entry.message,
-          timestamp: entry.timestamp,
-          details: entry.details
-        }));
-      } else {
-        // Default entries when no real data is available
-        activities = [
-          {
-            type: 'info',
-            message: 'System Check Completed',
-            timestamp: new Date().toISOString(),
-            details: 'Routine system security check completed with no issues found.'
-          },
-          {
-            type: 'warning',
-            message: 'Update Required',
-            timestamp: new Date(Date.now() - 30*60000).toISOString(),
-            details: 'Security definitions update is available and recommended.'
-          },
-          {
-            type: 'error',
-            message: 'Unusual Login Attempt',
-            timestamp: new Date(Date.now() - 24*60*60000).toISOString(),
-            details: 'Multiple failed login attempts detected from IP 192.168.1.45.'
-          }
-        ];
+      // Format log entries
+      const activities = [];
+      if (data && data.logs) {
+        data.logs.forEach(log => {
+          activities.push({
+            type: log.level || 'info',
+            message: log.message || 'System event',
+            timestamp: log.timestamp || new Date().toISOString(),
+            details: log.details || ''
+          });
+        });
       }
+      
+      // Update cache
+      this._cache.activityLog = activities;
+      this._cache.lastUpdate.activityLog = now;
       
       // Update UI
       this.updateActivityLogUI(activities);
     } catch (error) {
-      console.error('Error updating activity log:', error);
-      this.updateActivityLogUI([]);
+      console.error('Error fetching activity log:', error);
+      // Handle error (use cached data or fallback)
+      if (this._cache.activityLog) {
+        this.updateActivityLogUI(this._cache.activityLog);
+      } else {
+        const activityLog = document.getElementById('activity-log');
+        if (activityLog) {
+          activityLog.innerHTML = `
+            <li class="component-error">
+              Error loading activity log
+            </li>
+          `;
+        }
+      }
     }
   },
   
@@ -706,15 +766,21 @@ const HARDNDashboard = {
    */
   async runSecurityScan() {
     try {
-      showToast('Running security scan...', 'info');
-      const result = await APIClient.runSecurityScan();
+      // Show toast notification
+      showToast('Starting security scan...', 'info');
       
-      if (result && result.success) {
+      // Call API
+      const result = await APIClient.runSecurityScan({
+        scan_type: 'full',
+        depth: 3
+      });
+      
+      if (result.success) {
         showToast('Security scan completed successfully', 'success');
-        // Refresh data after scan
+        // Refresh dashboard data
         this.updateDashboard(true);
       } else {
-        showToast('Security scan failed: ' + (result.error || 'Unknown error'), 'error');
+        showToast(result.message || 'Security scan failed', 'error');
       }
     } catch (error) {
       console.error('Error running security scan:', error);
@@ -727,15 +793,18 @@ const HARDNDashboard = {
    */
   async updateThreatDatabase() {
     try {
+      // Show toast notification
       showToast('Updating threat database...', 'info');
-      const result = await APIClient.updateThreatDB();
       
-      if (result && result.success) {
+      // Call API
+      const result = await APIClient.updateThreatDatabase();
+      
+      if (result.success) {
         showToast('Threat database updated successfully', 'success');
-        // Refresh threat data after update
-        this.updateThreatLevel(true);
+        // Refresh dashboard data
+        this.updateDashboard(true);
       } else {
-        showToast('Threat database update failed: ' + (result.error || 'Unknown error'), 'error');
+        showToast(result.message || 'Threat database update failed', 'warning');
       }
     } catch (error) {
       console.error('Error updating threat database:', error);
@@ -924,6 +993,195 @@ const HARDNDashboard = {
       const now = new Date();
       element.textContent = `Last updated: ${now.toLocaleTimeString()}`;
     }
+  },
+  
+  // Add these functions to load data directly
+  async fetchDirectNetworkData() {
+    try {
+      console.log('Fetching direct network data');
+      const API_URL = this.getApiUrl();
+      const url = `${API_URL}/direct/network`;
+      
+      console.log(`Network API request to: ${url}`);
+      
+      // Direct fetch instead of using APIClient
+      const response = await fetch(url);
+      console.log('Network API response status:', response.status, response.statusText);
+      
+      if (!response.ok) {
+        throw new Error(`Network request failed with status ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('Network data received:', data);
+      
+      // Update network status UI
+      const networkStatus = document.getElementById('network-status');
+      if (networkStatus && data.connections) {
+        networkStatus.textContent = `${data.connections.length} active connections`;
+        networkStatus.classList.remove('loading');
+        networkStatus.classList.add('status-ok');
+        console.log('Network UI updated successfully');
+      } else {
+        console.log('Network UI not updated - missing element or data:', { 
+          elementExists: !!networkStatus, 
+          dataValid: !!data.connections
+        });
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Error fetching network data:', error);
+      // Try to use fallback data
+      this.updateNetworkStatusUI(this.getFallbackData().networkStatus);
+      console.log('Using fallback network data due to error');
+      return null;
+    }
+  },
+  
+  async fetchDirectSecurityData() {
+    try {
+      console.log('Fetching direct security data');
+      const API_URL = this.getApiUrl();
+      const url = `${API_URL}/direct/security`;
+      
+      console.log(`Security API request to: ${url}`);
+      
+      // Direct fetch instead of using APIClient
+      const response = await fetch(url);
+      console.log('Security API response status:', response.status, response.statusText);
+      
+      if (!response.ok) {
+        throw new Error(`Security request failed with status ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('Security data received:', data);
+      
+      // Update security status UI
+      const systemSecurity = document.getElementById('system-security-status');
+      if (systemSecurity && data.components) {
+        const componentsStatus = Object.values(data.components);
+        const allOk = componentsStatus.every(c => c.status === 'ok');
+        
+        systemSecurity.textContent = allOk ? 'All systems secure' : 'Security warnings detected';
+        systemSecurity.classList.remove('loading');
+        systemSecurity.classList.add(allOk ? 'status-ok' : 'status-warning');
+        console.log('Security UI updated successfully');
+        
+        // Update components list if available
+        const componentsList = document.getElementById('security-components-list');
+        if (componentsList) {
+          componentsList.innerHTML = '';
+          Object.entries(data.components).forEach(([name, info]) => {
+            const li = document.createElement('li');
+            li.className = `component-item status-${info.status}`;
+            li.innerHTML = `
+              <span class="component-name">${name}</span>
+              <span class="component-status">${info.message}</span>
+            `;
+            componentsList.appendChild(li);
+          });
+          console.log('Components list updated successfully');
+        } else {
+          console.log('Components list not updated - element missing');
+        }
+      } else {
+        console.log('Security UI not updated - missing element or data:', { 
+          elementExists: !!systemSecurity, 
+          dataValid: !!data.components
+        });
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Error fetching security data:', error);
+      // Try to use fallback data
+      this.updateSystemStatusUI(this.getFallbackData().systemStatus);
+      console.log('Using fallback security data due to error');
+      return null;
+    }
+  },
+  
+  async fetchDirectLogsData() {
+    try {
+      console.log('Fetching direct logs data');
+      const API_URL = this.getApiUrl();
+      const url = `${API_URL}/direct/logs`;
+      
+      console.log(`Logs API request to: ${url}`);
+      
+      // Direct fetch instead of using APIClient
+      const response = await fetch(url);
+      console.log('Logs API response status:', response.status, response.statusText);
+      
+      if (!response.ok) {
+        throw new Error(`Logs request failed with status ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('Logs data received:', data);
+      
+      // Update activity log UI
+      const activityLog = document.getElementById('activity-log');
+      if (activityLog && data.logs) {
+        activityLog.innerHTML = '';
+        data.logs.slice(0, 10).forEach(log => {
+          const li = document.createElement('li');
+          li.className = `activity-item level-${log.level}`;
+          li.innerHTML = `
+            <span class="activity-time">${this.formatTime(new Date(log.timestamp))}</span>
+            <span class="activity-message">${log.message}</span>
+          `;
+          activityLog.appendChild(li);
+        });
+        console.log('Activity log UI updated successfully');
+        
+        // Update threat level based on log severity
+        const threatLevel = document.getElementById('threat-level-status');
+        if (threatLevel) {
+          const hasErrors = data.logs.some(log => log.level === 'error');
+          const hasWarnings = data.logs.some(log => log.level === 'warning');
+          
+          let status = 'low';
+          if (hasErrors) status = 'high';
+          else if (hasWarnings) status = 'medium';
+          
+          threatLevel.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+          threatLevel.classList.remove('loading');
+          threatLevel.className = `summary-status status-${status}`;
+          console.log('Threat level UI updated successfully');
+        } else {
+          console.log('Threat level UI not updated - element missing');
+        }
+      } else {
+        console.log('Activity log UI not updated - missing element or data:', { 
+          elementExists: !!activityLog, 
+          dataValid: !!data.logs
+        });
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Error fetching logs data:', error);
+      // Try to use fallback data
+      this.updateThreatLevelUI(this.getFallbackData().threatLevel);
+      this.updateActivityLogUI(this.getFallbackData().activities);
+      console.log('Using fallback logs data due to error');
+      return null;
+    }
+  },
+  
+  // Get API URL
+  getApiUrl() {
+    const hostname = window.location.hostname;
+    const apiPort = 8080; // Backend API port
+    return `http://${hostname}:${apiPort}/api`;
+  },
+  
+  // Helper for formatting time
+  formatTime(date) {
+    return date.toLocaleTimeString();
   }
 };
 

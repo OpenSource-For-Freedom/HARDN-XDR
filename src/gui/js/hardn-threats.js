@@ -1,55 +1,63 @@
 /**
  * HARDN Threats Module
- * Handles threat detection and response
+ * Handles threat detection and mitigation
  */
 
-// Threats-related functionality
 const HARDNThreats = {
-  // Cache
+  // Cache TTL in milliseconds (30 seconds)
+  CACHE_TTL: 30000,
+  
+  // Cache for threat data
   _cache: {
     threatData: null,
     lastUpdate: 0
   },
   
-  // Cache TTL in milliseconds (30 seconds)
-  CACHE_TTL: 30000,
-  
   /**
    * Initialize the threats module
    */
   init() {
-    console.log('Initializing HARDN Threats Module...');
+    console.log('Initializing HARDN Threats module...');
     
-    // Set up event delegation for threat actions
-    document.body.addEventListener('click', (e) => {
-      // Handle threats refresh button
-      if (e.target.closest('#refresh-threats')) {
-        this.refreshThreatData();
-      }
+    // Create threats view
+    this.createThreatsView();
+    
+    // Fetch and render threat data
+    this.updateThreatData();
+    
+    // Set up auto-refresh for real-time data
+    setInterval(() => this.updateThreatData(), 60000);
+  },
+  
+  /**
+   * Create the threats view
+   */
+  createThreatsView() {
+    const mainContent = document.getElementById('main-content');
+    if (!mainContent) return;
+    
+    mainContent.innerHTML = `
+      <div class="threats-header">
+        <h1>Threat Analysis</h1>
+        <div class="controls">
+          <span id="threats-last-updated">Last updated: --:--</span>
+          <button id="refresh-threats" class="btn btn-refresh">
+            <i class="fas fa-sync-alt"></i>
+          </button>
+        </div>
+      </div>
       
-      // Handle threat action buttons (mitigate, block)
-      if (e.target.closest('.btn-icon')) {
-        const button = e.target.closest('.btn-icon');
-        const row = button.closest('tr');
-        
-        if (row) {
-          const description = row.querySelector('td:nth-child(2)')?.textContent;
-          
-          if (button.querySelector('.fa-shield-alt')) {
-            this.mitigateThreat(description);
-          } else if (button.querySelector('.fa-times')) {
-            this.dismissThreat(description);
-          }
-        }
-      }
-      
-      // Handle mitigate all button
-      if (e.target.closest('.card-actions .btn-text')) {
-        const button = e.target.closest('.btn-text');
-        if (button.querySelector('.fa-shield-alt')) {
-          this.mitigateAllThreats();
-        }
-      }
+      <div id="threats-content" class="threats-content">
+        <div class="loading-indicator">
+          <div class="spinner"></div>
+          <p>Loading threat data...</p>
+        </div>
+      </div>
+    `;
+    
+    // Add refresh button handler
+    document.getElementById('refresh-threats')?.addEventListener('click', () => {
+      this.updateThreatData(true);
     });
   },
   
@@ -68,17 +76,8 @@ const HARDNThreats = {
     }
     
     try {
-      const response = await fetch('http://localhost:8081/api', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'threats' })
-      });
-      
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
-      }
-      
-      const data = await response.json();
+      // Use centralized APIClient
+      const data = await window.APIClient.getThreats();
       
       // Update cache
       this._cache.threatData = data;
@@ -92,294 +91,280 @@ const HARDNThreats = {
   },
   
   /**
-   * Refresh the threat data and update the UI
+   * Update threat data and UI
+   * @param {boolean} forceRefresh - Whether to bypass cache
    */
-  async refreshThreatData() {
+  async updateThreatData(forceRefresh = false) {
     try {
-      if (window.HARDNDashboard) {
-        window.HARDNDashboard.showToast('Refreshing threat data...');
-      }
-      
-      const threatData = await this.fetchThreatData(true);
-      if (!threatData) {
-        if (window.HARDNDashboard) {
-          window.HARDNDashboard.showToast('Failed to fetch threat data', 'error');
-        }
-        return;
-      }
-      
-      // Update the UI with new data
-      this.renderThreatData(threatData);
-      
-      if (window.HARDNDashboard) {
-        window.HARDNDashboard.showToast('Threat data refreshed successfully', 'success');
+      const data = await this.fetchThreatData(forceRefresh);
+      if (data) {
+        this.renderThreatData(data);
+      } else {
+        this.showError('Unable to fetch threat data');
       }
     } catch (error) {
-      console.error('Error refreshing threat data:', error);
-      if (window.HARDNDashboard) {
-        window.HARDNDashboard.showToast('Error refreshing threat data', 'error');
-      }
+      console.error('Threat update error:', error);
+      this.showError('Error updating threat data: ' + error.message);
+    }
+    
+    // Update timestamp
+    const timestampElement = document.getElementById('threats-last-updated');
+    if (timestampElement) {
+      const now = new Date();
+      timestampElement.textContent = `Last updated: ${now.toLocaleTimeString()}`;
     }
   },
   
   /**
-   * Render threat data in the UI
-   * @param {Object} data - Threat data
+   * Render threat data to the UI
+   * @param {Object} data - Threat data from API
    */
   renderThreatData(data) {
-    // Update summary cards
-    this.updateThreatSummary(data);
+    const container = document.getElementById('threats-content');
+    if (!container) return;
     
-    // Update threat table
-    this.updateThreatTable(data);
+    // Get threat level class
+    const threatLevel = data.level || 0;
+    const threatLevelClass = threatLevel >= 3 ? 'error' : 
+                             threatLevel >= 1 ? 'warning' : 'ok';
+    const threatLevelText = threatLevel >= 3 ? 'High' : 
+                           threatLevel >= 1 ? 'Medium' : 'Low';
     
-    // Update last updated time
-    const timeElement = document.querySelector('.update-info span');
-    if (timeElement) {
-      const now = new Date();
-      const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      timeElement.textContent = `Last updated: ${time}`;
-    }
-  },
-  
-  /**
-   * Update the threat summary cards
-   * @param {Object} data - Threat data
-   */
-  updateThreatSummary(data) {
-    if (!data) return;
+    // Build HTML structure
+    let html = `
+      <div class="threats-overview">
+        <div class="status-card ${threatLevelClass}">
+          <h3>Current Threat Level</h3>
+          <div class="status-value">${threatLevelText}</div>
+          <div class="status-message">${data.status || 'No status available'}</div>
+        </div>
+        
+        <div class="threat-stats">
+          <div class="stat-item">
+            <span class="stat-value">${data.active_threats || 0}</span>
+            <span class="stat-label">Active Threats</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value">${data.last_update ? new Date(data.last_update).toLocaleDateString() : 'Unknown'}</span>
+            <span class="stat-label">Last Database Update</span>
+          </div>
+        </div>
+      </div>
+    `;
     
-    // Update threat level
-    const threatLevelCard = document.querySelector('.security-summary .summary-card:nth-child(1) .summary-status');
-    if (threatLevelCard) {
-      let levelClass = data.level > 2 ? 'error' : (data.level > 1 ? 'warning' : 'ok');
-      let levelText = data.level > 2 ? 'High' : (data.level > 1 ? 'Medium' : 'Low');
-      
-      threatLevelCard.className = `summary-status ${levelClass}`;
-      threatLevelCard.textContent = levelText;
-    }
-    
-    // Update active threats count
-    const activeThreatsCard = document.querySelector('.security-summary .summary-card:nth-child(2) .summary-status');
-    if (activeThreatsCard) {
-      const count = data.items ? data.items.length : 0;
-      let statusClass = count > 0 ? 'warning' : 'ok';
-      
-      activeThreatsCard.className = `summary-status ${statusClass}`;
-      activeThreatsCard.textContent = `${count} Detected`;
-    }
-  },
-  
-  /**
-   * Update the threat table
-   * @param {Object} data - Threat data
-   */
-  updateThreatTable(data) {
-    const tableBody = document.querySelector('.data-table tbody');
-    if (!tableBody) return;
-    
-    // Clear existing rows
-    tableBody.innerHTML = '';
-    
-    if (!data || !data.items || data.items.length === 0) {
-      tableBody.innerHTML = `
-        <tr>
-          <td colspan="3" class="text-center">No threats detected</td>
+    // Add threat items section if we have threats
+    if (data.items && data.items.length > 0) {
+      html += `
+        <div class="data-card">
+          <div class="card-header">
+            <h3>Detected Threats</h3>
+            <div class="card-actions">
+              <button class="btn-text" id="threats-mitigate-all"><i class="fas fa-shield-alt"></i> Mitigate All</button>
+              <button class="btn-text" id="threats-export"><i class="fas fa-download"></i> Export</button>
+            </div>
+          </div>
+          
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Level</th>
+                  <th>Description</th>
+                  <th>Actions</th>
         </tr>
+              </thead>
+              <tbody>
       `;
-      return;
-    }
     
-    // Add threat rows
+      // Add each threat item
     data.items.forEach(threat => {
-      const row = document.createElement('tr');
+        const levelClass = threat.level >= 3 ? 'high' : 
+                         threat.level >= 2 ? 'medium' : 'low';
       
-      // Determine level class
-      const levelClass = threat.level > 2 ? 'high' : (threat.level > 1 ? 'medium' : 'low');
-      
-      row.innerHTML = `
+        html += `
+          <tr>
         <td><span class="threat-level ${levelClass}">${threat.level}</span></td>
         <td>${threat.description}</td>
         <td>
           <button class="btn-icon small" title="Mitigate Threat"><i class="fas fa-shield-alt"></i></button>
           <button class="btn-icon small" title="Dismiss Threat"><i class="fas fa-times"></i></button>
         </td>
+          </tr>
       `;
-      tableBody.appendChild(row);
+      });
+      
+      html += `
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    } else {
+      // No threats detected
+      html += `
+        <div class="data-card">
+          <div class="card-header">
+            <h3>Detected Threats</h3>
+          </div>
+          <div class="no-threats-message">
+            <i class="fas fa-check-circle"></i>
+            <p>No active threats detected</p>
+            <p class="secondary">Your system is currently secure</p>
+          </div>
+        </div>
+      `;
+    }
+    
+    // Add threat scan section
+    html += `
+      <div class="action-panel">
+        <h3>Threat Management</h3>
+        <div class="action-buttons">
+          <button id="run-threat-scan" class="btn btn-action">
+            <i class="fas fa-search"></i>
+            Run Threat Scan
+          </button>
+          <button id="update-threat-db" class="btn btn-action">
+            <i class="fas fa-database"></i>
+            Update Threat Database
+          </button>
+        </div>
+      </div>
+    `;
+    
+    container.innerHTML = html;
+    
+    // Add event listeners for actions
+    document.getElementById('threats-mitigate-all')?.addEventListener('click', () => {
+      this.showNotImplemented('Mitigate all threats');
+    });
+    
+    document.getElementById('threats-export')?.addEventListener('click', () => {
+      this.showNotImplemented('Export threats report');
+    });
+    
+    document.getElementById('run-threat-scan')?.addEventListener('click', () => {
+      this.runThreatScan();
+    });
+    
+    document.getElementById('update-threat-db')?.addEventListener('click', () => {
+      this.updateThreatDatabase();
     });
   },
   
   /**
-   * Mitigate a specific threat
-   * @param {string} description - Threat description
-   */
-  async mitigateThreat(description) {
-    if (!description) return;
-    
-    try {
-      if (window.HARDNDashboard) {
-        window.HARDNDashboard.showToast(`Mitigating threat: ${description}...`);
-      }
-      
-      // In a real implementation, this would call the backend to mitigate the threat
-      // For now, we'll just simulate it with a delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Refresh data after mitigation
-      const threatData = await this.fetchThreatData(true);
-      
-      // For demo purposes, remove the threat from the list
-      if (threatData && threatData.items) {
-        const index = threatData.items.findIndex(item => item.description === description);
-        if (index !== -1) {
-          threatData.items.splice(index, 1);
-          
-          // Recalculate threat level based on remaining threats
-          threatData.level = threatData.items.length > 0 ? 
-            Math.max(...threatData.items.map(item => item.level)) : 0;
-            
-          // Update cache
-          this._cache.threatData = threatData;
-          
-          // Update UI
-          this.renderThreatData(threatData);
-        }
-      }
-      
-      if (window.HARDNDashboard) {
-        window.HARDNDashboard.showToast(`Threat mitigated successfully`, 'success');
-      }
-      
-    } catch (error) {
-      console.error(`Error mitigating threat: ${description}`, error);
-      if (window.HARDNDashboard) {
-        window.HARDNDashboard.showToast(`Failed to mitigate threat`, 'error');
-      }
-    }
-  },
-  
-  /**
-   * Dismiss a specific threat (mark as false positive)
-   * @param {string} description - Threat description
-   */
-  async dismissThreat(description) {
-    if (!description) return;
-    
-    try {
-      if (window.HARDNDashboard) {
-        window.HARDNDashboard.showToast(`Dismissing threat: ${description}...`);
-      }
-      
-      // In a real implementation, this would call the backend
-      // For now, we'll just simulate it with a delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Refresh data after dismissal
-      const threatData = await this.fetchThreatData(true);
-      
-      // For demo purposes, remove the threat from the list
-      if (threatData && threatData.items) {
-        const index = threatData.items.findIndex(item => item.description === description);
-        if (index !== -1) {
-          threatData.items.splice(index, 1);
-          
-          // Recalculate threat level based on remaining threats
-          threatData.level = threatData.items.length > 0 ? 
-            Math.max(...threatData.items.map(item => item.level)) : 0;
-            
-          // Update cache
-          this._cache.threatData = threatData;
-          
-          // Update UI
-          this.renderThreatData(threatData);
-        }
-      }
-      
-      if (window.HARDNDashboard) {
-        window.HARDNDashboard.showToast(`Threat dismissed`, 'success');
-      }
-      
-    } catch (error) {
-      console.error(`Error dismissing threat: ${description}`, error);
-      if (window.HARDNDashboard) {
-        window.HARDNDashboard.showToast(`Failed to dismiss threat`, 'error');
-      }
-    }
-  },
-  
-  /**
-   * Mitigate all detected threats
-   */
-  async mitigateAllThreats() {
-    try {
-      const threatData = await this.fetchThreatData(true);
-      
-      if (!threatData || !threatData.items || threatData.items.length === 0) {
-        if (window.HARDNDashboard) {
-          window.HARDNDashboard.showToast('No threats to mitigate', 'info');
-        }
-        return;
-      }
-      
-      const count = threatData.items.length;
-      
-      if (window.HARDNDashboard) {
-        window.HARDNDashboard.showToast(`Mitigating ${count} threats...`);
-      }
-      
-      // In a real implementation, this would call the backend
-      // For now, we'll just simulate it with a delay
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      // For demo purposes, clear all threats
-      threatData.items = [];
-      threatData.level = 0;
-      
-      // Update cache
-      this._cache.threatData = threatData;
-      
-      // Update UI
-      this.renderThreatData(threatData);
-      
-      if (window.HARDNDashboard) {
-        window.HARDNDashboard.showToast(`Successfully mitigated ${count} threats`, 'success');
-      }
-      
-    } catch (error) {
-      console.error('Error mitigating all threats:', error);
-      if (window.HARDNDashboard) {
-        window.HARDNDashboard.showToast('Failed to mitigate threats', 'error');
-      }
-    }
-  },
-  
-  /**
-   * Run a security scan to detect threats
+   * Run a threat scan
    */
   async runThreatScan() {
     try {
-      if (window.HARDNDashboard) {
-        window.HARDNDashboard.showToast('Running threat scan...');
-      }
+      this.showToast('Starting threat scan...');
       
-      // In a real implementation, this would call the backend
-      // For now, we'll just simulate it with a delay
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // Use the API client to run a security scan
+      const result = await window.APIClient.runSecurityScan({
+        scan_type: 'threat',
+        depth: 2
+      });
       
-      // Refresh threats data
-      await this.refreshThreatData();
-      
-      if (window.HARDNDashboard) {
-        window.HARDNDashboard.showToast('Threat scan completed', 'success');
+      if (result.success) {
+        this.showToast('Threat scan completed successfully');
+        // Refresh data to show new results
+        this.updateThreatData(true);
+      } else {
+        this.showToast('Threat scan failed: ' + (result.message || 'Unknown error'), 'error');
       }
     } catch (error) {
       console.error('Error running threat scan:', error);
-      if (window.HARDNDashboard) {
-        window.HARDNDashboard.showToast('Failed to complete threat scan', 'error');
-      }
+      this.showToast('Error running threat scan', 'error');
     }
+  },
+  
+  /**
+   * Update the threat database
+   */
+  async updateThreatDatabase() {
+    try {
+      this.showToast('Updating threat database...');
+      
+      // Use the API client to update the threat database
+      const result = await window.APIClient.updateThreatDatabase();
+      
+      if (result.success) {
+        this.showToast('Threat database updated successfully');
+        // Refresh data
+        this.updateThreatData(true);
+      } else {
+        this.showToast(result.message || 'Threat database update failed', 'warning');
+      }
+    } catch (error) {
+      console.error('Error updating threat database:', error);
+      this.showToast('Error updating threat database', 'error');
+    }
+  },
+  
+  /**
+   * Show a toast notification
+   * @param {string} message - Message to display
+   * @param {string} type - Notification type (info, success, warning, error)
+   */
+  showToast(message, type = 'info') {
+    // Use global toast if available
+    if (typeof window.showToast === 'function') {
+      window.showToast(message, type);
+    } else {
+      // Simple console fallback
+      console.log(`[${type.toUpperCase()}] ${message}`);
+      
+      // Create a simple toast if no global function
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      toast.textContent = message;
+      
+      document.body.appendChild(toast);
+      
+      // Remove after 3 seconds
+      setTimeout(() => {
+        toast.classList.add('fade-out');
+        setTimeout(() => {
+          if (document.body.contains(toast)) {
+            document.body.removeChild(toast);
+          }
+        }, 300);
+      }, 3000);
+    }
+  },
+  
+  /**
+   * Show an error message
+   * @param {string} message - Error message
+   */
+  showError(message) {
+    const container = document.getElementById('threats-content');
+    if (!container) return;
+    
+    container.innerHTML = `
+      <div class="error-message">
+        <i class="fas fa-exclamation-circle"></i>
+        <h3>Threat Analysis Error</h3>
+        <p>${message}</p>
+        <button id="retry-threats" class="btn btn-action">
+          <i class="fas fa-sync-alt"></i> Retry
+        </button>
+      </div>
+    `;
+    
+    document.getElementById('retry-threats')?.addEventListener('click', () => {
+      this.updateThreatData(true);
+    });
+  },
+  
+  /**
+   * Show a "not implemented" toast for incomplete features
+   * @param {string} feature - Feature name
+   */
+  showNotImplemented(feature) {
+    this.showToast(`${feature} is not implemented in this version`, 'info');
   }
 };
 
-// Expose to window
+// Export to window for access by main.js
 window.HARDNThreats = HARDNThreats; 

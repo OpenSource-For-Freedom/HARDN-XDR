@@ -9,15 +9,51 @@
  */
 
 // Configuration
-const API_ENDPOINT = 'http://localhost:8081/api';
-const SETUP_STATUS_ACTIONS = {
+const API_URL = 'http://localhost:8080/api';
+const SETUP_ENDPOINTS = {
+  GET_SYSTEM_STATUS: 'get_system_status',
   CHECK_SELINUX: 'check_selinux',
   CHECK_FIREWALL: 'check_firewall',
   CHECK_APPARMOR: 'check_apparmor',
   CHECK_PERMISSIONS: 'check_permissions',
   RUN_SETUP: 'run_setup',
   RUN_PACKAGES: 'run_packages',
-  GET_SYSTEM_STATUS: 'get_system_status'
+  RUN_SECURITY_TOOL: 'run_security_tool',
+  SECURITY_TOOL_STATUS: 'security_tool_status'
+};
+
+// Security Tools definitions
+const SECURITY_TOOLS = {
+  apparmor: {
+    name: "AppArmor",
+    description: "Mandatory Access Control (MAC) system that restricts programs' capabilities",
+    status: null,
+    canEnable: true
+  },
+  aide: {
+    name: "AIDE",
+    description: "Advanced Intrusion Detection Environment - monitors file changes",
+    status: null,
+    canEnable: true
+  },
+  fail2ban: {
+    name: "Fail2Ban",
+    description: "Intrusion prevention framework that protects against brute-force attacks",
+    status: null,
+    canEnable: true
+  },
+  firejail: {
+    name: "Firejail",
+    description: "Security sandbox program that reduces the risk of security breaches",
+    status: null,
+    canEnable: true
+  },
+  rkhunter: {
+    name: "RKHunter",
+    description: "Rootkit Hunter - scans for rootkits, backdoors and local exploits",
+    status: null,
+    canEnable: true
+  }
 };
 
 // Cache for system status
@@ -26,9 +62,70 @@ let lastStatusCheck = 0;
 const STATUS_CACHE_TTL = 60000; // 1 minute
 
 /**
+ * Initialize security tools status
+ * This will query the backend for the status of each tool
+ */
+async function initializeSecurityToolsStatus() {
+  for (const [toolId, toolInfo] of Object.entries(SECURITY_TOOLS)) {
+    try {
+      const status = await getSecurityToolStatus(toolId);
+      SECURITY_TOOLS[toolId].status = status.enabled ? 'enabled' : 'disabled';
+      SECURITY_TOOLS[toolId].details = status.details || {};
+    } catch (err) {
+      console.error(`Failed to get status for ${toolId}:`, err);
+      SECURITY_TOOLS[toolId].status = 'unknown';
+    }
+  }
+  return SECURITY_TOOLS;
+}
+
+/**
+ * Get status of a security tool
+ * @param {string} toolId - Tool identifier (e.g., 'apparmor', 'aide')
+ */
+async function getSecurityToolStatus(toolId) {
+  try {
+    // Use centralized APIClient if available
+    if (typeof window.APIClient === 'object' && typeof window.APIClient.getSecurityToolStatus === 'function') {
+      return await window.APIClient.getSecurityToolStatus(toolId);
+    } else {
+      // Fallback to direct request
+      return await setupApiRequest(`${SETUP_ENDPOINTS.SECURITY_TOOL_STATUS}/${toolId}`);
+    }
+  } catch (error) {
+    console.error(`Error getting status for ${toolId}:`, error);
+    return { enabled: false, error: error.message };
+  }
+}
+
+/**
+ * Run a security tool action
+ * @param {string} toolId - Tool identifier
+ * @param {string} action - Action to perform ('enable', 'disable', 'status', 'configure')
+ * @param {Object} params - Additional parameters for the action
+ */
+async function runSecurityToolAction(toolId, action, params = {}) {
+  try {
+    // Use centralized APIClient if available
+    if (typeof window.APIClient === 'object' && typeof window.APIClient.runSecurityTool === 'function') {
+      return await window.APIClient.runSecurityTool(toolId, { action, ...params });
+    } else {
+      // Fallback to direct request
+      return await setupApiRequest(SETUP_ENDPOINTS.RUN_SECURITY_TOOL, { 
+        tool: toolId, 
+        action, 
+        params 
+      }, 'POST');
+    }
+  } catch (error) {
+    console.error(`Error running ${action} for ${toolId}:`, error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * Fetch system status from the backend
- * This will be routed through the proxy to the Unix socket
- * and eventually to the appropriate script (setup.sh, packages.sh, or main.rs)
+ * This will call the API endpoint for system status
  */
 async function fetchSystemStatus(forceRefresh = false) {
   // Use cache if available and not expired
@@ -38,22 +135,27 @@ async function fetchSystemStatus(forceRefresh = false) {
   }
 
   try {
-    const response = await fetch(API_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        action: SETUP_STATUS_ACTIONS.GET_SYSTEM_STATUS 
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`Server responded with ${response.status}`);
+    // Ensure we have a valid token before making the request
+    if (typeof window.ensureValidToken === 'function') {
+      const tokenValid = await window.ensureValidToken();
+      if (!tokenValid) {
+        throw new Error('Authentication required');
+      }
     }
-
-    const data = await response.json();
-    systemStatusCache = data;
-    lastStatusCheck = now;
-    return data;
+    
+    // Use centralized APIClient if available
+    if (typeof window.APIClient === 'object' && typeof window.APIClient.getSystemStatus === 'function') {
+      const data = await window.APIClient.getSystemStatus();
+      systemStatusCache = data;
+      lastStatusCheck = now;
+      return data;
+    } else {
+      // Fallback to direct API call
+      const data = await setupApiRequest(SETUP_ENDPOINTS.GET_SYSTEM_STATUS);
+      systemStatusCache = data;
+      lastStatusCheck = now;
+      return data;
+    }
   } catch (error) {
     console.error('Error fetching system status:', error);
     return { 
@@ -70,31 +172,54 @@ async function fetchSystemStatus(forceRefresh = false) {
 }
 
 /**
+ * Helper function for making API requests to setup endpoints
+ * @param {string} endpoint - Endpoint path
+ * @param {Object} data - Request data for POST requests
+ * @param {string} method - HTTP method
+ */
+async function setupApiRequest(endpoint, data = null, method = 'GET') {
+  const options = {
+    method: method,
+    headers: { 
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${window.authTokens?.accessToken || ''}`
+    }
+  };
+  
+  if (data && method !== 'GET') {
+    options.body = JSON.stringify(data);
+  }
+  
+  const response = await fetch(`${API_URL}/${endpoint}`, options);
+  
+  if (!response.ok) {
+    throw new Error(`Server responded with ${response.status}`);
+  }
+  
+  return await response.json();
+}
+
+/**
  * Run a specific setup action
- * @param {string} action - The action to run (from SETUP_STATUS_ACTIONS)
+ * @param {string} endpoint - The API endpoint to call (from SETUP_ENDPOINTS)
  * @param {Object} params - Additional parameters for the action
  */
-async function runSetupAction(action, params = {}) {
+async function runSetupAction(endpoint, params = {}) {
   try {
-    const response = await fetch(API_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        action,
-        ...params
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`Server responded with ${response.status}`);
+    // Ensure we have a valid token before making the request
+    if (typeof window.ensureValidToken === 'function') {
+      const tokenValid = await window.ensureValidToken();
+      if (!tokenValid) {
+        throw new Error('Authentication required');
+      }
     }
-
-    const data = await response.json();
+    
+    const data = await setupApiRequest(endpoint, params, 'POST');
     // Invalidate cache after any action
     systemStatusCache = null;
     return data;
   } catch (error) {
-    console.error(`Error running setup action ${action}:`, error);
+    console.error(`Error running setup action ${endpoint}:`, error);
     return { 
       error: true, 
       message: error.message 
@@ -104,18 +229,18 @@ async function runSetupAction(action, params = {}) {
 
 /**
  * Run the full setup process
- * This will call setup.sh with the appropriate parameters
+ * This will call the setup endpoint
  */
 async function runFullSetup() {
-  return runSetupAction(SETUP_STATUS_ACTIONS.RUN_SETUP);
+  return runSetupAction(SETUP_ENDPOINTS.RUN_SETUP);
 }
 
 /**
  * Run just the packages validation
- * This will call packages.sh to verify the system configuration
+ * This will call the packages endpoint
  */
 async function runPackagesValidation() {
-  return runSetupAction(SETUP_STATUS_ACTIONS.RUN_PACKAGES);
+  return runSetupAction(SETUP_ENDPOINTS.RUN_PACKAGES);
 }
 
 /**
@@ -124,10 +249,10 @@ async function runPackagesValidation() {
  */
 async function checkComponentStatus(component) {
   const componentMap = {
-    'selinux': SETUP_STATUS_ACTIONS.CHECK_SELINUX,
-    'firewall': SETUP_STATUS_ACTIONS.CHECK_FIREWALL,
-    'apparmor': SETUP_STATUS_ACTIONS.CHECK_APPARMOR,
-    'permissions': SETUP_STATUS_ACTIONS.CHECK_PERMISSIONS
+    'selinux': SETUP_ENDPOINTS.CHECK_SELINUX,
+    'firewall': SETUP_ENDPOINTS.CHECK_FIREWALL,
+    'apparmor': SETUP_ENDPOINTS.CHECK_APPARMOR,
+    'permissions': SETUP_ENDPOINTS.CHECK_PERMISSIONS
   };
 
   if (!componentMap[component]) {
@@ -226,65 +351,61 @@ function renderSetupStatus(container, status) {
   });
 }
 
-// Export functions for use in main.js
-window.HardnSetup = {
-  fetchSystemStatus,
-  runSetupAction,
-  runFullSetup,
-  runPackagesValidation,
-  checkComponentStatus,
-  renderSetupStatus,
-  SETUP_STATUS_ACTIONS
-};
-
 /**
  * HARDN System Integration
- * This module establishes and maintains the connection to the backend proxy API
+ * This module establishes and maintains the connection to the backend API
  */
 
 // API configuration
-const HARDN_API_ENDPOINT = 'http://localhost:8081/api';
+const HARDN_API_URL = 'http://localhost:8080/api';
 const API_RETRY_ATTEMPTS = 3;
 const API_RETRY_DELAY = 1000; // 1 second
 
 // Global API client for all components to use
-const APIClient = {
+const SystemAPIClient = {
   /**
    * Make an API request with retry logic
-   * @param {string} action - The API action to request
+   * @param {string} endpoint - The API endpoint to request
    * @param {Object} params - Additional parameters (optional)
+   * @param {string} method - HTTP method (GET or POST)
    * @param {boolean} suppressErrors - Whether to suppress error messages
    * @returns {Promise<Object>} - The API response
    */
-  async request(action, params = {}, suppressErrors = false) {
-    const requestData = {
-      action,
-      ...params
-    };
+  async request(endpoint, params = {}, method = 'POST', suppressErrors = false) {
+    // Ensure we have a valid token before making the request
+    if (typeof window.ensureValidToken === 'function') {
+      const tokenValid = await window.ensureValidToken();
+      if (!tokenValid && !suppressErrors) {
+        throw new Error('Authentication required');
+      }
+    }
 
     let attempts = 0;
     
     while (attempts < API_RETRY_ATTEMPTS) {
       try {
         attempts++;
-        const response = await fetch(HARDN_API_ENDPOINT, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestData)
-        });
+        
+        const options = {
+          method: method,
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${window.authTokens?.accessToken || ''}`
+          }
+        };
+        
+        // Add request body for POST/PUT
+        if (params && (method === 'POST' || method === 'PUT')) {
+          options.body = JSON.stringify(params);
+        }
+        
+        const response = await fetch(`${HARDN_API_URL}/${endpoint}`, options);
         
         if (!response.ok) {
           throw new Error(`API error: ${response.status}`);
         }
         
-        const data = await response.json();
-        
-        // Check for API-level errors
-        if (data.error) {
-          throw new Error(data.error);
-        }
-        
-        return data;
+        return await response.json();
       } catch (error) {
         if (attempts >= API_RETRY_ATTEMPTS) {
           if (!suppressErrors) {
@@ -304,57 +425,57 @@ const APIClient = {
   },
   
   /**
-   * Get system status from the backend
-   * @returns {Promise<Object>} The system status data
+   * Get system status information
+   * @returns {Promise<Object>} System status data
    */
   async getSystemStatus() {
-    return this.request('get_system_status');
+    return this.request('get_system_status', null, 'GET');
   },
   
   /**
-   * Get security status summary
-   * @returns {Promise<Object>} The security status summary
+   * Get security status information
+   * @returns {Promise<Object>} Security status data
    */
   async getSecurityStatus() {
-    return this.request('status');
+    return this.request('get_security_status', null, 'GET');
   },
   
   /**
-   * Get network status data
-   * @returns {Promise<Object>} The network status data
+   * Get network status information
+   * @returns {Promise<Object>} Network status data
    */
   async getNetworkStatus() {
-    return this.request('network_status');
+    return this.request('get_network_status', null, 'GET');
   },
   
   /**
-   * Get threat data
-   * @returns {Promise<Object>} The threat data
+   * Get threat data information
+   * @returns {Promise<Object>} Threat data
    */
   async getThreatData() {
-    return this.request('threats');
+    return this.request('get_threats', null, 'GET');
   },
   
   /**
    * Get system logs
    * @param {number} limit - Maximum number of logs to retrieve
-   * @returns {Promise<Object>} The system logs
+   * @returns {Promise<Object>} System logs
    */
   async getSystemLogs(limit = 10) {
-    return this.request('get_logs', { limit });
+    return this.request(`get_logs?limit=${limit}`, null, 'GET');
   },
   
   /**
    * Run a security scan
-   * @returns {Promise<Object>} The scan results
+   * @returns {Promise<Object>} Scan results
    */
   async runSecurityScan() {
-    return this.request('run_security_scan');
+    return this.request('run_security_scan', { scan_type: 'full' });
   },
   
   /**
    * Update the threat database
-   * @returns {Promise<Object>} The update results
+   * @returns {Promise<Object>} Update results
    */
   async updateThreatDB() {
     return this.request('update_threat_db');
@@ -362,7 +483,7 @@ const APIClient = {
 
   /**
    * Run network analysis
-   * @returns {Promise<Object>} The analysis results
+   * @returns {Promise<Object>} Analysis results
    */
   async runNetworkAnalysis() {
     return this.request('run_network_analysis');
@@ -374,8 +495,8 @@ const APIClient = {
    */
   async checkBackendAvailable() {
     try {
-      const response = await this.request('ping', {}, true);
-      return response && !response.error;
+      const result = await this.request('check_backend', null, 'GET', true);
+      return result && !result.error;
     } catch (error) {
       return false;
     }
@@ -385,7 +506,7 @@ const APIClient = {
 // Detect if running in VM environment and update UI
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    const status = await APIClient.getSystemStatus();
+    const status = await SystemAPIClient.getSystemStatus();
     if (status && status.environment === 'virtual_machine') {
       const vmIndicator = document.getElementById('vm-environment');
       if (vmIndicator) {
@@ -407,27 +528,22 @@ function formatTimestamp(timestamp) {
 
 // Global helper to show toast notifications
 function showToast(message, type = 'info') {
-  const toast = document.createElement('div');
-  toast.className = `toast toast-${type}`;
-  toast.innerHTML = `
-    <div class="toast-content">
-      <i class="fas ${type === 'info' ? 'fa-info-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-check-circle'}"></i>
-      <span>${message}</span>
-    </div>
-  `;
-  
-  document.body.appendChild(toast);
-  
-  // Animate in
-  setTimeout(() => {
-    toast.classList.add('show');
-  }, 10);
-  
-  // Animate out after 3 seconds
-  setTimeout(() => {
-    toast.classList.remove('show');
-    setTimeout(() => {
-      document.body.removeChild(toast);
-    }, 300);
-  }, 3000);
-} 
+  // Use global toast if available
+  if (typeof window.showToast === 'function') {
+    window.showToast(message, type);
+  } else {
+    console.log(`[${type.toUpperCase()}] ${message}`);
+  }
+}
+
+// Export functionality for use in main.js
+window.HardnSetup = {
+  fetchSystemStatus,
+  runSetupAction,
+  runFullSetup,
+  runPackagesValidation,
+  checkComponentStatus,
+  renderSetupStatus,
+  SETUP_ENDPOINTS,
+  APIClient: SystemAPIClient
+}; 

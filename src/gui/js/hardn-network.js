@@ -1,48 +1,63 @@
 /**
  * HARDN Network Module
- * Handles network data display and analysis
+ * Handles network monitoring and connection visualization
  */
 
-// Network-related functionality
 const HARDNNetwork = {
-  // Cache
+  // Cache TTL in milliseconds (30 seconds)
+  CACHE_TTL: 30000,
+  
+  // Cache for network data
   _cache: {
     networkData: null,
     lastUpdate: 0
   },
   
-  // Cache TTL in milliseconds (30 seconds)
-  CACHE_TTL: 30000,
-  
   /**
    * Initialize the network module
    */
   init() {
-    console.log('Initializing HARDN Network Module...');
+    console.log('Initializing HARDN Network module...');
     
-    // Set up event delegation for network actions
-    document.body.addEventListener('click', (e) => {
-      // Handle network refresh button
-      if (e.target.closest('#refresh-network')) {
-        this.refreshNetworkData();
-      }
+    // Create network view
+    this.createNetworkView();
+    
+    // Fetch and render network data
+    this.updateNetworkData();
+    
+    // Set up auto-refresh for real-time data
+    setInterval(() => this.updateNetworkData(), 30000);
+  },
+  
+  /**
+   * Create the network view
+   */
+  createNetworkView() {
+    const mainContent = document.getElementById('main-content');
+    if (!mainContent) return;
+    
+    mainContent.innerHTML = `
+      <div class="network-header">
+        <h1>Network Connections</h1>
+        <div class="controls">
+          <span id="network-last-updated">Last updated: --:--</span>
+          <button id="refresh-network" class="btn btn-refresh">
+            <i class="fas fa-sync-alt"></i>
+          </button>
+        </div>
+      </div>
       
-      // Handle network action buttons (block, info)
-      if (e.target.closest('.btn-icon')) {
-        const button = e.target.closest('.btn-icon');
-        const row = button.closest('tr');
-        
-        if (row) {
-          const ip = row.querySelector('td:first-child')?.textContent;
-          const port = row.querySelector('td:nth-child(2)')?.textContent;
-          
-          if (button.querySelector('.fa-ban')) {
-            this.blockConnection(ip, port);
-          } else if (button.querySelector('.fa-info-circle')) {
-            this.showConnectionInfo(ip, port);
-          }
-        }
-      }
+      <div id="network-content" class="network-content">
+        <div class="loading-indicator">
+          <div class="spinner"></div>
+          <p>Loading network data...</p>
+        </div>
+      </div>
+    `;
+    
+    // Add refresh button handler
+    document.getElementById('refresh-network')?.addEventListener('click', () => {
+      this.updateNetworkData(true);
     });
   },
   
@@ -61,17 +76,8 @@ const HARDNNetwork = {
     }
     
     try {
-      const response = await fetch('http://localhost:8081/api', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'network' })
-      });
-      
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
-      }
-      
-      const data = await response.json();
+      // Use centralized APIClient
+      const data = await window.APIClient.getNetworkStatus();
       
       // Update cache
       this._cache.networkData = data;
@@ -85,245 +91,164 @@ const HARDNNetwork = {
   },
   
   /**
-   * Refresh the network data and update the UI
+   * Update network data and UI
+   * @param {boolean} forceRefresh - Whether to bypass cache
    */
-  async refreshNetworkData() {
+  async updateNetworkData(forceRefresh = false) {
     try {
-      if (window.HARDNDashboard) {
-        window.HARDNDashboard.showToast('Refreshing network data...');
-      }
-      
-      const networkData = await this.fetchNetworkData(true);
-      if (!networkData) {
-        if (window.HARDNDashboard) {
-          window.HARDNDashboard.showToast('Failed to fetch network data', 'error');
-        }
-        return;
-      }
-      
-      // Update the UI with new data
-      this.renderNetworkData(networkData);
-      
-      if (window.HARDNDashboard) {
-        window.HARDNDashboard.showToast('Network data refreshed successfully', 'success');
+      const data = await this.fetchNetworkData(forceRefresh);
+      if (data) {
+        this.renderNetworkData(data);
+      } else {
+        this.showError('Unable to fetch network data');
       }
     } catch (error) {
-      console.error('Error refreshing network data:', error);
-      if (window.HARDNDashboard) {
-        window.HARDNDashboard.showToast('Error refreshing network data', 'error');
+      console.error('Network update error:', error);
+      this.showError('Error updating network data: ' + error.message);
       }
+    
+    // Update timestamp
+    const timestampElement = document.getElementById('network-last-updated');
+    if (timestampElement) {
+      const now = new Date();
+      timestampElement.textContent = `Last updated: ${now.toLocaleTimeString()}`;
     }
   },
   
   /**
-   * Render network data in the UI
-   * @param {Array} data - Network connection data
+   * Render network data to the UI
+   * @param {Object} data - Network data from API
    */
   renderNetworkData(data) {
-    const tableBody = document.querySelector('.data-table tbody');
-    if (!tableBody) return;
+    const container = document.getElementById('network-content');
+    if (!container) return;
     
-    // Clear existing rows
-    tableBody.innerHTML = '';
+    // Check if we have connections data
+    const connections = data.connections || [];
     
-    if (!data || data.length === 0) {
-      tableBody.innerHTML = `
-        <tr>
-          <td colspan="4" class="text-center">No active connections found</td>
-        </tr>
-      `;
-      return;
-    }
-    
-    // Add network connection rows
-    data.forEach(conn => {
-      const row = document.createElement('tr');
-      row.innerHTML = `
-        <td>${conn.ip}</td>
-        <td>${conn.port}</td>
-        <td><span class="badge badge-success">Open</span></td>
-        <td>
-          <button class="btn-icon small" title="Connection Info"><i class="fas fa-info-circle"></i></button>
-          <button class="btn-icon small" title="Block Connection"><i class="fas fa-ban"></i></button>
-        </td>
-      `;
-      tableBody.appendChild(row);
-    });
-    
-    // Update stat values
-    const statValue = document.querySelector('.stat-value');
-    if (statValue) {
-      statValue.textContent = data.length;
-    }
-    
-    // Update last updated time
-    const timeElement = document.querySelector('.update-info span');
-    if (timeElement) {
-      const now = new Date();
-      const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      timeElement.textContent = `Last updated: ${time}`;
-    }
-  },
-  
-  /**
-   * Block a network connection
-   * @param {string} ip - IP address
-   * @param {string} port - Port number
-   */
-  async blockConnection(ip, port) {
-    if (!ip || !port) return;
-    
-    try {
-      if (window.HARDNDashboard) {
-        window.HARDNDashboard.showToast(`Blocking connection ${ip}:${port}...`);
-      }
-      
-      // In a real implementation, this would call the backend to block the connection
-      // For now, we'll just simulate it with a delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // For demo purposes, just refresh the data
-      await this.fetchNetworkData(true);
-      
-      if (window.HARDNDashboard) {
-        window.HARDNDashboard.showToast(`Connection ${ip}:${port} has been blocked`, 'success');
-      }
-      
-      // Increment blocked count (this is just for the UI demo)
-      const blockedCountEl = document.querySelector('.stat-grid .stat-item:nth-child(2) .stat-value');
-      if (blockedCountEl) {
-        const currentCount = parseInt(blockedCountEl.textContent, 10) || 0;
-        blockedCountEl.textContent = (currentCount + 1).toString();
-      }
-      
-    } catch (error) {
-      console.error(`Error blocking connection ${ip}:${port}:`, error);
-      if (window.HARDNDashboard) {
-        window.HARDNDashboard.showToast(`Failed to block connection ${ip}:${port}`, 'error');
-      }
-    }
-  },
-  
-  /**
-   * Show detailed information about a connection
-   * @param {string} ip - IP address
-   * @param {string} port - Port number
-   */
-  async showConnectionInfo(ip, port) {
-    if (!ip || !port) return;
-    
-    try {
-      if (window.HARDNDashboard) {
-        window.HARDNDashboard.showToast(`Loading information for ${ip}:${port}...`);
-      }
-      
-      // In a real implementation, this would fetch detailed info from the backend
-      // For now, we'll simulate with a delay and show a fake modal
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Create modal
-      let modal = document.getElementById('network-modal');
-      if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'network-modal';
-        modal.className = 'modal';
-        document.body.appendChild(modal);
-      }
-      
-      // Generate some fake connection details
-      const protocol = port == 80 ? 'HTTP' : 
-                      port == 443 ? 'HTTPS' : 
-                      port == 22 ? 'SSH' : 
-                      port == 3306 ? 'MySQL' : 'TCP';
-      
-      const status = 'Active';
-      const established = new Date();
-      established.setMinutes(established.getMinutes() - Math.floor(Math.random() * 60));
-      const duration = Math.floor((new Date() - established) / 60000);
-      
-      const sent = Math.floor(Math.random() * 1000000);
-      const received = Math.floor(Math.random() * 5000000);
-      
-      // Create modal content
-      modal.innerHTML = `
-        <div class="modal-content">
-          <div class="modal-header">
-            <h3>Connection Details: ${ip}:${port}</h3>
-            <button class="modal-close">&times;</button>
+    // Build HTML structure
+    let html = `
+      <div class="network-overview">
+        <div class="status-card ${data.status || 'warning'}">
+          <h3>Network Status</h3>
+          <div class="status-value">${data.status === 'ok' ? 'Secure' : 'Warning'}</div>
+          <div class="status-message">${data.message || 'No status message available'}</div>
+        </div>
+        
+        <div class="connection-stats">
+          <div class="stat-item">
+            <span class="stat-value">${connections.length}</span>
+            <span class="stat-label">Active Connections</span>
           </div>
-          <div class="modal-body">
-            <div class="info-grid">
-              <div class="info-row">
-                <div class="info-label">IP Address</div>
-                <div class="info-value">${ip}</div>
-              </div>
-              <div class="info-row">
-                <div class="info-label">Port</div>
-                <div class="info-value">${port}</div>
-              </div>
-              <div class="info-row">
-                <div class="info-label">Protocol</div>
-                <div class="info-value">${protocol}</div>
-              </div>
-              <div class="info-row">
-                <div class="info-label">Status</div>
-                <div class="info-value">${status}</div>
-              </div>
-              <div class="info-row">
-                <div class="info-label">Established</div>
-                <div class="info-value">${established.toLocaleTimeString()} (${duration} min ago)</div>
-              </div>
-              <div class="info-row">
-                <div class="info-label">Data Sent</div>
-                <div class="info-value">${(sent / 1024).toFixed(2)} KB</div>
-              </div>
-              <div class="info-row">
-                <div class="info-label">Data Received</div>
-                <div class="info-value">${(received / 1024).toFixed(2)} KB</div>
-              </div>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button class="action-btn" id="block-connection-btn">
-              <i class="fas fa-ban"></i> Block Connection
-            </button>
-            <button class="action-btn" id="close-modal-btn">Close</button>
+          <div class="stat-item">
+            <span class="stat-value">0</span>
+            <span class="stat-label">Blocked Threats</span>
           </div>
         </div>
+      </div>
+      
+      <div class="data-card">
+        <div class="card-header">
+          <h3>Active Connections</h3>
+          <div class="card-actions">
+            <button class="btn-text" id="network-filter"><i class="fas fa-filter"></i> Filter</button>
+            <button class="btn-text" id="network-export"><i class="fas fa-download"></i> Export</button>
+          </div>
+        </div>
+        
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>IP Address</th>
+                <th>Port</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    if (connections.length > 0) {
+      connections.forEach(conn => {
+        html += `
+          <tr>
+            <td>${conn.ip}</td>
+            <td>${conn.port}</td>
+            <td>${conn.type || 'unknown'}</td>
+            <td><span class="badge ${conn.status === 'established' ? 'success' : 'warning'}">${conn.status || 'unknown'}</span></td>
+            <td>
+              <button class="btn-icon small" title="Connection Details"><i class="fas fa-info-circle"></i></button>
+              <button class="btn-icon small" title="Block Connection"><i class="fas fa-ban"></i></button>
+            </td>
+          </tr>
+        `;
+      });
+    } else {
+      html += `
+        <tr>
+          <td colspan="5" class="text-center">No active connections found</td>
+        </tr>
       `;
-      
-      // Show modal
-      modal.style.display = 'flex';
-      
-      // Add event listeners
-      modal.querySelector('.modal-close').addEventListener('click', () => {
-        modal.style.display = 'none';
-      });
-      
-      modal.querySelector('#close-modal-btn').addEventListener('click', () => {
-        modal.style.display = 'none';
-      });
-      
-      modal.querySelector('#block-connection-btn').addEventListener('click', () => {
-        modal.style.display = 'none';
-        this.blockConnection(ip, port);
-      });
-      
-      // Close when clicking outside
-      modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-          modal.style.display = 'none';
-        }
-      });
-      
-    } catch (error) {
-      console.error(`Error showing info for ${ip}:${port}:`, error);
-      if (window.HARDNDashboard) {
-        window.HARDNDashboard.showToast(`Failed to load connection info`, 'error');
-      }
     }
+    
+    html += `
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+    
+    container.innerHTML = html;
+    
+    // Add event listeners for the action buttons
+    document.getElementById('network-filter')?.addEventListener('click', () => {
+      this.showNotImplemented('Filtering connections');
+    });
+    
+    document.getElementById('network-export')?.addEventListener('click', () => {
+      this.showNotImplemented('Exporting connections');
+    });
+  },
+  
+  /**
+   * Show an error message
+   * @param {string} message - Error message
+   */
+  showError(message) {
+    const container = document.getElementById('network-content');
+    if (!container) return;
+    
+    container.innerHTML = `
+      <div class="error-message">
+        <i class="fas fa-exclamation-circle"></i>
+        <h3>Network Error</h3>
+        <p>${message}</p>
+        <button id="retry-network" class="btn btn-action">
+          <i class="fas fa-sync-alt"></i> Retry
+        </button>
+      </div>
+    `;
+    
+    document.getElementById('retry-network')?.addEventListener('click', () => {
+      this.updateNetworkData(true);
+    });
+  },
+  
+  /**
+   * Show a "not implemented" toast for incomplete features
+   * @param {string} feature - Feature name
+   */
+  showNotImplemented(feature) {
+    // Use global toast if available
+    if (typeof showToast === 'function') {
+      showToast(`${feature} is not implemented in this version`, 'info');
+    } else {
+      console.log(`${feature} is not implemented in this version`);
+        }
   }
 };
 
-// Expose to window
+// Export to window for access by main.js
 window.HARDNNetwork = HARDNNetwork; 

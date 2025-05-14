@@ -1,41 +1,63 @@
 /**
  * HARDN Logs Module
- * Handles system log display and filtering
+ * Handles system log display and management
  */
 
-// Logs-related functionality
 const HARDNLogs = {
-  // Cache
+  // Cache TTL in milliseconds (30 seconds)
+  CACHE_TTL: 30000,
+  
+  // Cache for log data
   _cache: {
     logData: null,
     lastUpdate: 0
   },
   
-  // Cache TTL in milliseconds (15 seconds)
-  CACHE_TTL: 15000,
-  
   /**
    * Initialize the logs module
    */
   init() {
-    console.log('Initializing HARDN Logs Module...');
+    console.log('Initializing HARDN Logs module...');
     
-    // Set up event delegation for log actions
-    document.body.addEventListener('click', (e) => {
-      // Handle logs refresh button
-      if (e.target.closest('#refresh-logs')) {
-        this.refreshLogData();
-      }
+    // Create logs view
+    this.createLogsView();
+    
+    // Fetch and render log data
+    this.updateLogData();
+    
+    // Set up auto-refresh for real-time data
+    setInterval(() => this.updateLogData(), 60000);
+  },
+  
+  /**
+   * Create the logs view
+   */
+  createLogsView() {
+    const mainContent = document.getElementById('main-content');
+    if (!mainContent) return;
+    
+    mainContent.innerHTML = `
+      <div class="logs-header">
+        <h1>System Logs</h1>
+        <div class="controls">
+          <span id="logs-last-updated">Last updated: --:--</span>
+          <button id="refresh-logs" class="btn btn-refresh">
+            <i class="fas fa-sync-alt"></i>
+          </button>
+        </div>
+      </div>
       
-      // Handle log filter button
-      if (e.target.closest('.card-actions .btn-text')) {
-        const button = e.target.closest('.btn-text');
-        if (button.querySelector('.fa-filter')) {
-          this.showLogFilter();
-        } else if (button.querySelector('.fa-download')) {
-          this.exportLogs();
-        }
-      }
+      <div id="logs-content" class="logs-content">
+        <div class="loading-indicator">
+          <div class="spinner"></div>
+          <p>Loading log data...</p>
+        </div>
+      </div>
+    `;
+    
+    // Add refresh button handler
+    document.getElementById('refresh-logs')?.addEventListener('click', () => {
+      this.updateLogData(true);
     });
   },
   
@@ -54,17 +76,8 @@ const HARDNLogs = {
     }
     
     try {
-      const response = await fetch('http://localhost:8081/api', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'logs' })
-      });
-      
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
-      }
-      
-      const data = await response.json();
+      // Use centralized APIClient
+      const data = await window.APIClient.getLogs();
       
       // Update cache
       this._cache.logData = data;
@@ -78,318 +91,228 @@ const HARDNLogs = {
   },
   
   /**
-   * Refresh the log data and update the UI
+   * Update log data and UI
+   * @param {boolean} forceRefresh - Whether to bypass cache
    */
-  async refreshLogData() {
+  async updateLogData(forceRefresh = false) {
     try {
-      if (window.HARDNDashboard) {
-        window.HARDNDashboard.showToast('Refreshing logs...');
-      }
-      
-      const logData = await this.fetchLogData(true);
-      if (!logData) {
-        if (window.HARDNDashboard) {
-          window.HARDNDashboard.showToast('Failed to fetch logs', 'error');
-        }
-        return;
-      }
-      
-      // Update the UI with new data
-      this.renderLogData(logData);
-      
-      if (window.HARDNDashboard) {
-        window.HARDNDashboard.showToast('Logs refreshed successfully', 'success');
+      const data = await this.fetchLogData(forceRefresh);
+      if (data) {
+        this.renderLogData(data);
+      } else {
+        this.showError('Unable to fetch log data');
       }
     } catch (error) {
-      console.error('Error refreshing logs:', error);
-      if (window.HARDNDashboard) {
-        window.HARDNDashboard.showToast('Error refreshing logs', 'error');
+      console.error('Log update error:', error);
+      this.showError('Error updating log data: ' + error.message);
       }
+    
+    // Update timestamp
+    const timestampElement = document.getElementById('logs-last-updated');
+    if (timestampElement) {
+      const now = new Date();
+      timestampElement.textContent = `Last updated: ${now.toLocaleTimeString()}`;
     }
   },
   
   /**
-   * Render log data in the UI
-   * @param {Array} data - Log data
+   * Render log data to the UI
+   * @param {Object} data - Log data from API
    */
   renderLogData(data) {
-    const logContainer = document.querySelector('.log-container');
-    if (!logContainer) return;
+    const container = document.getElementById('logs-content');
+    if (!container) return;
     
-    // Clear existing logs
-    logContainer.innerHTML = '';
+    // Get log entries
+    const logs = data.logs || [];
     
-    if (!data || data.length === 0) {
-      logContainer.innerHTML = '<div class="log-item log-empty">No logs available</div>';
-      return;
+    // Build HTML structure
+    let html = `
+      <div class="data-card">
+        <div class="card-header">
+          <h3>System Logs</h3>
+          <div class="card-actions">
+            <button class="btn-text" id="logs-filter"><i class="fas fa-filter"></i> Filter</button>
+            <button class="btn-text" id="logs-export"><i class="fas fa-download"></i> Export</button>
+          </div>
+        </div>
+        
+        <div class="log-container">
+    `;
+    
+    if (logs.length > 0) {
+      logs.forEach(log => {
+        // Determine log type/severity
+        const logType = log.level || 'info';
+        const logClass = logType === 'error' ? 'log-error' : 
+                       logType === 'warning' ? 'log-warning' : 'log-info';
+    
+        // Format timestamp
+        const timestamp = log.timestamp ? new Date(log.timestamp).toLocaleString() : '';
+        
+        html += `
+          <div class="log-entry ${logClass}">
+            <div class="log-timestamp">${timestamp}</div>
+            <div class="log-level">${logType.toUpperCase()}</div>
+            <div class="log-message">${log.message}</div>
+          </div>
+        `;
+      });
+    } else {
+      html += `
+        <div class="no-logs-message">
+          <i class="fas fa-info-circle"></i>
+          <p>No log entries available</p>
+        </div>
+      `;
     }
     
-    // Add log items
-    data.forEach(log => {
-      const logItem = document.createElement('div');
+    html += `
+        </div>
+        </div>
       
-      // Determine log class based on content
-      let logClass = '';
-      if (log.toLowerCase().includes('error') || log.toLowerCase().includes('fail')) {
-        logClass = 'log-error';
-      } else if (log.toLowerCase().includes('warn') || log.toLowerCase().includes('attention')) {
-        logClass = 'log-warning';
-      }
-      
-      logItem.className = `log-item ${logClass}`;
-      logItem.textContent = log;
-      logContainer.appendChild(logItem);
-    });
-    
-    // Update last updated time
-    const timeElement = document.querySelector('.update-info span');
-    if (timeElement) {
-      const now = new Date();
-      const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      timeElement.textContent = `Last updated: ${time}`;
-    }
-  },
-  
-  /**
-   * Show log filtering options
-   */
-  showLogFilter() {
-    // Create filter dropdown content
-    let filterContent = `
-      <div class="filter-dropdown" id="log-filter-dropdown">
-        <div class="filter-header">
-          <h4>Filter Logs</h4>
-          <button class="close-filter">&times;</button>
-        </div>
-        <div class="filter-options">
-          <label>
-            <input type="checkbox" data-filter="all" checked> All Logs
-          </label>
-          <label>
-            <input type="checkbox" data-filter="error"> Errors Only
-          </label>
-          <label>
-            <input type="checkbox" data-filter="warning"> Warnings Only
-          </label>
-          <label>
-            <input type="checkbox" data-filter="system"> System Logs
-          </label>
-          <label>
-            <input type="checkbox" data-filter="security"> Security Logs
-          </label>
-        </div>
-        <div class="filter-search">
-          <input type="text" placeholder="Search logs..." id="log-search">
-        </div>
-        <div class="filter-actions">
-          <button class="apply-filter">Apply Filters</button>
-          <button class="reset-filter">Reset</button>
+      <div class="action-panel">
+        <h3>Log Management</h3>
+        <div class="action-buttons">
+          <button id="clear-logs" class="btn btn-action">
+            <i class="fas fa-trash"></i>
+            Clear Logs
+          </button>
+          <button id="download-logs" class="btn btn-action">
+            <i class="fas fa-download"></i>
+            Download Logs
+          </button>
         </div>
       </div>
     `;
     
-    // Create or update filter dropdown
-    let dropdown = document.getElementById('log-filter-dropdown');
+    container.innerHTML = html;
     
-    if (!dropdown) {
-      dropdown = document.createElement('div');
-      dropdown.innerHTML = filterContent;
-      document.querySelector('.card-header')?.appendChild(dropdown.firstElementChild);
-      dropdown = document.getElementById('log-filter-dropdown');
-    } else {
-      dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
-    }
+    // Add event listeners for actions
+    document.getElementById('logs-filter')?.addEventListener('click', () => {
+      this.showNotImplemented('Filtering logs');
+      });
+      
+    document.getElementById('logs-export')?.addEventListener('click', () => {
+      this.exportLogs();
+    });
     
-    // Add event listeners
-    if (dropdown) {
-      // Close button
-      dropdown.querySelector('.close-filter')?.addEventListener('click', () => {
-        dropdown.style.display = 'none';
-      });
-      
-      // Apply filter button
-      dropdown.querySelector('.apply-filter')?.addEventListener('click', () => {
-        this.applyLogFilter(dropdown);
-        dropdown.style.display = 'none';
-      });
-      
-      // Reset filter button
-      dropdown.querySelector('.reset-filter')?.addEventListener('click', () => {
-        this.resetLogFilter(dropdown);
-      });
-      
-      // All logs checkbox
-      const allLogsCheckbox = dropdown.querySelector('input[data-filter="all"]');
-      if (allLogsCheckbox) {
-        allLogsCheckbox.addEventListener('change', (e) => {
-          const checked = e.target.checked;
-          dropdown.querySelectorAll('.filter-options input:not([data-filter="all"])')
-            .forEach(input => {
-              input.checked = false;
-              input.disabled = checked;
-            });
+    document.getElementById('clear-logs')?.addEventListener('click', () => {
+      this.showNotImplemented('Clearing logs');
         });
-      }
-      
-      // Other checkboxes
-      dropdown.querySelectorAll('.filter-options input:not([data-filter="all"])')
-        .forEach(input => {
-          input.addEventListener('change', (e) => {
-            const anyChecked = Array.from(
-              dropdown.querySelectorAll('.filter-options input:not([data-filter="all"])')
-            ).some(i => i.checked);
-            
-            const allCheckbox = dropdown.querySelector('input[data-filter="all"]');
-            if (allCheckbox) {
-              allCheckbox.checked = !anyChecked;
-            }
-          });
-        });
-    }
-  },
-  
-  /**
-   * Apply log filtering based on selected options
-   * @param {HTMLElement} dropdown - The filter dropdown element
-   */
-  async applyLogFilter(dropdown) {
-    try {
-      // Get filter options
-      const showAll = dropdown.querySelector('input[data-filter="all"]')?.checked;
-      const showErrors = dropdown.querySelector('input[data-filter="error"]')?.checked;
-      const showWarnings = dropdown.querySelector('input[data-filter="warning"]')?.checked;
-      const showSystem = dropdown.querySelector('input[data-filter="system"]')?.checked;
-      const showSecurity = dropdown.querySelector('input[data-filter="security"]')?.checked;
-      
-      // Get search text
-      const searchText = dropdown.querySelector('#log-search')?.value.toLowerCase();
-      
-      // Get all logs
-      const logs = await this.fetchLogData();
-      if (!logs) return;
-      
-      // Apply filters
-      let filteredLogs = logs;
-      
-      if (!showAll) {
-        filteredLogs = logs.filter(log => {
-          const logLower = log.toLowerCase();
-          
-          // Filter by type
-          if (showErrors && (logLower.includes('error') || logLower.includes('fail'))) {
-            return true;
-          }
-          
-          if (showWarnings && (logLower.includes('warn') || logLower.includes('attention'))) {
-            return true;
-          }
-          
-          if (showSystem && (logLower.includes('system') || logLower.includes('startup'))) {
-            return true;
-          }
-          
-          if (showSecurity && (logLower.includes('security') || logLower.includes('auth'))) {
-            return true;
-          }
-          
-          return false;
-        });
-      }
-      
-      // Apply search text filter
-      if (searchText) {
-        filteredLogs = filteredLogs.filter(log => 
-          log.toLowerCase().includes(searchText)
-        );
-      }
-      
-      // Render filtered logs
-      this.renderLogData(filteredLogs);
-      
-      if (window.HARDNDashboard) {
-        window.HARDNDashboard.showToast(`Showing ${filteredLogs.length} filtered logs`);
-      }
-    } catch (error) {
-      console.error('Error applying log filter:', error);
-      if (window.HARDNDashboard) {
-        window.HARDNDashboard.showToast('Error applying log filter', 'error');
-      }
-    }
-  },
-  
-  /**
-   * Reset log filters
-   * @param {HTMLElement} dropdown - The filter dropdown element
-   */
-  resetLogFilter(dropdown) {
-    // Reset all checkboxes
-    dropdown.querySelector('input[data-filter="all"]').checked = true;
     
-    dropdown.querySelectorAll('.filter-options input:not([data-filter="all"])')
-      .forEach(input => {
-        input.checked = false;
-        input.disabled = true;
-      });
-    
-    // Clear search
-    dropdown.querySelector('#log-search').value = '';
-    
-    // Refresh logs
-    this.refreshLogData();
+    document.getElementById('download-logs')?.addEventListener('click', () => {
+      this.exportLogs();
+    });
   },
   
   /**
    * Export logs to a downloadable file
    */
-  async exportLogs() {
+  exportLogs() {
     try {
-      if (window.HARDNDashboard) {
-        window.HARDNDashboard.showToast('Preparing logs for export...');
-      }
-      
-      const logs = await this.fetchLogData();
-      if (!logs || logs.length === 0) {
-        if (window.HARDNDashboard) {
-          window.HARDNDashboard.showToast('No logs to export', 'warning');
-        }
+      const logs = this._cache.logData?.logs || [];
+      if (logs.length === 0) {
+        this.showToast('No logs available to export', 'warning');
         return;
       }
       
-      // Create file content
-      const content = logs.join('\n');
+      // Format log entries as text
+      let logContent = '';
+      logs.forEach(log => {
+        const timestamp = log.timestamp || new Date().toISOString();
+        const level = log.level?.toUpperCase() || 'INFO';
+        const message = log.message || '';
+        
+        logContent += `[${timestamp}] [${level}] ${message}\n`;
+      });
       
-      // Create blob and download link
-      const blob = new Blob([content], { type: 'text/plain' });
+      // Create downloadable blob
+      const blob = new Blob([logContent], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
       
-      const date = new Date().toISOString().slice(0, 10);
-      const filename = `hardn_logs_${date}.txt`;
-      
-      // Create download link
+      // Create download link and trigger download
       const a = document.createElement('a');
       a.href = url;
-      a.download = filename;
-      a.style.display = 'none';
+      a.download = `hardn-logs-${new Date().toISOString().slice(0, 10)}.txt`;
       document.body.appendChild(a);
       a.click();
       
       // Clean up
-      setTimeout(() => {
         document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }, 100);
+      window.URL.revokeObjectURL(url);
       
-      if (window.HARDNDashboard) {
-        window.HARDNDashboard.showToast('Logs exported successfully', 'success');
-      }
+      this.showToast('Logs exported successfully', 'success');
     } catch (error) {
       console.error('Error exporting logs:', error);
-      if (window.HARDNDashboard) {
-        window.HARDNDashboard.showToast('Error exporting logs', 'error');
-      }
+      this.showToast('Error exporting logs', 'error');
     }
+  },
+  
+  /**
+   * Show a toast notification
+   * @param {string} message - Message to display
+   * @param {string} type - Notification type (info, success, warning, error)
+   */
+  showToast(message, type = 'info') {
+    // Use global toast if available
+    if (typeof window.showToast === 'function') {
+      window.showToast(message, type);
+    } else {
+      // Simple console fallback
+      console.log(`[${type.toUpperCase()}] ${message}`);
+      
+      // Create a simple toast if no global function
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      toast.textContent = message;
+      
+      document.body.appendChild(toast);
+      
+      // Remove after 3 seconds
+      setTimeout(() => {
+        toast.classList.add('fade-out');
+        setTimeout(() => {
+          if (document.body.contains(toast)) {
+            document.body.removeChild(toast);
+          }
+        }, 300);
+      }, 3000);
+    }
+  },
+  
+  /**
+   * Show an error message
+   * @param {string} message - Error message
+   */
+  showError(message) {
+    const container = document.getElementById('logs-content');
+    if (!container) return;
+    
+    container.innerHTML = `
+      <div class="error-message">
+        <i class="fas fa-exclamation-circle"></i>
+        <h3>Logs Error</h3>
+        <p>${message}</p>
+        <button id="retry-logs" class="btn btn-action">
+          <i class="fas fa-sync-alt"></i> Retry
+        </button>
+      </div>
+    `;
+    
+    document.getElementById('retry-logs')?.addEventListener('click', () => {
+      this.updateLogData(true);
+    });
+  },
+  
+  /**
+   * Show a "not implemented" toast for incomplete features
+   * @param {string} feature - Feature name
+   */
+  showNotImplemented(feature) {
+    this.showToast(`${feature} is not implemented in this version`, 'info');
   }
 };
 
-// Expose to window
+// Export to window for access by main.js
 window.HARDNLogs = HARDNLogs; 
