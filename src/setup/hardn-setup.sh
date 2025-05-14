@@ -61,10 +61,6 @@ set_generic_hostname() {
 
 }
 
-
-
-
-
 detect_os() {
     if [ -f /etc/os-release ] && [ -r /etc/os-release ]; then
         . /etc/os-release
@@ -99,27 +95,17 @@ detect_os() {
     fi
 }
 
-
 update_system_packages() {
     printf "\033[1;31m[+] Updating system packages...\033[0m\n"
     apt update -y && apt upgrade -y
     apt --fix-broken install -y
 }
 
-
-
-
-
-
 install_pkgdeps() {
     printf "\033[1;31m[+] Installing package dependencies...\033[0m\n"
     apt install -y git gawk mariadb-common policycoreutils \
         unixodbc-common firejail python3-pyqt6 fonts-liberation libpam-pwquality
 }
-
-
-
-
 
 call_grub_script() {
     printf "\033[1;31m[+] Calling hardn-grub.sh script...\033[0m\n"
@@ -137,18 +123,11 @@ call_grub_script() {
     fi
 }
 
-
-
-
-
-
 install_security_tools() {
     printf "\033[1;31m[+] Installing required system security tools...\033[0m\n"
     apt install -y ufw fail2ban apparmor apparmor-profiles apparmor-utils firejail tcpd lynis debsums \
         libpam-pwquality libvirt-daemon-system libvirt-clients qemu-system-x86 openssh-server openssh-client rkhunter 
 }
-
-
 
 enable_fail2ban() {
     printf "\033[1;31m[+] Installing and enabling Fail2Ban...\033[0m\n"
@@ -171,7 +150,6 @@ EOF
     printf "\033[1;32m[+] Fail2Ban configured and restarted successfully.\033[0m\n"
 }
 
-
 enable_apparmor() {
     printf "\033[1;31m[+] Installing and enabling AppArmor…\033[0m\n"
     apt install -y apparmor apparmor-utils apparmor-profiles || {
@@ -193,11 +171,6 @@ enable_apparmor() {
     printf "\033[1;32m[+] AppArmor installed. Profiles are in complain mode for testing.\033[0m\n"
     printf "\033[1;33m[!] Review profile behavior before switching to enforce mode.\033[0m\n"
 }
-
-
-
-
-
 
 enable_aide() {
     printf "\033[1;31m[+] Checking if AIDE is already installed and initialized…\033[0m\n"
@@ -222,9 +195,6 @@ enable_aide() {
 
     printf "\033[1;32m[+] AIDE successfully installed and configured.\033[0m\n"
 }
-
-
-
 
 enable_rkhunter(){
     printf "\033[1;31m[+] Installing rkhunter...\033[0m\n"
@@ -252,9 +222,6 @@ enable_rkhunter(){
     rkhunter --propupd
     printf "\033[1;32m[+] rkhunter installed and updated.\033[0m\n"
 }
-
-
-
 
 configure_firejail() {
     printf "\033[1;31m[+] Configuring Firejail for Firefox and Chrome...\033[0m\n"
@@ -284,21 +251,12 @@ configure_firejail() {
     printf "\033[1;31m[+] Firejail configuration completed.\033[0m\n"
 }
 
-
-
-
-
-
-   
-
 stig_password_policy() {
-
     sed -i 's/^#\? *minlen *=.*/minlen = 14/' /etc/security/pwquality.conf
     sed -i 's/^#\? *dcredit *=.*/dcredit = -1/' /etc/security/pwquality.conf
     sed -i 's/^#\? *ucredit *=.*/ucredit = -1/' /etc/security/pwquality.conf
     sed -i 's/^#\? *ocredit *=.*/ocredit = -1/' /etc/security/pwquality.conf
     sed -i 's/^#\? *lcredit *=.*/lcredit = -1/' /etc/security/pwquality.conf
-
 
     if command -v pam-auth-update > /dev/null; then
         pam-auth-update --package
@@ -308,11 +266,6 @@ stig_password_policy() {
     fi
 }
 
-
-
-
-
-
 stig_lock_inactive_accounts() {
     useradd -D -f 35
     awk -F: '$3 >= 1000 && $1 != "nobody" {print $1}' /etc/passwd | while read -r user; do
@@ -320,21 +273,12 @@ stig_lock_inactive_accounts() {
     done
 }
 
-
-
-
-
-
 stig_login_banners() {
     echo "You are accessing a fully secured SIG Information System (IS)..." > /etc/issue
     echo "Use of this IS constitutes consent to monitoring..." > /etc/issue.net
     chmod 644 /etc/issue /etc/issue.net
 
 }
-
-
-
-
 
 stig_secure_filesystem() {
     printf "\033[1;31m[+] Securing filesystem permissions...\033[0m\n"
@@ -367,15 +311,9 @@ EOF
     auditctl -e 1 || printf "\033[1;31m[-] Failed to enable auditd.\033[0m\n"
 }
 
-
-
-
-   
 stig_kernel_setup() {
     printf "\033[1;31m[+] Setting up STIG-compliant kernel parameters...\033[0m\n"
     tee /etc/sysctl.d/stig-kernel.conf > /dev/null <<EOF
-
-
 
 kernel.randomize_va_space = 2        
 kernel.exec-shield = 1               
@@ -404,27 +342,15 @@ net.ipv4.conf.default.accept_source_route = 0
 net.ipv4.conf.all.forwarding = 0         
 net.ipv4.conf.default.forwarding = 0
 
-
 EOF
 
-    
     sysctl --system || printf "\033[1;31m[-] Failed to reload sysctl settings.\033[0m\n"
 }
-
-
-
-
-
 
 stig_disable_usb() {
     echo "install usb-storage /bin/false" > /etc/modprobe.d/hardn-blacklist.conf
     update-initramfs -u || printf "\033[1;31m[-] Failed to update initramfs.\033[0m\n"
 }
-
-
-
-
-
 
 stig_disable_core_dumps() {
     echo "* hard core 0" | tee -a /etc/security/limits.conf > /dev/null
@@ -432,33 +358,16 @@ stig_disable_core_dumps() {
     sysctl -w fs.suid_dumpable=0
 }
 
-
-
-
-
-
 stig_disable_ctrl_alt_del() {
     systemctl mask ctrl-alt-del.target
     systemctl daemon-reexec
 }
-
-
-
-
-
-
 
 stig_disable_ipv6() {
     echo "net.ipv6.conf.all.disable_ipv6 = 1" >> /etc/sysctl.d/99-sysctl.conf
     echo "net.ipv6.conf.default.disable_ipv6 = 1" >> /etc/sysctl.d/99-sysctl.conf
     sysctl -p
 }
-
-
-
-
-
-
 
 stig_configure_firewall() {
     printf "\033[1;31m[+] Configuring UFW...\033[0m\n"
@@ -498,20 +407,12 @@ stig_configure_firewall() {
     printf "\033[1;32m[+] UFW configuration completed successfully.\033[0m\n"
 }
 
-
-
-
-
-
 stig_set_randomize_va_space() {
     printf "\033[1;31m[+] Setting kernel.randomize_va_space...\033[0m\n"
     echo "kernel.randomize_va_space = 2" > /etc/sysctl.d/hardn.conf
     sysctl -w kernel.randomize_va_space=2 || printf "\033[1;31m[-] Failed to set randomize_va_space.\033[0m\n"
     sysctl --system || printf "\033[1;31m[-] Failed to reload sysctl settings.\033[0m\n"
 }
-
-
-
 
 update_firmware() {
     printf "\033[1;31m[+] Checking for firmware updates...\033[0m\n"
@@ -525,7 +426,6 @@ update_firmware() {
     fi
     apt update -y
 }
-
 
 apply_stig_hardening() {
     printf "\033[1;31m[+] Applying STIG hardening tasks...\033[0m\n"
@@ -545,13 +445,6 @@ apply_stig_hardening() {
     bash "$SCRIPT_DIR/tools/stig/stig_set_randomize_va_space.sh"
     printf "\033[1;32m[+] STIG hardening tasks applied successfully.\033[0m\n"
 }
-
-
-
-
-
-
-
 
 setup_complete() {
     echo "======================================================="
@@ -579,11 +472,6 @@ sleep 3
         printf "\033[1;31m[-] hardn-packages.sh not found at: %s. Skipping...\033[0m\n" "$PACKAGES_SCRIPT"
     fi
 }
-
-
-
-
-
 
 
 main() {
@@ -628,8 +516,6 @@ main() {
     sleep 3
     setup_complete
     printf "\033[1;31m[+] Installing scheduled jobs via cron_packages()\033[0m\n"
-   
-
 }
 
 main
