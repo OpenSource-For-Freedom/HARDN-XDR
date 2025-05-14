@@ -1,0 +1,7 @@
+# ignored files
+docs/.idea
+docs/TODO
+TODO.txt
+*.iml
+
+ 

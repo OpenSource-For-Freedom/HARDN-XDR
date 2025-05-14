@@ -1,0 +1,10 @@
+#!/bin/bash
+set -e
+
+
+
+
+mv /usr/bin/hardn-setup.sh /usr/bin/hardn
+chmod +x /usr/bin/hardn
+
+exit 0
