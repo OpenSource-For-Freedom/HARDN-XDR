@@ -10,82 +10,154 @@
 #                                      #
 ########################################
 
-#TODO: Change the name of this script to autorice.sh ???
-# It's job is not the exact same as the original setup.sh
+# Notes one updated script: Change the name of this script to autorice.sh ???
 # Some changes. This auto rice script has been moved to the repo's home directory.
 # makes for easier access and avoids possible naming conflicts,
 # as this repo contains directories and scripts with similar setup names.
+# TODO: Need to make a /tools dir like dev-testing, lightening up the hardn-setup
+# fine tune the menu, no gui needed, and leave  it as .deb build package
+# clone repo then,
+# build the debian package
+# sudo dpkg-buildpackage -us -uc
+# isntall the package
+# sudo dpkg -i ../hardn_*.deb
+# run the setup
+# sudo hardn
 
-# main branch git url: https://github.com/OpenSource-For-Freedom/HARDN.git
+# Parent fork main branch git url: https://github.com/OpenSource-For-Freedom/HARDN.git
+
+# urls to be changed after merge
+progsfile="https://raw.githubusercontent.com/LinuxUser255/HARDN/refs/heads/LinuxUser255-main/progs.csv"
+repobranch="LinuxUser255-main"
+name=$USER
+# repodir=""
 
 # Check for root privileges
 if [ "$(id -u)" -ne 0 ]; then
+   echo ""
    echo "This script must be run as root."
-   echo "easy use: sh"
-  # curl -LO
-   sh larbs.sh
+   # change the fork url to the Parent fork above after merge with Tim's. Same curl -LO command.
+   echo "Install curl if you don't already have it"
+   echo "sudo apt install curl"
+   echo "How to use this install script:"
+   echo "curl -LO https://raw.githubusercontent.com/LinuxUser255/HARDN/refs/heads/LinuxUser255-main/setup.sh"
+   echo -e "sh setup.sh\n"
    exit 1
 fi
 
-# quietly checks if a package is installed, and installs it if not.
 installpkg() {
     dpkg -s "$1" >/dev/null 2>&1 || sudo apt install -y "$1" >/dev/null 2>&1
 }
 
+welcomemsg() {
+    	whiptail --title "Welcome!" \
+    		--msgbox "Welcome to HARDN OS Security!\\n\\nThis script will automatically install everything you need to fully security harden your Linux machine.\\n\\n-Chris" 10 60
+
+    	whiptail --title "Important Note!" --yes-button "All ready!" \
+    		--no-button "Return..." \
+    		--yesno "Ensure you are up to date with apt.\\n\\nIf it does not, the installation of some programs might fail." 8 70
+}
 
 preinstallmsg() {
-	whiptail --title "Welcome to HARDN. A Linux Security Hardening program." --yes-button "Let's go!" \
-		--no-button "No, nevermind!" \
-		--yesno "The rest of the installation will now be totally automated, so you can sit back and relax.\\n\\nIt will take some time, but when done, you can enjoy your security hardened Linux OS.\\n\\nNow just press <Let's go!> and the system will begin installation!" 13 60 || {
-		clear
-		exit 1
+    	whiptail --title "Welcome to HARDN. A Linux Security Hardening program." --yes-button "Let's go!" \
+    		--no-button "No, nevermind!" \
+    		--yesno "The rest of the installation will now be totally automated, so you can sit back and relax.\\n\\nIt will take some time, but when done, you can enjoy your security hardened Linux OS.\\n\\nNow just press <Let's go!> and the system will begin installation!" 13 60 || {
+    		clear
+    		exit 1
 	}
 }
 
 update_system_packages() {
-    printf "\033[1;31m[+] Updating system packages...\033[0m\n"
+    #printf "\033[1;31m[+] Updating system packages...\033[0m\n"
+    whiptail --message "Updating system packages"
     apt update && apt upgrade -y
 }
 
-# Install package dependencies
-install_pkgdeps() {
-    printf "\033[1;31m[+] Installing package dependencies...\033[0m\n"
-    # List of packages to install
-    apt install -y wget curl git gawk mariadb-common mysql-common policycoreutils \
-        python-matplotlib-data unixodbc-common gawk-doc
+# Install package dependencies from progs.csv
+install_package_dependencies() {
+        whiptail --infobox "Installing package dependencies from progs.csv..." 7 60
+        # progsfile="$1"
+            if ! dpkg -s "$1" >/dev/null 2>&1; then
+                whiptail --infobox "Installing $1... ($2)" 7 60
+                sudo apt-get update -qq
+                sudo apt-get install -y "$1"
+            else
+                whiptail --infobox "$1 is already installed." 7 60
+            fi
 }
-
-# Function to check package dependencies
-check_pkgdeps() {
-    # Implementation of check_pkgdeps function
-    echo "Checking package dependencies..."
     # Return empty for now as the original implementation is missing
-    return 0
+
+# Function to install packages with visual feedback
+aptinstall() {
+        whiptail --title "HARDN Installation" \
+            --infobox "Installing \`$1\` ($n of $total) from the repository. $1 $2" 9 70
+        echo "$aptinstalled" | grep -q "^$1$" && return 1
+        apt-get install -y "$1" >/dev/null 2>&1
+        # Add to installed packages list
+        aptinstalled="$aptinstalled\n$1"
+}
+# You Need to Initialize list of installed packages
+aptinstalled=""
+
+# Function to check if a package is installed
+isinstalled() {
+    dpkg -s "$1" >/dev/null 2>&1
+}
+# And you'll need to set the n and total variables when calling this function to show the progress (e.g., "Installing package 3 of 20").
+# This function can be used in your main installation loop when processing the packages from your progs.csv file.
+
+# Function to build and install from Git repo
+gitmakeinstall() {
+    repo_url="$1"
+    description="$2"
+    dir="/tmp/$(basename "$repo_url" .git)"
+
+    whiptail --infobox "Cloning $repo_url... ($description)" 7 70
+    git clone --depth=1 "$repo_url" "$dir" >/dev/null 2>&1
+    cd "$dir" || exit
+    whiptail --infobox "Building and installing $description..." 7 70
+    make >/dev/null 2>&1 && sudo make install >/dev/null 2>&1
+    cd - >/dev/null 2>&1 || exit
 }
 
-# Function to offer resolving issues
-offer_to_resolve_issues() {
-    deps_to_resolve="$1"
-    if [ -z "$deps_to_resolve" ]; then
-        echo "No dependencies to resolve."
-        return 0
-    fi
+# Main loop to parse and install
+installationloop() {
+     { [ -f "$progsfile" ] && cp "$progsfile" /tmp/progs.csv ||
+            curl -Ls "$progsfile" | sed '/^#/d' >/tmp/progs.csv }
+    total=$(wc -l </tmp/progs.csv)
+    #echo "[INFO] Found $total entries to process."
+    # Get list of manually installed packages (not installed as dependencies)
+    aptinstalled=$(apt-mark showmanual)
+    while IFS=, read -r tag program comment; do
+        n=$((n + 1))
+        echo "➤ Processing: $program [$tag]"
 
-    echo "Dependencies to resolve:"
-    echo "$deps_to_resolve"
-    echo
-    printf "Do you want to resolve these dependencies? (y/n): "
-    read answer
-    case "$answer" in
-        [Yy]*)
-            echo "$deps_to_resolve" | sed 's/\s//g;s/<[^>]*>//g' > dependencies_to_resolve.txt
-            echo "List of dependencies to resolve saved in dependencies_to_resolve.txt"
-            ;;
-        *)
-            echo "No action taken."
-            ;;
-    esac
+        # Strip quotes from comments
+        echo "$comment" | grep -q "^\".*\"$" &&
+            comment="$(echo "$comment" | sed -E "s/(^\"|\"$)//g")"
+
+        case "$tag" in
+            a) aptinstall "$program" "$comment" ;;
+            G) gitmakeinstall "$program" "$comment" ;;
+            *) maininstall "$program" "$comment"
+        esac
+    done </tmp/progs.csv
 }
+
+putgitrepo() {
+        # Downloads a gitrepo $1 and places the files in $2 only overwriting conflicts
+        whiptail --infobox "Downloading and installing files..." 7 60
+        [ -z "$3" ] && branch="master" || branch="$repobranch"
+        dir=$(mktemp -d)
+        [ ! -d "$2" ] && mkdir -p "$2"
+        chown "$name":wheel "$dir" "$2"
+        sudo -u "$name" git -C "$repodir" clone --depth 1 \
+            --single-branch --no-tags -q --recursive -b "$branch" \
+            --recurse-submodules "$1" "$dir"
+        sudo -u "$name" cp -rfT "$dir" "$2"
+}
+# Be sure to Run the main install loop
+#installationloop
 
 # Install and configure SELinux
 install_selinux() {
@@ -238,7 +310,8 @@ reload_apparmor() {
 
 # Configure cron jobs
 configure_cron() {
-    printf "\033[1;31m[+] Configuring cron jobs...\033[0m\n"
+    # printf "\033[1;31m[+] Configuring cron jobs...\033[0m\n"
+    whiptail --infobox "Configuring cron jobs.."
 
     # Remove existing cron jobs
     (crontab -l 2>/dev/null | grep -v "lynis audit system --cronjob" | \
@@ -264,67 +337,39 @@ EOFCRON
 
 # Disable USB storage
 disable_usb_storage() {
-    printf "\033[1;31m[+] Disabling USB storage...\033[0m\n"
+    whiptail --infobox "Disabling USB storage..." 7 50
     echo 'blacklist usb-storage' > /etc/modprobe.d/usb-storage.conf
     if modprobe -r usb-storage 2>/dev/null; then
-        printf "\033[1;31m[+] USB storage successfully disabled.\033[0m\n"
+        whiptail --msgbox "USB storage successfully disabled." 8 50
     else
-        printf "\033[1;31m[-] Warning: USB storage module in use, cannot unload.\033[0m\n"
+        whiptail --msgbox "Warning: USB storage module in use, cannot unload." 8 60
     fi
 }
 
 # Update system packages again
 update_sys_pkgs() {
     if ! update_system_packages; then
-        printf "\033[1;31m[-] System update failed.\033[0m\n"
+        # printf "\033[1;31m[-] System update failed.\033[0m\n"
+        whiptail --title "System update failed"
         exit 1
     fi
 }
 
-setup_complete() {
-    echo " "
-    echo "======================================================="
-    echo "             [+] HARDN - Setup Complete                "
-    echo "  [+] Please reboot your system to apply changes       "
-    echo "======================================================="
-    echo " "
+
+finalize() {
+	whiptail --title "All done!" \
+		--msgbox "Congrats! Provided there were no hidden errors, the script completed successfully and all the programs and configuration files should be in place.\\n\\nPlease reboot to apply installation.\\n\\n.t Luke" 13 80
 }
+
 
 # Main function
 main() {
+    welcomemsg || error "User exited."
+    preinstallmsg || error "User exited."
     update_system_packages
-    preinstallmsg
     install_pkgdeps
-
-    # Check dependencies
-    deps_and_conflicts=$(check_pkgdeps)
-    if [ -n "$deps_and_conflicts" ]; then
-        echo "All dependencies and conflicts:"
-        echo "$deps_and_conflicts"
-        echo
-
-        # Extract only the lines prefixed with "Depends"
-        depends_only=$(echo "$deps_and_conflicts" | grep -E '^\s*Depends:')
-
-        if [ -n "$depends_only" ]; then
-            echo "Found dependencies:"
-            echo "$depends_only"
-            echo
-            printf "Do you want to offer resolving these dependencies? (y/n): "
-            read offer_answer
-            case "$offer_answer" in
-                [Yy]*)
-                    offer_to_resolve_issues "$depends_only"
-                    apt install $depends_only -y
-                    ;;
-                *)
-                    echo "Skipping dependency resolution."
-                    ;;
-            esac
-        fi
-    fi
-
-    # Call each function in the proper order
+    # Check dependencies. If needed, use commented conditional block below main
+    installationloop
     install_selinux
     install_security_tools
     configure_ufw
@@ -334,8 +379,45 @@ main() {
     configure_cron
     disable_usb_storage
     update_sys_pkgs
-    setup_complete
+    finalize
+    # setup_complete
 }
 
 # Run the main function
 main
+
+#    deps_and_conflicts=$(check_pkgdeps)
+#    if [ -n "$deps_and_conflicts" ]; then
+#        echo "All dependencies and conflicts:"
+#        echo "$deps_and_conflicts"
+#        echo
+#
+#        # Extract only the lines prefixed with "Depends"
+#        depends_only=$(echo "$deps_and_conflicts" | grep -E '^\s*Depends:')
+#
+#        if [ -n "$depends_only" ]; then
+#            echo "Found dependencies:"
+#            echo "$depends_only"
+#            echo
+#            printf "Do you want to offer resolving these dependencies? (y/n): "
+#            read offer_answer
+#            case "$offer_answer" in
+#                [Yy]*)
+#                    offer_to_resolve_issues "$depends_only"
+#                    apt install $depends_only -y
+#                    ;;
+#                *)
+#                    echo "Skipping dependency resolution."
+#                    ;;
+#            esac
+#        fi
+#    fi
+
+#setup_complete() {
+#    echo " "
+#    echo "======================================================="
+#    echo "             [+] HARDN - Setup Complete                "
+#    echo "  [+] Please reboot your system to apply changes       "
+#    echo "======================================================="
+#    echo " "
+#}
