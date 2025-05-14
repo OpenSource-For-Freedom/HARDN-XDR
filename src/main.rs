@@ -1,24 +1,34 @@
-use clap::{Command as ClapCommand, Arg, ArgAction};
-use std::env;
 use std::fs::{self, OpenOptions};
 use std::io::{BufReader, BufRead, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
 use std::process::{Command as ProcessCommand, exit};
 use std::sync::{mpsc::channel, Arc, Mutex};
-use std::time::Duration;
-use notify::{Watcher, RecursiveMode};
+use std::time::{Duration, Instant};
 use serde::{Serialize};
 use serde_json::{json, Value};
 use actix_web::{web, App, HttpServer};
 use std::collections::HashMap;
 use rand::{distributions::Alphanumeric, Rng};
-//use std::os::unix::fs::PermissionsExt;
-//use std::fs;
+use notify::{Watcher, RecursiveMode};
 
+use argon2::{
+    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
+    Argon2, Algorithm, Version, Params
+};
+
+mod gui_input;
+mod hardn_logging;
 mod gui_api;
 mod setup;
-mod setup;
+//mod r#main_func
+// use for unit testing
+// mod main_auth_srv;
+
+#[cfg(test)]
+mod test {
+    pub mod network_monitor_tests;
+}
 
 // =================== Constants ===================
 const LOG_FILE: &str = "/var/log/hardn.log";
@@ -29,6 +39,7 @@ const SYSTEMD_UNIT: &str = "/etc/systemd/system/hardn.service";
 struct Connection {
     ip: String,
     port: u16,
+
 }
 
 struct NetworkMonitor;
@@ -96,32 +107,160 @@ struct AuthResult {
     user: Option<String>,
     message: String,
 }
+
+struct AuthAttempt {
+    attempts: u32,
+    last_attempt: Instant,
+}
+
 struct AuthService {
-    tokens: Mutex<HashMap<String, String>>, // Maps tokens to usernames
+    tokens: Mutex<HashMap<String, String>>,                  // Maps tokens to usernames
+    credentials: Mutex<HashMap<String, String>>,             // Maps usernames to hashed passwords
+    failed_attempts: Mutex<HashMap<String, AuthAttempt>>,    // Tracks failed login attempts
 }
 
 impl AuthService {
     fn new() -> Self {
+        // Initialize with a securely hashed default admin password
+        let mut credentials = HashMap::new();
+
+        // Pre-hash the default password (in production, this would be set during installation)
+        let salt = generate_salt();
+        let hashed_password = hash_password("hardn123", &salt);
+        credentials.insert("admin".to_string(), hashed_password);
+
         Self {
             tokens: Mutex::new(HashMap::new()),
+            credentials: Mutex::new(credentials),
+            failed_attempts: Mutex::new(HashMap::new()),
         }
     }
 
     fn authenticate(&self, username: &str, password: &str) -> AuthResult {
-        if username == "admin" && password == "hardn123" {
-            let token = self.generate_token(username);
-            AuthResult {
-                success: true,
-                user: Some(username.to_string()),
-                message: token,
-            }
-        } else {
-            AuthResult {
+        // Rate limiting check
+        if self.is_rate_limited(username) {
+            return AuthResult {
                 success: false,
                 user: None,
-                message: "Invalid credentials".into(),
+                message: "Too many failed attempts. Please try again later.".into(),
+            };
+        }
+
+        // Get stored credentials
+        let credentials = self.credentials.lock().unwrap();
+
+        // Check if user exists and verify password
+        match credentials.get(username) {
+            Some(stored_hash) => {
+                if verify_password(password, stored_hash) {
+                    // Reset failed attempts on success
+                    self.reset_failed_attempts(username);
+
+                    // Generate authentication token
+                    let token = self.generate_token(username);
+
+                    AuthResult {
+                        success: true,
+                        user: Some(username.to_string()),
+                        message: token,
+                    }
+                } else {
+                    // Record failed attempt
+                    self.record_failed_attempt(username);
+
+                    AuthResult {
+                        success: false,
+                        user: None,
+                        message: "Invalid credentials".into(),
+                    }
+                }
+            },
+            None => {
+                // Still record the attempt to prevent username enumeration
+                self.record_failed_attempt(username);
+
+                AuthResult {
+                    success: false,
+                    user: None,
+                    message: "Invalid credentials".into(),
+                }
             }
         }
+    }
+
+    // Record a failed login attempt
+    fn record_failed_attempt(&self, username: &str) {
+        let mut attempts = self.failed_attempts.lock().unwrap();
+
+        let entry = attempts.entry(username.to_string()).or_insert(AuthAttempt {
+            attempts: 0,
+            last_attempt: Instant::now(),
+        });
+
+        entry.attempts += 1;
+        entry.last_attempt = Instant::now();
+    }
+
+    // Reset failed attempts counter
+    fn reset_failed_attempts(&self, username: &str) {
+        let mut attempts = self.failed_attempts.lock().unwrap();
+        attempts.remove(username);
+    }
+
+    // Check if user is rate limited
+    fn is_rate_limited(&self, username: &str) -> bool {
+        let attempts = self.failed_attempts.lock().unwrap();
+
+        if let Some(attempt) = attempts.get(username) {
+            // Define rate limiting tiers
+            let rate_limits = [
+                (10, 300), // 10+ attempts: wait 5 minutes (300 seconds)
+                (5, 30),   // 5-9 attempts: wait 30 seconds
+                (3, 5),    // 3-4 attempts: wait 5 seconds
+            ];
+
+            let elapsed = attempt.last_attempt.elapsed();
+
+            // Check each tier in descending order of severity
+            for &(attempt_threshold, wait_time) in &rate_limits {
+                if attempt.attempts >= attempt_threshold && elapsed < Duration::from_secs(wait_time) {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
+
+    // Add a new user (for admin functionality)
+    fn add_user(&self, username: &str, password: &str) -> bool {
+        let mut credentials = self.credentials.lock().unwrap();
+
+        if credentials.contains_key(username) {
+            return false; // User already exists
+        }
+
+        let salt = generate_salt();
+        let hashed_password = hash_password(password, &salt);
+        credentials.insert(username.to_string(), hashed_password);
+
+        true
+    }
+
+    // Change a user's password
+    fn change_password(&self, username: &str, old_password: &str, new_password: &str) -> bool {
+        let mut credentials = self.credentials.lock().unwrap();
+
+        if let Some(stored_hash) = credentials.get(username) {
+            if verify_password(old_password, stored_hash) {
+                let salt = generate_salt();
+                let new_hash = hash_password(new_password, &salt);
+                credentials.insert(username.to_string(), new_hash);
+                return true;
+            }
+        }
+
+        false
     }
 
     fn generate_token(&self, username: &str) -> String {
@@ -242,7 +381,7 @@ fn set_executable_permissions(base_dir: &str) {
         if Path::new(&file).exists() {
             let mut permissions = fs::metadata(&file).unwrap().permissions();
             permissions.set_mode(0o755); // Read, write, and execute for owner; read and execute for group and others
-            fs::set_permissions(&file).unwrap();
+            fs::set_permissions(&file, permissions).unwrap();
             println!("[+] Set executable permissions for: {}", file);
         } else {
             println!("[!] File not found: {}", file);
@@ -282,24 +421,122 @@ use std::sync::mpsc::{Sender, Receiver};
 
 
 fn monitor_system() {
-    let (_tx, rx): (Sender<String>, Receiver<String>) = channel();
-    let mut watcher = notify::recommended_watcher(move |res| {
+    let (tx, rx): (Sender<String>, Receiver<String>) = channel();
+
+    // Create watcher with simplified event handling
+    let mut watcher = match setup_file_watcher(tx) {
+        Ok(w) => w,
+        Err(e) => {
+            eprintln!("Failed to create file watcher: {}", e);
+            return;
+        }
+    };
+
+    // Configure directories to monitor
+    configure_watch_directories(&mut watcher);
+
+    // Process events from the channel
+    process_file_events(rx);
+}
+// Handle file system events and filter for security-relevant changes
+fn handle_file_event(event: &notify::Event, tx: &Sender<String>) {
+    use notify::EventKind;
+
+    // Filter for relevant events
+    match event.kind {
+        EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_) => {
+            // Get paths affected by this event
+            let paths: Vec<String> = event.paths.iter()
+                .map(|path| path.to_string_lossy().to_string())
+                .collect();
+
+            // Skip temporary files and other noise
+            if paths.iter().any(|p| {
+                p.contains(".swp") || p.contains(".tmp") || p.contains("~") ||
+                p.contains(".cache") || p.contains("/proc/")
+            }) {
+                return;
+            }
+
+            // Format a message about the event
+            let event_type = match event.kind {
+                EventKind::Create(_) => "Created",
+                EventKind::Modify(_) => "Modified",
+                EventKind::Remove(_) => "Removed",
+                _ => "Accessed",
+            };
+
+            let message = format!(
+                "[SECURITY] {} file(s): {}",
+                event_type,
+                paths.join(", ")
+            );
+
+            // Send the message through the channel
+            tx.send(message).unwrap_or_default();
+        },
+        _ => {}, // Ignore other event types
+    }
+}
+
+// Set up the file watcher with event filtering
+fn setup_file_watcher(tx: Sender<String>) -> Result<impl Watcher, notify::Error> {
+    notify::recommended_watcher(move |res| {
         match res {
-            Ok(event) => println!("System change: {:?}", event),
-            Err(e) => eprintln!("Watch error: {:?}", e),
+            Ok(event) => handle_file_event(&event, &tx),
+            Err(e) => {
+                let error_msg = format!("Watch error: {:?}", e);
+                tx.send(error_msg.clone()).unwrap_or_default();
+                eprintln!("{}", error_msg);
+            },
         }
     })
-    .expect("Failed to create watcher");
-    watcher
-        .watch(Path::new("/"), RecursiveMode::Recursive)
-        .expect("Failed to watch path");
+}
+
+// Configure which directories to watch
+fn configure_watch_directories(watcher: &mut impl Watcher) {
+    let security_dirs = [
+        "/etc",
+        "/var/log",
+        "/bin",
+        "/sbin",
+        "/usr/bin",
+        "/usr/sbin",
+        "/home"
+    ];
+
+    println!("[+] Setting up system monitoring for security-relevant directories");
+
+    for dir in security_dirs {
+        if Path::new(dir).exists() {
+            match watcher.watch(Path::new(dir), RecursiveMode::Recursive) {
+                Ok(_) => println!("[+] Monitoring directory: {}", dir),
+                Err(e) => eprintln!("Failed to watch {}: {}", dir, e),
+            }
+        }
+    }
+
+    println!("[+] System monitoring active");
+}
+
+// Process events from the channel
+fn process_file_events(rx: Receiver<String>) {
     loop {
         match rx.recv() {
-            Ok(event) => println!("System change: {:?}", event),
-            Err(e) => eprintln!("Watch error: {:?}", e),
+            Ok(event) => {
+                println!("{}", event);
+                log_message(&event);
+            },
+            Err(e) => {
+                let error = format!("Channel error in monitor_system: {:?}", e);
+                eprintln!("{}", error);
+                log_message(&error);
+                break;
+            }
         }
     }
 }
+
 fn create_systemd_service(exec_path: &str) {
     let unit = format!(
         "[Unit]\nDescription=HARDN Service\n[Service]\nExecStart={} --all\n[Install]\nWantedBy=multi-user.target\n",
@@ -351,13 +588,13 @@ fn remove_systemd_timers() {
 }
 
 
-/* holding for more testing befoe I lock the door completly 
+/* holding for more testing before I lock the door completely
 fn lock_down_hardn_files(base_dir: &str) {
 
     let files = vec![
         format!("{}/setup/setup.sh", base_dir),
         format!("{}/setup/packages.sh", base_dir),
-        format!("{}/kernel.c", base_dir),
+       // format!("{}/kernel.c", base_dir), <- file has been removed
         format!("{}/gui/main.py", base_dir),
         format!("{}/src/hardn.rs", base_dir),
     ];
@@ -395,13 +632,52 @@ fn log_message(message: &str) {
     writeln!(file, "{}", message).expect("Failed to write to log file");
 }
 
+// Helper functions for password hashing
+fn generate_salt() -> String {
+    // Generate a random salt
+    let salt = SaltString::generate(&mut OsRng);
+    salt.as_str().to_string()
+}
+
+
+fn hash_password(password: &str, salt: &str) -> String {
+    // Create an Argon2 instance with default parameters
+    let argon2 = Argon2::new(
+        Algorithm::Argon2id,
+        Version::V0x13,
+        Params::new(65536, 3, 4, None).unwrap()
+    );
+
+    // Use the provided salt string
+    let salt = SaltString::from_b64(salt).unwrap();
+
+    // Hash the password
+    let password_hash = argon2.hash_password(password.as_bytes(), &salt)
+        .unwrap()
+        .to_string();
+
+    password_hash
+}
+
+fn verify_password(password: &str, hash: &str) -> bool {
+    // Parse the hash string
+    let parsed_hash = match PasswordHash::new(hash) {
+        Ok(hash) => hash,
+        Err(_) => return false,
+    };
+
+    // Verify the password against the hash
+    Argon2::default().verify_password(password.as_bytes(), &parsed_hash).is_ok()
+}
+
 // =================== Main ===================
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     // Initialize application state
     let app_state = Arc::new(Mutex::new(AppState::new()));
 
-    // Launch the GUI
+// Launch the GUI
+println!("[+] Starting HARDN system...");
     gui_api::launch_gui();
 
     // Start REST API server

@@ -1,11 +1,20 @@
 [package]
 name = "hardn"
 version = "1.1.4"
-edition = "2025"
+# changed edition from 2025 to 2021 for compatable unit testing via cargo
+edition = "2021"
 
 [dependencies]
+
+
 clap = "4.1.8"
 notify = "5.2.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 nix = "0.26"
+rand = "0.8.5"
+actix-web = "4.3.1"
+argon2 = "0.5.0"
+base64 = "0.21.0"
+chrono = "0.4.41"
+crossbeam = "0.8"

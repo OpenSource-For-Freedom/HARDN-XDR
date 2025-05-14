@@ -1,8 +1,17 @@
 
 # TODO
 
+## And Ideas
 
-## Fix setup shell script, bad..
+## [ ] Use Go for the RestAPI instead of Python?
+
+## [x] Create diagram / flow chart and Hardn system description
+
+## [x] Fix errors on backend_socket.py  - refactor
+
+## [ ] Implement Ollama into the project?
+
+## [x] fix setup shell script, bad..
 
 ## Create a wiki/trouble shooting guide
 

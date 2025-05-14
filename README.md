@@ -21,7 +21,7 @@
 ### HARDN Endpoint
 - This Debian Package is only for **BARE-METAL installs of Debian 12 and Ubuntu 24.04 Bare Metal and Virtual Machines**
 -  Is a robust and secure endpoint management solution designed to simplify and enhance the management of devices in your network. It provides advanced features for monitoring, securing, and maintaining endpoints efficiently.
-- We also bring you with this release `STIG` COMPLIANCE to align with the Security Technical Information Guides provided by the DOD Cyber Exchange.
+- We also bring you with this release `STIG` COMPLIANCE to align with the **[Security Technical Information Guides](https://public.cyber.mil/stigs/)** provided by the DOD Cyber Exchange.
 
 <p align="center">
   <img src="https://img.shields.io/badge/FEATURES-white?style=for-the-badge&labelColor=black" alt="FEATURES"><br><br>
@@ -103,25 +103,27 @@ After installation, you can always start the hardening setup by running `sudo ha
 
 
 
-<p align="center">
+<div style="text-align: center;">
   <img src="https://img.shields.io/badge/PROJECT PARTNERS-white?style=for-the-badge&labelColor=black" alt="PROJECT PARTNERS"><br><br>
-</p>
+</div>
 
-![cybersynapse.png](docs/assets/cybersynapse.png)
+<div style="text-align: center;">
+  <img src="docs/assets/cybersynapse.png" alt="CyberSynapse Logo">
+</div>
 
 
 
 <p align="center">
   <img src="https://img.shields.io/badge/LICENSE-white?style=for-the-badge&labelColor=black" alt="LICENSE"><br><br>
   This project is licensed under the 
-  <a href="https://www.gnu.org/licenses/gpl-3.0.en.html" target="_blank">GNU General Public License (GPL)</a>.
+  <a href="https://www.gnu.org/licenses/gpl-3.0.en.html" target="_blank"><strong>GNU General Public License (GPL)</strong></a>.
 </p>
 
 
 
 <p align="center">
   <img src="https://img.shields.io/badge/CONTACT-white?style=for-the-badge&labelColor=black" alt="CONTACT"><br><br>
-office@cybersynapse.ro
+<strong><a href="mailto:office@cybersynapse.ro" style="font-weight: bold;">office@cybersynapse.ro</a></strong>
 </p>
 
 
