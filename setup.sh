@@ -46,7 +46,7 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 installpkg() {
-    dpkg -s "$1" >/dev/null 2>&1 || sudo apt install -y "$1" >/dev/null 2>&1
+       dpkg -s "$1" >/dev/null 2>&1 || sudo apt install -y "$1" >/dev/null 2>&1
 }
 
 welcomemsg() {
@@ -101,47 +101,47 @@ aptinstalled=""
 
 # Function to check if a package is installed
 isinstalled() {
-    dpkg -s "$1" >/dev/null 2>&1
+        dpkg -s "$1" >/dev/null 2>&1
 }
 # And you'll need to set the n and total variables when calling this function to show the progress (e.g., "Installing package 3 of 20").
 # This function can be used in your main installation loop when processing the packages from your progs.csv file.
 
 # Function to build and install from Git repo
 gitmakeinstall() {
-    repo_url="$1"
-    description="$2"
-    dir="/tmp/$(basename "$repo_url" .git)"
+        repo_url="$1"
+        description="$2"
+        dir="/tmp/$(basename "$repo_url" .git)"
 
-    whiptail --infobox "Cloning $repo_url... ($description)" 7 70
-    git clone --depth=1 "$repo_url" "$dir" >/dev/null 2>&1
-    cd "$dir" || exit
-    whiptail --infobox "Building and installing $description..." 7 70
-    make >/dev/null 2>&1 && sudo make install >/dev/null 2>&1
-    cd - >/dev/null 2>&1 || exit
+        whiptail --infobox "Cloning $repo_url... ($description)" 7 70
+        git clone --depth=1 "$repo_url" "$dir" >/dev/null 2>&1
+        cd "$dir" || exit
+        whiptail --infobox "Building and installing $description..." 7 70
+        make >/dev/null 2>&1 && sudo make install >/dev/null 2>&1
+        cd - >/dev/null 2>&1 || exit
 }
 
 # Main loop to parse and install
 installationloop() {
-     { [ -f "$progsfile" ] && cp "$progsfile" /tmp/progs.csv ||
-            curl -Ls "$progsfile" | sed '/^#/d' >/tmp/progs.csv }
-    total=$(wc -l </tmp/progs.csv)
-    #echo "[INFO] Found $total entries to process."
-    # Get list of manually installed packages (not installed as dependencies)
-    aptinstalled=$(apt-mark showmanual)
-    while IFS=, read -r tag program comment; do
-        n=$((n + 1))
-        echo "➤ Processing: $program [$tag]"
+         { [ -f "$progsfile" ] && cp "$progsfile" /tmp/progs.csv ||
+                curl -Ls "$progsfile" | sed '/^#/d' >/tmp/progs.csv }
+        total=$(wc -l </tmp/progs.csv)
+        #echo "[INFO] Found $total entries to process."
+        # Get list of manually installed packages (not installed as dependencies)
+        aptinstalled=$(apt-mark showmanual)
+        while IFS=, read -r tag program comment; do
+            n=$((n + 1))
+            echo "➤ Processing: $program [$tag]"
 
-        # Strip quotes from comments
-        echo "$comment" | grep -q "^\".*\"$" &&
-            comment="$(echo "$comment" | sed -E "s/(^\"|\"$)//g")"
+            # Strip quotes from comments
+            echo "$comment" | grep -q "^\".*\"$" &&
+                comment="$(echo "$comment" | sed -E "s/(^\"|\"$)//g")"
 
-        case "$tag" in
-            a) aptinstall "$program" "$comment" ;;
-            G) gitmakeinstall "$program" "$comment" ;;
-            *) maininstall "$program" "$comment"
-        esac
-    done </tmp/progs.csv
+            case "$tag" in
+                a) aptinstall "$program" "$comment" ;;
+                G) gitmakeinstall "$program" "$comment" ;;
+                *) maininstall "$program" "$comment"
+            esac
+        done </tmp/progs.csv
 }
 
 putgitrepo() {
@@ -161,68 +161,68 @@ putgitrepo() {
 
 # Install and configure SELinux
 install_selinux() {
-    printf "\033[1;31m[+] Installing and configuring SELinux...\033[0m\n"
+        printf "\033[1;31m[+] Installing and configuring SELinux...\033[0m\n"
 
-    # Install SELinux packages
-    apt update
-    apt install -y selinux-utils selinux-basics policycoreutils policycoreutils-python-utils selinux-policy-default
+        # Install SELinux packages
+        apt update
+        apt install -y selinux-utils selinux-basics policycoreutils policycoreutils-python-utils selinux-policy-default
 
-    # Check if installation was successful
-    if ! command -v getenforce > /dev/null 2>&1; then
-        printf "\033[1;31m[-] SELinux installation failed. Please check system logs.\033[0m\n"
-        return 1
-    fi
+        # Check if installation was successful
+        if ! command -v getenforce > /dev/null 2>&1; then
+            printf "\033[1;31m[-] SELinux installation failed. Please check system logs.\033[0m\n"
+            return 1
+        fi
 
-    # Configure SELinux to enforcing mode
-    setenforce 1 2>/dev/null || printf "\033[1;31m[-] Could not set SELinux to enforcing mode immediately\033[0m\n"
+        # Configure SELinux to enforcing mode
+        setenforce 1 2>/dev/null || printf "\033[1;31m[-] Could not set SELinux to enforcing mode immediately\033[0m\n"
 
-    # Configure SELinux to be enforcing at boot
-    if [ -f /etc/selinux/config ]; then
-        sed -i 's/SELINUX=disabled/SELINUX=enforcing/' /etc/selinux/config
-        sed -i 's/SELINUX=permissive/SELINUX=enforcing/' /etc/selinux/config
-        printf "\033[1;31m[+] SELinux configured to enforcing mode at boot\033[0m\n"
-    else
-        printf "\033[1;31m[-] SELinux config file not found\033[0m\n"
-    fi
+        # Configure SELinux to be enforcing at boot
+        if [ -f /etc/selinux/config ]; then
+            sed -i 's/SELINUX=disabled/SELINUX=enforcing/' /etc/selinux/config
+            sed -i 's/SELINUX=permissive/SELINUX=enforcing/' /etc/selinux/config
+            printf "\033[1;31m[+] SELinux configured to enforcing mode at boot\033[0m\n"
+        else
+            printf "\033[1;31m[-] SELinux config file not found\033[0m\n"
+        fi
 
-    printf "\033[1;31m[+] SELinux installation and configuration completed\033[0m\n"
+        printf "\033[1;31m[+] SELinux installation and configuration completed\033[0m\n"
 }
 
 # Install system security tools
 install_security_tools() {
-    printf "\033[1;31m[+] Installing required system security tools...\033[0m\n"
-    apt install -y ufw fail2ban apparmor apparmor-profiles apparmor-utils firejail tcpd lynis debsums rkhunter libpam-pwquality libvirt-daemon-system libvirt-clients qemu-kvm docker.io docker-compose openssh-server
+        printf "\033[1;31m[+] Installing required system security tools...\033[0m\n"
+        apt install -y ufw fail2ban apparmor apparmor-profiles apparmor-utils firejail tcpd lynis debsums rkhunter libpam-pwquality libvirt-daemon-system libvirt-clients qemu-kvm docker.io docker-compose openssh-server
 }
 
 # UFW configuration
 configure_ufw() {
-    printf "\033[1;31m[+] Configuring UFW...\033[0m\n"
-    ufw allow out 53,80,443/tcp
-    ufw allow out 53,123/udp
-    ufw allow out 67,68/udp
-    ufw reload
+        printf "\033[1;31m[+] Configuring UFW...\033[0m\n"
+        ufw allow out 53,80,443/tcp
+        ufw allow out 53,123/udp
+        ufw allow out 67,68/udp
+        ufw reload
 }
 
 # Enable and start Fail2Ban and AppArmor services
 enable_services() {
-    printf "\033[1;31m[+] Enabling and starting Fail2Ban and AppArmor services...\033[0m\n"
-    systemctl enable --now fail2ban
-    systemctl enable --now apparmor
+       printf "\033[1;31m[+] Enabling and starting Fail2Ban and AppArmor services...\033[0m\n"
+       systemctl enable --now fail2ban
+       systemctl enable --now apparmor
 }
 
 # Install chkrootkit, LMD, and rkhunter
 install_additional_tools() {
-    printf "\033[1;31m[+] Installing chkrootkit, LMD, and rkhunter...\033[0m\n"
-    apt install -y chkrootkit
+        printf "\033[1;31m[+] Installing chkrootkit, LMD, and rkhunter...\033[0m\n"
+        apt install -y chkrootkit
 
-    # Install Linux Malware Detect (LMD)
-    printf "\033[1;31m[+] Installing Linux Malware Detect...\033[0m\n"
+        # Install Linux Malware Detect (LMD)
+        printf "\033[1;31m[+] Installing Linux Malware Detect...\033[0m\n"
 
-    # Create a temporary directory for the installation
-    temp_dir=$(mktemp -d)
-    cd "$temp_dir" || {
-        printf "\033[1;31m[-] Failed to create temporary directory\033[0m\n"
-        install_maldet_failed=true
+        # Create a temporary directory for the installation
+        temp_dir=$(mktemp -d)
+        cd "$temp_dir" || {
+            printf "\033[1;31m[-] Failed to create temporary directory\033[0m\n"
+            install_maldet_failed=true
     }
 
     # Try to install from GitHub
@@ -288,43 +288,43 @@ install_additional_tools() {
 
 # Reload AppArmor profiles
 reload_apparmor() {
-    printf "\033[1;31m[+] Reloading AppArmor profiles...\033[0m\n"
+        printf "\033[1;31m[+] Reloading AppArmor profiles...\033[0m\n"
 
-    # Use systemd to reload AppArmor instead of manually parsing files
-    if systemctl is-active --quiet apparmor; then
-        printf "\033[1;31m[+] Reloading AppArmor service...\033[0m\n"
-        systemctl reload apparmor
-    else
-        printf "\033[1;31m[+] Starting AppArmor service...\033[0m\n"
-        systemctl start apparmor
-    fi
+        # Use systemd to reload AppArmor instead of manually parsing files
+        if systemctl is-active --quiet apparmor; then
+            printf "\033[1;31m[+] Reloading AppArmor service...\033[0m\n"
+            systemctl reload apparmor
+        else
+            printf "\033[1;31m[+] Starting AppArmor service...\033[0m\n"
+            systemctl start apparmor
+        fi
 
-    # Verify AppArmor status
-    if aa-status >/dev/null 2>&1; then
-        printf "\033[1;31m[+] AppArmor is running properly\033[0m\n"
-    else
-        printf "\033[1;31m[-] Warning: AppArmor may not be running correctly\033[0m\n"
-        printf "\033[1;31m[-] You may need to reboot your system\033[0m\n"
-    fi
+        # Verify AppArmor status
+        if aa-status >/dev/null 2>&1; then
+            printf "\033[1;31m[+] AppArmor is running properly\033[0m\n"
+        else
+            printf "\033[1;31m[-] Warning: AppArmor may not be running correctly\033[0m\n"
+            printf "\033[1;31m[-] You may need to reboot your system\033[0m\n"
+        fi
 }
 
 # Configure cron jobs
 configure_cron() {
-    # printf "\033[1;31m[+] Configuring cron jobs...\033[0m\n"
-    whiptail --infobox "Configuring cron jobs.."
+        # printf "\033[1;31m[+] Configuring cron jobs...\033[0m\n"
+        whiptail --infobox "Configuring cron jobs.."
 
-    # Remove existing cron jobs
-    (crontab -l 2>/dev/null | grep -v "lynis audit system --cronjob" | \
-     grep -v "apt update && apt upgrade -y" | \
-     grep -v "/opt/eset/esets/sbin/esets_update" | \
-     grep -v "chkrootkit" | \
-     grep -v "maldet --update" | \
-     grep -v "maldet --scan-all" | \
-     crontab -) || true
+        # Remove existing cron jobs
+        (crontab -l 2>/dev/null | grep -v "lynis audit system --cronjob" | \
+         grep -v "apt update && apt upgrade -y" | \
+         grep -v "/opt/eset/esets/sbin/esets_update" | \
+         grep -v "chkrootkit" | \
+         grep -v "maldet --update" | \
+         grep -v "maldet --scan-all" | \
+         crontab -) || true
 
-    # Create new cron jobs
-    (crontab -l 2>/dev/null || true) > mycron
-    cat >> mycron << 'EOFCRON'
+        # Create new cron jobs
+        (crontab -l 2>/dev/null || true) > mycron
+        cat >> mycron << 'EOFCRON'
 0 1 * * * lynis audit system --cronjob >> /var/log/lynis_cron.log 2>&1
 0 3 * * * /opt/eset/esets/sbin/esets_update
 0 4 * * * chkrootkit
@@ -337,50 +337,50 @@ EOFCRON
 
 # Disable USB storage
 disable_usb_storage() {
-    whiptail --infobox "Disabling USB storage..." 7 50
-    echo 'blacklist usb-storage' > /etc/modprobe.d/usb-storage.conf
-    if modprobe -r usb-storage 2>/dev/null; then
-        whiptail --msgbox "USB storage successfully disabled." 8 50
-    else
-        whiptail --msgbox "Warning: USB storage module in use, cannot unload." 8 60
-    fi
+        whiptail --infobox "Disabling USB storage..." 7 50
+        echo 'blacklist usb-storage' > /etc/modprobe.d/usb-storage.conf
+        if modprobe -r usb-storage 2>/dev/null; then
+            whiptail --msgbox "USB storage successfully disabled." 8 50
+        else
+            whiptail --msgbox "Warning: USB storage module in use, cannot unload." 8 60
+        fi
 }
 
 # Update system packages again
 update_sys_pkgs() {
-    if ! update_system_packages; then
-        # printf "\033[1;31m[-] System update failed.\033[0m\n"
-        whiptail --title "System update failed"
-        exit 1
-    fi
+        if ! update_system_packages; then
+            # printf "\033[1;31m[-] System update failed.\033[0m\n"
+            whiptail --title "System update failed"
+            exit 1
+        fi
 }
 
 
 finalize() {
-	whiptail --title "All done!" \
-		--msgbox "Congrats! Provided there were no hidden errors, the script completed successfully and all the programs and configuration files should be in place.\\n\\nPlease reboot to apply installation.\\n\\n.t Luke" 13 80
+    	whiptail --title "All done!" \
+    		--msgbox "Congrats! Provided there were no hidden errors, the script completed successfully and all the programs and configuration files should be in place.\\n\\nPlease reboot to apply installation.\\n\\n.t Luke" 13 80
 }
 
 
 # Main function
 main() {
-    welcomemsg || error "User exited."
-    preinstallmsg || error "User exited."
-    update_system_packages
-    install_pkgdeps
-    # Check dependencies. If needed, use commented conditional block below main
-    installationloop
-    install_selinux
-    install_security_tools
-    configure_ufw
-    enable_services
-    install_additional_tools
-    reload_apparmor
-    configure_cron
-    disable_usb_storage
-    update_sys_pkgs
-    finalize
-    # setup_complete
+        welcomemsg || error "User exited."
+        preinstallmsg || error "User exited."
+        update_system_packages
+        install_pkgdeps
+        # Check dependencies. If needed, use commented conditional block below main
+        installationloop
+        install_selinux
+        install_security_tools
+        configure_ufw
+        enable_services
+        install_additional_tools
+        reload_apparmor
+        configure_cron
+        disable_usb_storage
+        update_sys_pkgs
+        finalize
+        # setup_complete
 }
 
 # Run the main function
