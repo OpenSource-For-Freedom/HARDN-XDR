@@ -501,22 +501,7 @@ EOF
     sysctl -w kernel.randomize_va_space=2 || printf "\033[1;31m[-] Failed to set kernel.randomize_va_space.\033[0m\n"
 }
 
-grub_security() {
-    # Skip if UEFI < VM support
-    if [ -d /sys/firmware/efi ]; then
-        echo "[*] UEFI system detected. Skipping GRUB configuration..."
-        return 0
-    fi
 
-    # Check for Virtual Machine environment
-    if grep -q 'hypervisor' /proc/cpuinfo; then
-        echo "[*] Virtual machine detected. Proceeding with GRUB configuration..."
-    else
-        echo "[+] No virtual machine detected. Proceeding with GRUB configuration..."
-    fi
-    sysctl --system || printf "\033[1;31m[-] Failed to reload sysctl settings.\033[0m\n"
-    sysctl -w kernel.randomize_va_space=2 || printf "\033[1;31m[-] Failed to set kernel.randomize_va_space.\033[0m\n"
-}
 
 grub_security() {
     # Skip if UEFI < VM support
