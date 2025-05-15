@@ -337,9 +337,9 @@ disable_usb_storage() {
 
 # Update system packages again
 update_sys_pkgs() {
-        whiptail --infobox "Updating system packages..."
+            printf "\033[1;31m[-] System update.\033[0m\n"
         if ! update_system_packages; then
-            # printf "\033[1;31m[-] System update failed.\033[0m\n"
+             printf "\033[1;31m[-] System update failed.\033[0m\n"
             whiptail --title "System update failed"
             exit 1
         fi
@@ -357,7 +357,7 @@ main() {
         welcomemsg || error "User exited."
         preinstallmsg || error "User exited."
         update_system_packages
-        install_pkgdeps
+        #install_pkgdeps
         aptinstall
         maininstall
         gitdpkgbuild
