@@ -108,6 +108,24 @@ After installation, you can always start the hardening setup by running `sudo ha
 - Improved error handling and script optimization.
 - Updated documentation and ensured cron jobs are non-intrusive.
 
+### New Features in HARDN v1.1.5
+
+- **Menu in Setup Script**: The `hardn` setup script now supports various flags for enhanced flexibility:
+  - `--setup`: Start hardn setup.
+  - `--update`: Update system packages.
+  - `--install-security-tools`: Install security tools.
+  - `--disable-security-tools`: Disable all security tools.
+  - `--show-tools`: Display installed security tools.
+  - `--show-stig`: Show STIG hardening tasks.
+  - `--disable-apparmor`: Disable AppArmor.
+  - `--enable-fail2ban`: Enable Fail2Ban.
+  - `--disable-firejail`: Disable Firejail.
+  - `--disable-rkhunter`: Disable RKHunter.
+  - `--disable-aide`: Disable AIDE.
+  - `--disable-ufw`: Disable UFW.
+
+These flags allow users to customize the setup process according to their requirements.
+
 ### Installation Notes
 - Ensure you have the latest version of Debian 12 or Ubuntu 24.04.
 - Follow the updated installation steps in the `docs` directory.
