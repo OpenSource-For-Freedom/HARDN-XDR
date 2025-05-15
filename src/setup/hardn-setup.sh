@@ -869,6 +869,58 @@ ${GREEN}=======================================================${RESET}
 
 EOF
 
+        # Function to display status messages in a consistent format
+        display_status() {
+            local message="$1"
+            cat <<EOF
+
+${GREEN}=======================================================${RESET}
+${GREEN}         [+] $message${RESET}
+${GREEN}=======================================================${RESET}
+
+EOF
+        }
+
+        # Execute each step and display status
+        detect_os
+        display_status "OS Detection Complete"
+
+        print_ascii_banner
+        display_status "Starting HARDN Setup"
+
+        update_system_packages "$SKIP_FIRMWARE"
+        display_status "System Packages Updated"
+
+        install_pkgdeps
+        display_status "Package Dependencies Installed"
+
+        install_security_tools
+        display_status "Security Tools Installed"
+
+        enable_fail2ban
+        display_status "Fail2Ban Enabled"
+
+        enable_apparmor
+        display_status "AppArmor Enabled"
+
+        enable_aide
+        display_status "AIDE Enabled"
+
+        enable_rkhunter
+        display_status "RKHunter Enabled"
+
+        configure_firejail
+        display_status "Firejail Configured"
+
+        apply_stig_hardening
+        display_status "STIG Hardening Applied"
+
+        grub_security
+        display_status "GRUB Security Configured"
+
+        setup_complete
+        display_status "Setup Complete"
+
         echo -e "${GREEN}HARDN setup completed successfully.${RESET}"
 }
 
