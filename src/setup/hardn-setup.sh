@@ -232,7 +232,7 @@ detect_os() {
 install_pkgdeps() {
         printf "\033[1;31m[+] Installing package dependencies...\033[0m\n"
         # Replace: apt install -y package_name
-        apt "$APT_OPTIONS" git gawk mariadb-common policycoreutils dpkg-dev \
+        apt "$APT_OPTIONS" install git gawk mariadb-common policycoreutils dpkg-dev \
             unixodbc-common firejail python3-pyqt6 fonts-liberation libpam-pwquality
 }
 
@@ -843,7 +843,7 @@ main() {
                     return 1
                     ;;
             esac
-        elif [[ "$0" != "$BASH_SOURCE" ]]; then
+        elif [[ "$0" != "$BASH_SOURCE[0]" ]]; then
             # If being sourced, don't run the full setup
             return 0
         else
