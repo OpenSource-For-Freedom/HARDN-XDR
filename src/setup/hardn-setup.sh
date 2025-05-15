@@ -105,9 +105,10 @@ update_system_packages() {
 # menu selection case statement
 # Ensure no unintended code runs unless explicitly triggered by a flag
 if [[ -n "$1" ]]; then
+  main
     case $1 in
         -s|--setup)
-            main
+     #       main
             ;;
         -u|--update)
             update_system_packages
