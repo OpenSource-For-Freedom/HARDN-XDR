@@ -695,8 +695,6 @@ EOF
 main() {
         local arg="$1"
         local SKIP_FIRMWARE="false"
-        #print_ascii_banner
-        sleep 5
 
         SCRIPT_PATH="$(readlink -f "$0")"
         SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
@@ -707,17 +705,16 @@ main() {
             exit 1
         fi
 
-        # Only display menu options if no arguments are provided or help is requested
-        if [[ -z "$arg" || "$arg" == "-h" || "$arg" == "--help" ]]; then
-            list_menu_options
-        fi
-
-        # menu selection case statement
-        # Ensure no unintended code runs unless explicitly triggered by a flag
+        # Process command line arguments
         if [[ -n "$arg" ]]; then
             case $arg in
+                -h|--help)
+                    display_help_banner
+                    list_menu_options
+                    return 0
+                    ;;
                 -s|--setup)
-                    # Skip the case statement for setup to avoid recursion
+                    # Full setup will be executed below
                     ;;
                 -u|--update)
                     update_system_packages
@@ -729,10 +726,8 @@ main() {
                     return 0
                     ;;
                 -sf|--skip-firmware)
-                    # This flag will be used when calling update_firmware in apply_stig_hardening
                     SKIP_FIRMWARE="true"
                     echo "Firmware updates will be skipped during setup."
-                    return 0
                     ;;
                 -cl|--check-HARDN-logs)
                     if [ -f HARDN_alerts.txt ]; then
@@ -842,11 +837,6 @@ main() {
                     echo "  - Set randomize_va_space"
                     return 0
                     ;;
-                -h|--help)
-                    display_help_banner
-                    list_menu_options
-                    return 0
-                    ;;
                 *)
                     echo "Unknown option: $arg"
                     echo "Use -h or --help for usage information."
@@ -857,13 +847,12 @@ main() {
             # If being sourced, don't run the full setup
             return 0
         else
-            # Only show this message when run directly without arguments
-            # and not when called from the -s|--setup option
-            if [[ "$arg" != "-s" && "$arg" != "--setup" ]]; then
-                echo "No option provided. Use -h or --help for usage information."
-                return 1
-            fi
+            # No arguments provided, show help
+            list_menu_options
+            return 0
         fi
+
+        # If we reach here, we're doing a full setup (either with -s/--setup or with --skip-firmware)
 
         # Define colors for better readability
         GREEN="\033[1;32m"
@@ -875,6 +864,51 @@ main() {
             cat <<EOF
 
 ${GREEN}=======================================================${RESET}
+${GREEN}         [+] $message${RESET}
+${GREEN}=======================================================${RESET}
+
+EOF
+        }
+
+        # Execute each step and display status
+        detect_os
+        display_status "OS Detection Complete"
+
+        update_system_packages
+        display_status "System Packages Updated"
+
+        install_pkgdeps
+        display_status "Package Dependencies Installed"
+
+        install_security_tools
+        display_status "Security Tools Installed"
+
+        grub_security
+        display_status "GRUB Security Configured"
+
+        enable_fail2ban
+        display_status "Fail2Ban Enabled"
+
+        enable_apparmor
+        display_status "AppArmor Enabled"
+
+        enable_aide
+        display_status "AIDE Enabled"
+
+        enable_rkhunter
+        display_status "RKHunter Enabled"
+
+        configure_firejail
+        display_status "Firejail Configured"
+
+        apply_stig_hardening
+        display_status "STIG Hardening Applied"
+
+        setup_complete
+        display_status "HARDN Setup Complete"
+
+        echo -e "${GREEN}HARDN setup completed successfully.${RESET}"
+}
 ${GREEN}         [+] $message${RESET}
 ${GREEN}=======================================================${RESET}
 
