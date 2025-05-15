@@ -54,13 +54,6 @@ EOF
     echo -e "${RESET}"
 }
 
-if [[ "$1" == "-h" || "$1" == "--help" ]]; then
-    display_help_banner
-    list_menu_options
-    exit 0
-fi
-
-
 # Display menu options
 list_menu_options() {
     cat <<EOF
@@ -92,9 +85,10 @@ EOF
 }
 
 
-if [[ -z "$1" ]]; then
-        echo "No option provided. Use -h or --help for usage information."
-        exit 1
+if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+    display_help_banner
+    list_menu_options
+    exit 0
 fi
 
 
@@ -289,7 +283,6 @@ detect_os() {
         exit 1
     fi
 }
-
 
 
 install_pkgdeps() {
