@@ -270,7 +270,7 @@ EOF
 
 enable_apparmor() {
         printf "\033[1;31m[+] Installing and enabling AppArmor…\033[0m\n"
-        apt "$APT_OPTIONS" apparmor apparmor-utils apparmor-profiles || {
+        apt "$APT_OPTIONS" install apparmor apparmor-utils apparmor-profiles || {
             printf "\033[1;31m[-] Failed to install AppArmor.\033[0m\n"
             return 1
         }
@@ -291,7 +291,7 @@ enable_apparmor() {
 
 enable_aide() {
         printf "\033[1;31m[+] Installing AIDE and initializing database…\033[0m\n"
-        apt "$APT_OPTIONS" aide aide-common || {
+        apt "$APT_OPTIONS" install aide aide-common || {
             printf "\033[1;31m[-] Failed to install AIDE.\033[0m\n"
             return 1
         }
@@ -415,7 +415,7 @@ stig_secure_filesystem() {
         chmod 640 /etc/shadow /etc/gshadow
 
         printf "\033[1;31m[+] Configuring audit rules...\033[0m\n"
-        apt "$APT_OPTIONS" auditd audispd-plugins
+        apt "$APT_OPTIONS" install auditd audispd-plugins
         tee /etc/audit/rules.d/stig.rules > /dev/null <<EOF
 -w /etc/passwd -p wa -k identity
 -w /etc/shadow -p wa -k identity
