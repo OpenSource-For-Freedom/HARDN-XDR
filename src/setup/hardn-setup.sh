@@ -70,8 +70,8 @@ fi
 
 
 if [[ -z "$1" ]]; then
-    "$0" -h
-    exit 0
+    echo "No option provided. Use -h or --help for usage information."
+    exit 1
 fi
 
 
