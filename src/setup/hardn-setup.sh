@@ -291,23 +291,41 @@ install_security_tools() {
     apt install -y ufw fail2ban apparmor apparmor-profiles apparmor-utils firejail tcpd lynis debsums aide \
         libpam-pwquality libvirt-daemon-system libvirt-clients qemu-system-x86 openssh-server openssh-client rkhunter 
 
-    TMPDIR=$(mktemp -d)
-    cd "$TMPDIR"
-    wget https://www.rfxn.com/downloads/maldetect-current.tar.gz
-    tar -xvzf maldetect-current.tar.gz
-    MALDETECT_DIR=$(find . -maxdepth 1 -type d -name "maldetect-*" | head -n 1)
-    if [ -d "$MALDETECT_DIR" ]; then
-        cd "$MALDETECT_DIR"
-        ./install.sh
-        sudo maldet --update
-    else
-        echo "[-] Maldetect directory not found after extraction."
-        cd /
-        rm -rf "$TMPDIR"
+}
+
+install_maldet() {
+    printf "\033[1;31m[+] Installing Linux Malware Detect (maldet)...\033[0m\n"
+
+    wget https://www.rfxn.com/downloads/maldetect-current.tar.gz -O /tmp/maldetect-current.tar.gz || {
+        printf "\033[1;31m[-] Failed to download maldet.\033[0m\n"
+        return 1
+    }
+
+    tar -xvzf /tmp/maldetect-current.tar.gz -C /tmp || {
+        printf "\033[1;31m[-] Failed to extract maldet.\033[0m\n"
+        return 1
+    }
+   
+    maldet_dir=$(find /tmp -maxdepth 1 -type d -name "maldetect-*" | head -n 1)
+    if [ -z "$maldet_dir" ]; then
+        printf "\033[1;31m[-] Maldetect directory not found.\033[0m\n"
         return 1
     fi
-    cd /
-    rm -rf "$TMPDIR"
+    cd "$maldet_dir" || {
+        printf "\033[1;31m[-] Failed to navigate to maldet directory.\033[0m\n"
+        return 1
+    }
+    sudo ./install.sh || {
+        printf "\033[1;31m[-] Failed to install maldet.\033[0m\n"
+        return 1
+    }
+
+    sudo maldet --update || {
+        printf "\033[1;31m[-] Failed to update maldet signatures.\033[0m\n"
+        return 1
+    }
+
+    printf "\033[1;32m[+] maldet installed and updated successfully.\033[0m\n"
 }
 
 enable_fail2ban() {
@@ -358,7 +376,7 @@ enable_aide() {
     }
 
     if [ -f /var/lib/aide/aide.db ]; then
-        printf "\033[1;33m[!] AIDE database already exists. Skipping initialization.\033[0m\n"
+        printf "\033[1;33m[!] AIDE database already exists. Skipping initialization and continuing.\033[0m\n"
         return 0
     fi
 
@@ -366,6 +384,12 @@ enable_aide() {
         printf "\033[1;31m[-] Failed to initialize AIDE database.\033[0m\n"
         return 1
     }
+
+    aide --check || {
+        printf "\033[1;31m[-] AIDE check failed. Please review the logs.\033[0m\n"
+        return 1
+    }
+    
     mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db || {
         printf "\033[1;31m[-] Failed to replace AIDE database.\033[0m\n"
         return 1
@@ -463,15 +487,14 @@ stig_login_banners() {
 stig_secure_filesystem() {
     printf "\033[1;31m[+] Securing filesystem permissions...\033[0m\n"
 
-    # Set ownership and permissions for critical files
+    
     chown root:root /etc/passwd /etc/group /etc/gshadow
     chmod 644 /etc/passwd
     chmod 644 /etc/group
-
     chown root:shadow /etc/shadow /etc/gshadow
     chmod 640 /etc/shadow /etc/gshadow
 
-    # Configure audit rules
+   
     printf "\033[1;31m[+] Configuring audit rules...\033[0m\n"
     apt install -y auditd audispd-plugins
     tee /etc/audit/rules.d/stig.rules > /dev/null <<EOF
@@ -482,11 +505,8 @@ stig_secure_filesystem() {
 -w /etc/security/opasswd -p wa -k identity
 EOF
 
-    # Set ownership and permissions for audit rules
     chown root:root /etc/audit/rules.d/*.rules
     chmod 600 /etc/audit/rules.d/*.rules
-
-    # Ensure audit log directory exists and is secured
     mkdir -p /var/log/audit
     chown -R root:root /var/log/audit
     chmod 700 /var/log/audit
@@ -498,6 +518,9 @@ EOF
     systemctl restart auditd || { printf "\033[1;31m[-] Failed to restart auditd.\033[0m\n"; return 1; }
     auditctl -e 1 || printf "\033[1;31m[-] Failed to enable auditd.\033[0m\n"
 }
+
+
+
 
 stig_harden_ssh() {
     printf "\033[1;31m[+] Hardening SSH configuration...\033[0m\n"
@@ -774,6 +797,7 @@ main() {
 ================================================================================
 \033[0m"
     install_security_tools
+    install_maldet
 
     echo -e "\033[1;31m
 ================================================================================

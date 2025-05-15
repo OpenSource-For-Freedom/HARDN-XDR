@@ -1,5 +1,24 @@
 # Changelog
 
+## Version 1.1.6
+
+### Added
+- **Internet Connectivity Check**: Added a function to verify internet connectivity before proceeding with the setup.
+- **Linux Malware Detect (maldet)**: Automated installation and configuration of maldet.
+- **Audit Rules**: Configured audit rules for critical system files like `/etc/passwd` and `/etc/shadow`.
+
+### Improved
+- **File Permissions**: Fixed permissions for critical files such as `/etc/shadow` and `/etc/passwd`.
+- **Service Management**: Enhanced error handling and ensured `Fail2Ban`, `AppArmor`, and `auditd` are enabled and running at boot.
+- **SSH Hardening**: Enforced stricter SSH settings for improved security.
+- **Kernel Randomization**: Ensured kernel randomization is applied persistently and at runtime.
+
+### Fixed
+- **Error Handling**: Improved error handling for services like `Fail2Ban`, `AppArmor`, and `auditd` to prevent setup failures.
+
+
+---
+
 ## Version 1.1.5
 
 ### Added

@@ -22,7 +22,7 @@ ${CYAN_BOLD}
                      
                                                V A L I D A T I O N
                                                      
-                                                    v 1.1.4
+                                                    v 1.1.6
                                                                        
                                                                      
                                        
@@ -402,8 +402,6 @@ main() {
 
     if grep -q "[-]" "$LOG_FILE"; then
         printf "\033[1;31m[-] Validation failed. Please check the log file at %s for details.\033[0m\n" "$LOG_FILE"
-        printf "\033[1;31m[-] Error Summary:\033[0m\n"
-        grep "[-]" "$LOG_FILE" | nl
         return 1
     else
         printf "\033[1;32m[+] Validation successful. No errors found.\033[0m\n"
