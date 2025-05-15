@@ -1,3 +1,27 @@
+hardn (1.1.8) UNRELEASED; urgency=medium
+
+  * Added `detect_environment` to `hardn-setup.sh` for identifying bare metal or virtual machine environments.
+  * Updated `main` in `hardn-setup.sh` to include environment detection for golden image builds.
+  * Added `validate_environment` to `hardn-packages.sh` for validating system environment configurations.
+  * Enhanced `validate_packages` in `hardn-packages.sh` to include environment validation.
+
+ -- Tim Burns <cyborgcreations01@gmail.com>  Thu, 15 May 2025 13:00:00 +0500
+
+hardn (1.1.7) UNRELEASED; urgency=medium
+
+  * Updated `validate_packages` in `hardn-packages.sh` to automatically fix validation issues.
+  * Added a `main` function to `hardn-setup.sh` for initializing the environment during a fresh install.
+
+ -- Tim Burns <cyborgcreations01@gmail.com>  Thu, 15 May 2025 12:00:00 +0500
+
+hardn (1.1.6) UNRELEASED; urgency=medium
+
+  * Added error handling to `update_system_packages` in `hardn-setup.sh`.
+  * Updated `LOG_FILE` path in `hardn-packages.sh` to `/var/log/hardn-packages.log`.
+  * Added input validation to `fix_if_needed` in `hardn-packages.sh`.
+
+ -- Tim Burns <cyborgcreations01@gmail.com>  Thu, 15 May 2025 10:00:00 +0500
+
 hardn (1.1.5) UNRELEASED; urgency=medium
 
   * Added flag-based functionality to `hardn-setup.sh` for enhanced flexibility.

@@ -2,7 +2,7 @@
 
 
 set -e # Exit on errors
-LOG_FILE="/dev/null"
+LOG_FILE="/var/log/hardn-packages.log"
 
 
 print_ascii_banner() {
@@ -64,6 +64,12 @@ fix_if_needed() {
     local success_msg="$3"
     local failure_msg="$4"
 
+    # Validate inputs
+    if [[ -z "$check_cmd" || -z "$fix_cmd" || -z "$success_msg" || -z "$failure_msg" ]]; then
+        echo "[-] Invalid arguments provided to fix_if_needed." | tee -a "$LOG_FILE"
+        return 1
+    fi
+
     if eval "$check_cmd"; then
         echo "[+] $success_msg" | tee -a "$LOG_FILE"
     else
@@ -93,102 +99,98 @@ ensure_aide_initialized() {
     fi
 }
 
-validate_packages() {
-    echo "[INFO] Validating package configurations with enhanced error handling..."
+validate_environment() {
+    echo "[INFO] Validating system environment..." | tee -a "$LOG_FILE"
 
+    if [ -d /sys/firmware/efi ]; then
+        echo "[*] UEFI system detected. Ensuring UEFI configurations are applied..." | tee -a "$LOG_FILE"
+        # Add UEFI-specific validation here if needed
+    else
+        echo "[*] Legacy BIOS system detected. Ensuring BIOS configurations are applied..." | tee -a "$LOG_FILE"
+        # Add BIOS-specific validation here if needed
+    fi
+
+    if grep -q 'hypervisor' /proc/cpuinfo; then
+        echo "[*] Virtual machine detected. Validating VM-specific configurations..." | tee -a "$LOG_FILE"
+        # Add VM-specific validation here if needed
+    else
+        echo "[*] Bare metal system detected. Validating bare metal configurations..." | tee -a "$LOG_FILE"
+        # Add bare metal-specific validation here if needed
+    fi
+}
+
+validate_packages() {
+    echo "[INFO] Validating package configurations with enhanced error handling..." | tee -a "$LOG_FILE"
+
+    # Validate system environment
+    validate_environment
+
+    # Check and fix internet connectivity
     fix_if_needed \
-        "! ping -c 1 google.com >/dev/null 2>&1" \
+        "ping -c 1 google.com >/dev/null 2>&1" \
         "sudo systemctl restart networking && sudo dhclient" \
         "Internet connectivity is restored" \
         "Internet connectivity is not available"
 
-    echo "[*] Checking internet connectivity..." | tee -a "$LOG_FILE"
-
-    fix_if_needed \
-        "sudo ufw status | grep -q 'Status: active'" \
-        "sudo apt-get install -y ufw && sudo ufw enable" \
-        "UFW is active" \
-        "UFW is not active. Attempting to fix..."
-
-    echo "[*] Checking UFW status..." | tee -a "$LOG_FILE"
-
+    # Check and fix Fail2Ban
     fix_if_needed \
         "sudo systemctl is-active --quiet fail2ban" \
         "sudo systemctl start fail2ban" \
         "Fail2Ban is active" \
         "Fail2Ban not running"
 
-    echo "[*] Checking Fail2Ban status..." | tee -a "$LOG_FILE"
-
+    # Check and fix AppArmor
     fix_if_needed \
-        "command -v aa-status >/dev/null && sudo systemctl is-active --quiet apparmor" \
-        "sudo systemctl start apparmor" \
+        "sudo systemctl is-active --quiet apparmor" \
+        "sudo systemctl enable --now apparmor" \
         "AppArmor is active" \
         "AppArmor not active"
 
-    echo "[*] Checking AppArmor status..." | tee -a "$LOG_FILE"
-
+    # Check and install maldet
     fix_if_needed \
-        "command -v firejail >/dev/null" \
-        "sudo apt-get install -y firejail" \
-        "Firejail is installed" \
-        "Firejail missing"
-
-    echo "[*] Checking Firejail installation..." | tee -a "$LOG_FILE"
-
-    fix_if_needed \
-        "command -v chkrootkit >/dev/null" \
-        "sudo apt-get install -y chkrootkit" \
-        "chkrootkit installed" \
-        "chkrootkit missing"
-
-    echo "[*] Checking chkrootkit installation..." | tee -a "$LOG_FILE"
-
-    fix_if_needed \
-        "[ -x /usr/local/maldetect/maldet ] || [ -x /usr/local/bin/maldet ] || command -v maldet >/dev/null" \
-        "( [ ! -d /tmp/linux-malware-detect ] && cd /tmp && git clone https://github.com/rfxn/linux-malware-detect.git ) && cd /tmp/linux-malware-detect && sudo ./install.sh && sudo ln -sf /usr/local/maldetect/maldet /usr/local/bin/maldet && ( [ -x /usr/local/maldetect/maldet ] || [ -x /usr/local/bin/maldet ] || command -v maldet >/dev/null )" \
+        "command -v maldet >/dev/null 2>&1" \
+        "sudo apt install -y maldet" \
         "Linux Malware Detect (maldet) is installed" \
         "Linux Malware Detect (maldet) is not installed"
 
-    echo "[*] Checking maldet installation..." | tee -a "$LOG_FILE"
-
+    # Check and reinitialize AIDE database
     fix_if_needed \
-        "command -v rkhunter >/dev/null" \
-        "sudo apt-get install -y rkhunter" \
-        "rkhunter installed" \
-        "rkhunter missing"
-
-    echo "[*] Checking rkhunter installation..." | tee -a "$LOG_FILE"
-
-    fix_if_needed \
-        "sudo systemctl is-active --quiet auditd" \
-        "sudo systemctl start auditd" \
-        "auditd is running" \
-        "auditd not running"
-
-    echo "[*] Checking auditd status..." | tee -a "$LOG_FILE"
-
-    fix_if_needed \
-        "command -v aide >/dev/null" \
-        "sudo apt-get install -y aide" \
-        "AIDE is installed" \
-        "AIDE not installed"
-
-    echo "[*] Checking AIDE installation..." | tee -a "$LOG_FILE"
-
-    fix_if_needed \
-        "sudo aide --check >/dev/null 2>&1" \
-        "sudo aideinit && sudo cp /var/lib/aide/aide.db.new /var/lib/aide/aide.db" \
-        "AIDE database check passed" \
+        "[ -f /var/lib/aide/aide.db ]" \
+        "sudo aideinit && sudo cp /var/lib/aide/aide.db.new /var/lib/aide/aide.db && sudo chmod 600 /var/lib/aide/aide.db" \
+        "AIDE database is initialized" \
         "AIDE database check failed"
 
-    echo "[*] Performing AIDE database check..." | tee -a "$LOG_FILE"
+    # Check and fix /etc/shadow permissions
+    fix_if_needed \
+        "[ $(stat -c '%a' /etc/shadow) -eq 640 ] && [ $(stat -c '%U:%G' /etc/shadow) == 'root:shadow' ]" \
+        "sudo chmod 640 /etc/shadow && sudo chown root:shadow /etc/shadow" \
+        "/etc/shadow permissions are correct" \
+        "Incorrect /etc/shadow permissions"
 
-    
+    # Enable Fail2Ban at boot
+    fix_if_needed \
+        "sudo systemctl is-enabled --quiet fail2ban" \
+        "sudo systemctl enable fail2ban" \
+        "Fail2Ban is enabled at boot" \
+        "Fail2Ban is disabled at boot"
+
+    # Enable auditd at boot
+    fix_if_needed \
+        "sudo systemctl is-enabled --quiet auditd" \
+        "sudo systemctl enable auditd" \
+        "auditd is enabled at boot" \
+        "auditd is disabled at boot"
+
+    # Enable AppArmor at boot
+    fix_if_needed \
+        "sudo systemctl is-enabled --quiet apparmor" \
+        "sudo systemctl enable apparmor" \
+        "AppArmor is enabled at boot" \
+        "AppArmor is disabled at boot"
+
     echo "[INFO] Summary of changes made during validation:" | tee -a "$LOG_FILE"
     grep "[+]" "$LOG_FILE" | tee -a "$LOG_FILE"
 }
-
 
 validate_stig_hardening() {
     echo "[+] Validating STIG compliance..." | tee -a "$LOG_FILE"

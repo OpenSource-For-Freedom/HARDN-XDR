@@ -2,7 +2,20 @@
 
 set -e
 
-# Add a global debug statement to confirm script execution
+SCRIPT_PATH="$(readlink -f "$0")"
+SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
+PACKAGES_SCRIPT="$SCRIPT_DIR/hardn-packages.sh"
+
+LOG_FILE="/var/log/hardn-setup.log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+
+if [ "$(id -u)" -ne 0; then
+    echo "This script must be run as root. Use: sudo hardn"
+    exit 1
+fi
+
+
 printf "[DEBUG] Script started with arguments: $@\n"
 
 center_text() {
@@ -80,12 +93,25 @@ RESET="\033[0m"
 
 update_system_packages() {
     printf "\033[1;31m[+] Updating system packages...\033[0m\n"
-    apt update -y && apt upgrade -y
-    sudo apt-get install -f
-    apt --fix-broken install -y
+    if ! apt update -y && apt upgrade -y; then
+        printf "\033[1;31m[-] Failed to update and upgrade packages.\033[0m\n"
+        exit 1
+    fi
+
+    if ! sudo apt-get install -f; then
+        printf "\033[1;31m[-] Failed to fix broken dependencies.\033[0m\n"
+        exit 1
+    fi
+
+    if ! apt --fix-broken install -y; then
+        printf "\033[1;31m[-] Failed to fix broken packages.\033[0m\n"
+        exit 1
+    fi
+
+    printf "\033[1;32m[+] System packages updated successfully.\033[0m\n"
 }
 
-# Add debugging output to trace execution
+
 flags(){ 
     echo "[DEBUG] Entered flags function with argument: $1"
     if [[ -n "$1" ]]; then
@@ -206,40 +232,6 @@ flags(){
     fi
 }
 
-
-print_ascii_banner() {
-    cat <<EOF
-${CYAN_BOLD}
-                              ▄█    █▄       ▄████████    ▄████████ ████████▄  ███▄▄▄▄   
-                             ███    ███     ███    ███   ███    ███ ███   ▀███ ███▀▀▀██▄ 
-                             ███    ███     ███    ███   ███    ███ ███    ███ ███   ███ 
-                            ▄███▄▄▄▄███▄▄   ███    ███  ▄███▄▄▄▄██▀ ███    ███ ███   ███ 
-                           ▀▀███▀▀▀▀███▀  ▀███████████ ▀▀███▀▀▀▀▀   ███    ███ ███   ███ 
-                             ███    ███     ███    ███ ▀███████████ ███    ███ ███   ███ 
-                             ███    ███     ███    ███   ███    ███ ███   ▄███ ███   ███ 
-                             ███    █▀      ███    █▀    ███    ███ ████████▀   ▀█   █▀  
-                                                         ███    ███ 
-                                    
-                                                   S E T U P
-                                                   
-                                                    v 1.1.5
-${RESET}
-EOF
-}
-
-SCRIPT_PATH="$(readlink -f "$0")"
-SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
-MENU_SCRIPT="$SCRIPT_DIR/../tools/menu.sh"
-PACKAGES_SCRIPT="$SCRIPT_DIR/hardn-packages.sh"
-
-
-if [ "$(id -u)" -ne 0 ]; then
-    echo "This script must be run as root. Use: sudo hardn"
-    exit 1
-fi
-
-
-
 detect_os() {
     if [ -f /etc/os-release ] && [ -r /etc/os-release ]; then
         . /etc/os-release
@@ -274,21 +266,29 @@ detect_os() {
     fi
 }
 
-
-
 install_pkgdeps() {
+    
     printf "\033[1;31m[+] Installing package dependencies...\033[0m\n"
-    apt install -y git gawk mariadb-common policycoreutils dpkg-dev \
-        unixodbc-common firejail python3-pyqt6 fonts-liberation libpam-pwquality
+    apt install -y git fwupd gawk mariadb-common policycoreutils dpkg-dev \
+        unixodbc-common firejail unattended-upgrades python3-pyqt6 fonts-liberation libpam-pwquality
 }
 
+enable_auto_updates() {
+    printf "\033[1;31m[+] Enabling automatic updates...\033[0m\n"
+    apt install -y unattended-upgrades || {
+        printf "\033[1;31m[-] Failed to install unattended-upgrades.\033[0m\n"
+        return 1
+    }
+
+    dpkg-reconfigure -plow unattended-upgrades
+    printf "\033[1;32m[+] Automatic updates enabled.\033[0m\n"
+}
 
 install_security_tools() {
     printf "\033[1;31m[+] Installing required system security tools...\033[0m\n"
-    apt install -y ufw fail2ban apparmor apparmor-profiles apparmor-utils firejail tcpd lynis debsums \
+    apt install -y ufw fail2ban apparmor apparmor-profiles apparmor-utils firejail tcpd lynis debsums aide \
         libpam-pwquality libvirt-daemon-system libvirt-clients qemu-system-x86 openssh-server openssh-client rkhunter 
 }
-
 
 enable_fail2ban() {
     printf "\033[1;31m[+] Installing and enabling Fail2Ban...\033[0m\n"
@@ -330,7 +330,6 @@ enable_apparmor() {
     printf "\033[1;33m[!] Review profile behavior before switching to enforce mode.\033[0m\n"
 }
 
-
 enable_aide() {
     printf "\033[1;31m[+] Installing AIDE and initializing database…\033[0m\n"
     apt install -y aide aide-common || {
@@ -354,7 +353,6 @@ enable_aide() {
 
     printf "\033[1;32m[+] AIDE successfully installed and configured.\033[0m\n"
 }
-
 
 enable_rkhunter(){
     printf "\033[1;31m[+] Installing rkhunter...\033[0m\n" | tee -a HARDN_alerts.txt
@@ -381,7 +379,6 @@ enable_rkhunter(){
     printf "\033[1;32m[+] rkhunter installed and updated.\033[0m\n" | tee -a HARDN_alerts.txt
 }
 
-
 configure_firejail() {
     printf "\033[1;31m[+] Configuring Firejail for Firefox and Chrome...\033[0m\n"
 
@@ -407,9 +404,8 @@ configure_firejail() {
     printf "\033[1;31m[+] Firejail configuration completed.\033[0m\n"
 }
 
-
 stig_password_policy() {
-    # Update password quality settings in pwquality.conf
+
     sed -i 's/^#\? *minlen *=.*/minlen = 14/' /etc/security/pwquality.conf
     sed -i 's/^#\? *dcredit *=.*/dcredit = -1/' /etc/security/pwquality.conf
     sed -i 's/^#\? *ucredit *=.*/ucredit = -1/' /etc/security/pwquality.conf
@@ -417,12 +413,12 @@ stig_password_policy() {
     sed -i 's/^#\? *lcredit *=.*/lcredit = -1/' /etc/security/pwquality.conf
     sed -i 's/^#\? *enforcing *=.*/enforcing = 1/' /etc/security/pwquality.conf
 
-    # Update password aging policies in login.defs
+   
     echo "PASS_MIN_DAYS 1" >> /etc/login.defs
     echo "PASS_MAX_DAYS 90" >> /etc/login.defs
     echo "PASS_WARN_AGE 7" >> /etc/login.defs
 
-    # Activate pwquality profile using pam-auth-update if available
+  
     if command -v pam-auth-update > /dev/null; then
         pam-auth-update --package
         echo "[+] pam_pwquality profile activated via pam-auth-update"
@@ -431,14 +427,12 @@ stig_password_policy() {
     fi
 }
 
-
 stig_lock_inactive_accounts() {
     useradd -D -f 35
     awk -F: '$3 >= 1000 && $1 != "nobody" {print $1}' /etc/passwd | while read -r user; do
         chage --inactive 35 "$user"
     done
 }
-
 
 stig_login_banners() {
     echo "You are accessing a fully secured SIG Information System (IS)..." > /etc/issue
@@ -450,7 +444,7 @@ stig_secure_filesystem() {
     printf "\033[1;31m[+] Securing filesystem permissions...\033[0m\n"
     chown root:root /etc/passwd /etc/group /etc/gshadow
     chmod 644 /etc/passwd
-    chmod 640 /etc/group  # safer for PAM modules
+    chmod 640 /etc/group  
 
     chown root:shadow /etc/shadow /etc/gshadow
     chmod 640 /etc/shadow /etc/gshadow
@@ -463,7 +457,7 @@ stig_secure_filesystem() {
 -w /etc/group -p wa -k identity
 -w /etc/gshadow -p wa -k identity
 -w /etc/security/opasswd -p wa -k identity
-# -e 2  # Immutable mode. Uncomment only for production.
+
 EOF
 
     chown root:root /etc/audit/rules.d/*.rules
@@ -479,17 +473,17 @@ EOF
     auditctl -e 1 || printf "\033[1;31m[-] Failed to enable auditd.\033[0m\n"
 }
 
-
 stig_harden_ssh() {
     printf "\033[1;31m[+] Hardening SSH configuration...\033[0m\n"
 
-
     sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
-
-    # Disable password authentication to enforce key-based authentication
     sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+    sed -i 's/^#\?ChallengeResponseAuthentication.*/ChallengeResponseAuthentication no/' /etc/ssh/sshd_config
+    sed -i 's/^#\?UsePAM.*/UsePAM yes/' /etc/ssh/sshd_config
+    echo "AllowUsers your_user" >> /etc/ssh/sshd_config
+    echo "Ciphers aes256-ctr,aes192-ctr,aes128-ctr" >> /etc/ssh/sshd_config
+    echo "MACs hmac-sha2-512,hmac-sha2-256" >> /etc/ssh/sshd_config
 
-    # Restart the SSH service to apply changes
     systemctl restart sshd || {
         printf "\033[1;31m[-] Failed to restart SSH service. Check your configuration.\033[0m\n"
         return 1
@@ -497,7 +491,6 @@ stig_harden_ssh() {
 
     printf "\033[1;32m[+] SSH configuration hardened successfully.\033[0m\n"
 }
-
 
 stig_kernel_setup() {
     printf "\033[1;31m[+] Setting up STIG-compliant kernel parameters (login-safe)...\033[0m\n"
@@ -507,7 +500,6 @@ kernel.kptr_restrict = 2
 kernel.dmesg_restrict = 1
 fs.protected_hardlinks = 1
 fs.protected_symlinks = 1
-
 net.ipv4.conf.all.rp_filter = 1
 net.ipv4.conf.default.rp_filter = 1
 net.ipv4.conf.all.accept_redirects = 0
@@ -537,20 +529,19 @@ EOF
 
 
 grub_security() {
-    # Skip GRUB configuration for UEFI systems
+    
     if [ -d /sys/firmware/efi ]; then
         echo "[*] UEFI system detected. Skipping GRUB configuration..."
         return 0
     fi
 
-    # Check if running VM
+  
     if grep -q 'hypervisor' /proc/cpuinfo; then
         echo "[*] Virtual machine detected. Proceeding with GRUB configuration..."
     else
         echo "[+] No virtual machine detected. Proceeding with GRUB configuration..."
     fi
 
-    # Set GRUB password + grub-mkpasswd-pbkdf2
     echo "[+] Setting GRUB password..."
     grub-mkpasswd-pbkdf2 | tee /etc/grub.d/40_custom_password
 
@@ -568,15 +559,14 @@ grub_security() {
 
     echo "[+] Configuring GRUB security settings..."
     
-    # Backup the existing GRUB 
+
     BACKUP_CFG="$GRUB_CFG.bak.$(date +%Y%m%d%H%M%S)"
     cp "$GRUB_CFG" "$BACKUP_CFG"
     echo "[+] Backup created at $BACKUP_CFG"
 
-    # Modify GRUB 
     sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT="/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash security=1 /' /etc/default/grub
 
-    # Set GRUB_TIMEOUT
+
     if grep -q '^GRUB_TIMEOUT=' /etc/default/grub; then
         sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=5/' /etc/default/grub
     else
@@ -599,13 +589,10 @@ grub_security() {
     echo "[+] GRUB configuration secured: $GRUB_CFG"
 }
 
-
-
 stig_disable_usb() {
     echo "install usb-storage /bin/false" > /etc/modprobe.d/hardn-blacklist.conf
     update-initramfs -u || printf "\033[1;31m[-] Failed to update initramfs.\033[0m\n"
 }
-
 
 stig_disable_core_dumps() {
     echo "* hard core 0" | tee -a /etc/security/limits.conf > /dev/null
@@ -658,10 +645,12 @@ stig_configure_firewall() {
 }
 
 stig_set_randomize_va_space() {
+    stig_set_randomize_va_space() {
     printf "\033[1;31m[+] Setting kernel.randomize_va_space...\033[0m\n"
     echo "kernel.randomize_va_space = 2" > /etc/sysctl.d/hardn.conf
-    sysctl -w kernel.randomize_va_space=2 || printf "\033[1;31m[-] Failed to set randomize_va_space.\033[0m\n"
-    sysctl --system || printf "\033[1;31m[-] Failed to reload sysctl settings.\033[0m\n"
+    sysctl --system || { printf "\033[1;31m[-] Failed to reload sysctl settings.\033[0m\n"; exit 1; }
+    sysctl -w kernel.randomize_va_space=2 || { printf "\033[1;31m[-] Failed to set kernel.randomize_va_space.\033[0m\n"; exit 1; }
+}
 }
 
 update_firmware() {
@@ -675,26 +664,6 @@ update_firmware() {
         printf "\033[1;33m[+] No firmware updates available or update process skipped.\033[0m\n"
     fi
     apt update -y
-}
-
-apply_stig_hardening() {
-    printf "\033[1;31m[+] Applying STIG hardening tasks...\033[0m\n"
-
-    stig_password_policy || { printf "\033[1;31m[-] Failed to apply password policy.\033[0m\n"; exit 1; }
-    stig_harden_ssh || { printf "\033[1;31m[-] Failed to secure ssh.\033[0m\n"; exit 1; }
-    stig_lock_inactive_accounts || { printf "\033[1;31m[-] Failed to lock inactive accounts.\033[0m\n"; exit 1; }
-    stig_login_banners || { printf "\033[1;31m[-] Failed to set login banners.\033[0m\n"; exit 1; }
-    stig_kernel_setup || { printf "\033[1;31m[-] Failed to configure kernel parameters.\033[0m\n"; exit 1; }
-    stig_secure_filesystem || { printf "\033[1;31m[-] Failed to secure filesystem permissions.\033[0m\n"; exit 1; }
-    stig_disable_usb || { printf "\033[1;31m[-] Failed to disable USB storage.\033[0m\n"; exit 1; }
-    stig_disable_core_dumps || { printf "\033[1;31m[-] Failed to disable core dumps.\033[0m\n"; exit 1; }
-    stig_disable_ctrl_alt_del || { printf "\033[1;31m[-] Failed to disable Ctrl+Alt+Del.\033[0m\n"; exit 1; }
-    stig_disable_ipv6 || { printf "\033[1;31m[-] Failed to disable IPv6.\033[0m\n"; exit 1; }
-    stig_configure_firewall || { printf "\033[1;31m[-] Failed to configure firewall.\033[0m\n"; exit 1; }
-    stig_set_randomize_va_space || { printf "\033[1;31m[-] Failed to set randomize_va_space.\033[0m\n"; exit 1; }
-    update_firmware || { printf "\033[1;31m[-] Failed to update firmware.\033[0m\n"; exit 1; }
-
-    printf "\033[1;32m[+] STIG hardening tasks applied successfully.\033[0m\n"
 }
 
 setup_complete() {
@@ -724,88 +693,224 @@ setup_complete() {
 
 }
 
+detect_environment() {
+    printf "\033[1;31m[+] Detecting system environment...\033[0m\n"
+
+    if [ -d /sys/firmware/efi ]; then
+        echo "[*] UEFI system detected. Configuring for UEFI..."
+        # Add UEFI-specific configurations here if needed
+    else
+        echo "[*] Legacy BIOS system detected. Configuring for BIOS..."
+        # Add BIOS-specific configurations here if needed
+    fi
+
+    if grep -q 'hypervisor' /proc/cpuinfo; then
+        echo "[*] Virtual machine detected. Applying VM-specific optimizations..."
+        # Add VM-specific configurations here if needed
+    else
+        echo "[*] Bare metal system detected. Applying bare metal optimizations..."
+        # Add bare metal-specific configurations here if needed
+    fi
+}
+
 main() {
-    print_ascii_banner
-    sleep 5
+    printf "\033[1;31m[+] Initializing HARDN setup...\033[0m\n"
 
-    SCRIPT_PATH="$(readlink -f "$0")"
-    SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
-    PACKAGES_SCRIPT="$SCRIPT_DIR/hardn-packages.sh"
+    detect_environment
+    enable_auto_updates
+    echo -e "\033[1;31m
+================================================================================
+                          [*] DETECTING OPERATING SYSTEM
+================================================================================
+\033[0m"
+    detect_os
 
-    if [ "$(id -u)" -ne 0; then
-        echo "This script must be run as root. Use: sudo hardn"
+    echo -e "\033[1;31m
+================================================================================
+                          [*] INSTALLING PACKAGE DEPENDENCIES
+================================================================================
+\033[0m"
+    install_pkgdeps
+
+    echo -e "\033[1;31m
+================================================================================
+                          [*] INSTALLING SECURITY TOOLS
+================================================================================
+\033[0m"
+    install_security_tools
+
+    echo -e "\033[1;31m
+================================================================================
+                          [*] ENABLING FAIL2BAN
+================================================================================
+\033[0m"
+    enable_fail2ban
+
+    echo -e "\033[1;31m
+================================================================================
+                          [*] ENABLING APPARMOR
+================================================================================
+\033[0m"
+    enable_apparmor
+
+    echo -e "\033[1;31m
+================================================================================
+                          [*] ENABLING AIDE
+================================================================================
+\033[0m"
+    enable_aide
+
+    echo -e "\033[1;31m
+================================================================================
+                          [*] ENABLING RKHUNTER
+================================================================================
+\033[0m"
+    enable_rkhunter
+
+    echo -e "\033[1;31m
+================================================================================
+                          [*] CONFIGURING FIREJAIL
+================================================================================
+\033[0m"
+    configure_firejail
+
+    echo -e "\033[1;31m
+================================================================================
+                          [*] APPLYING PASSWORD POLICY
+================================================================================
+\033[0m"
+    stig_password_policy || { printf "\033[1;31m[-] Failed to apply password policy.\033[0m\n"; exit 1; }
+
+    echo -e "\033[1;31m
+================================================================================
+                          [*] HARDENING SSH CONFIGURATION
+================================================================================
+\033[0m"
+    stig_harden_ssh || { printf "\033[1;31m[-] Failed to secure ssh.\033[0m\n"; exit 1; }
+
+    echo -e "\033[1;31m
+================================================================================
+                          [*] LOCKING INACTIVE ACCOUNTS
+================================================================================
+\033[0m"
+    stig_lock_inactive_accounts || { printf "\033[1;31m[-] Failed to lock inactive accounts.\033[0m\n"; exit 1; }
+
+    echo -e "\033[1;31m
+================================================================================
+                          [*] SETTING LOGIN BANNERS
+================================================================================
+\033[0m"
+    stig_login_banners || { printf "\033[1;31m[-] Failed to set login banners.\033[0m\n"; exit 1; }
+
+    echo -e "\033[1;31m
+================================================================================
+                          [*] CONFIGURING KERNEL PARAMETERS
+================================================================================
+\033[0m"
+    stig_kernel_setup || { printf "\033[1;31m[-] Failed to configure kernel parameters.\033[0m\n"; exit 1; }
+
+    echo -e "\033[1;31m
+================================================================================
+                          [*] SECURING FILESYSTEM PERMISSIONS
+================================================================================
+\033[0m"
+    stig_secure_filesystem || { printf "\033[1;31m[-] Failed to secure filesystem permissions.\033[0m\n"; exit 1; }
+
+    echo -e "\033[1;31m
+================================================================================
+                          [*] DISABLING USB STORAGE
+================================================================================
+\033[0m"
+    stig_disable_usb || { printf "\033[1;31m[-] Failed to disable USB storage.\033[0m\n"; exit 1; }
+
+    echo -e "\033[1;31m
+================================================================================
+                          [*] DISABLING CORE DUMPS
+================================================================================
+\033[0m"
+    stig_disable_core_dumps || { printf "\033[1;31m[-] Failed to disable core dumps.\033[0m\n"; exit 1; }
+
+    echo -e "\033[1;31m
+================================================================================
+                          [*] DISABLING CTRL+ALT+DEL
+================================================================================
+\033[0m"
+    stig_disable_ctrl_alt_del || { printf "\033[1;31m[-] Failed to disable Ctrl+Alt+Del.\033[0m\n"; exit 1; }
+
+    echo -e "\033[1;31m
+================================================================================
+                          [*] DISABLING IPV6
+================================================================================
+\033[0m"
+    stig_disable_ipv6 || { printf "\033[1;31m[-] Failed to disable IPv6.\033[0m\n"; exit 1; }
+
+    echo -e "\033[1;31m
+================================================================================
+                          [*] CONFIGURING FIREWALL (UFW)
+================================================================================
+\033[0m"
+    stig_configure_firewall || { printf "\033[1;31m[-] Failed to configure firewall.\033[0m\n"; exit 1; }
+
+    echo -e "\033[1;31m
+================================================================================
+                          [*] SETTING RANDOMIZE VA SPACE
+================================================================================
+\033[0m"
+    stig_set_randomize_va_space || { printf "\033[1;31m[-] Failed to set randomize_va_space.\033[0m\n"; exit 1; }
+
+    echo -e "\033[1;31m
+================================================================================
+                          [*] UPDATING FIRMWARE
+================================================================================
+\033[0m"
+    update_firmware || { printf "\033[1;31m[-] Failed to update firmware.\033[0m\n"; exit 1; }
+
+    echo -e "\033[1;31m
+================================================================================
+                          [*] CONFIGURING GRUB SECURITY
+================================================================================
+\033[0m"
+    grub_security
+
+    echo -e "\033[1;31m
+================================================================================
+                          [*] APPLYING STIG HARDENING TASKS
+================================================================================
+\033[0m"
+    apply_stig_hardening
+
+    echo -e "\033[1;31m
+================================================================================
+                          [*] ENABLING UFW
+================================================================================
+\033[0m"
+    systemctl enable --now ufw
+
+  
+    printf "\033[1;31m[+] Running validation script...\033[0m\n"
+    bash "$PACKAGES_SCRIPT"
+
+    if [ $? -ne 0 ]; then
+        printf "\033[1;31m[-] Validation script encountered errors. Please check the log file.\033[0m\n"
         exit 1
     fi
 
-    detect_os
-    echo "======================================================="
-    echo "             [+] OS Detection Complete                 "
-    echo "======================================================="
-
-    update_system_packages
-    echo "======================================================="
-    echo "         [+] System Packages Updated                   "
-    echo "======================================================="
-
-    install_pkgdeps
-    echo "======================================================="
-    echo "         [+] Package Dependencies Installed            "
-    echo "======================================================="
-
-    install_security_tools
-    echo "======================================================="
-    echo "         [+] Security Tools Installed                  "
-    echo "======================================================="
-
-    grub_security
-    echo "======================================================="
-    echo "         [+] GRUB Security Configured                  "
-    echo "======================================================="
-
-    enable_fail2ban
-    echo "======================================================="
-    echo "         [+] Fail2Ban Enabled                          "
-    echo "======================================================="
-
-    enable_apparmor
-    echo "======================================================="
-    echo "         [+] AppArmor Enabled                          "
-    echo "======================================================="
-
-    enable_aide
-    echo "======================================================="
-    echo "         [+] AIDE Enabled                              "
-    echo "======================================================="
-
-    enable_rkhunter
-    echo "======================================================="
-    echo "         [+] RKHunter Enabled                          "
-    echo "======================================================="
-
-    configure_firejail
-    echo "======================================================="
-    echo "         [+] Firejail Configured                       "
-    echo "======================================================="
-
-    apply_stig_hardening
-    echo "======================================================="
-    echo "         [+] STIG Hardening Applied                    "
-    echo "======================================================="
-
     setup_complete
-    echo "======================================================="
-    echo "         [+] HARDN Setup Complete                      "
-    echo "======================================================="
 
-    echo "HARDN setup completed successfully."
+    printf "\033[1;32m[+] Validation script completed successfully.\033[0m\n"
+    printf "\033[1;32m[+] HARDN setup completed successfully.\033[0m\n"
 }
 
-# Ensure the menu is displayed when no arguments or -h/--help is provided
+
+if [[ $# -eq 0 || "$1" == "-s" ]]; then
+    main
+fi
+
 if [[ $# -eq 0 || "$1" == "-h" || "$1" == "--help" ]]; then
     print_menu -h
     exit 0
 fi
 
-# Ensure the flags function is called with all arguments
+
 flags "$@"
 
