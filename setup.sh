@@ -30,7 +30,7 @@
 repo="https://github.com/LinuxUser255/HARDN.git"
 progsfile="https://raw.githubusercontent.com/LinuxUser255/HARDN/refs/heads/LinuxUser255-main/progs.csv"
 repobranch="LinuxUser255-main"
-name=$USER
+name=$(USER)
 
 # Check for root privileges
 if [ "$(id -u)" -ne 0 ]; then
