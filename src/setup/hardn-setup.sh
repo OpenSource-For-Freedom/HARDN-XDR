@@ -288,7 +288,7 @@ enable_apparmor() {
         printf "\033[1;33m[!] Review profile behavior before switching to enforce mode.\033[0m\n"
 }
 
-
+# enable aide
 enable_aide() {
         printf "\033[1;31m[+] Installing AIDE and initializing database…\033[0m\n"
         apt "$APT_OPTIONS" install aide aide-common || {
@@ -296,18 +296,53 @@ enable_aide() {
             return 1
         }
 
-        if [ -f /var/lib/aide/aide.db ]; then
-            printf "\033[1;33m[!] AIDE database already exists. Reinitializing...\033[0m\n"
-            # Remove existing database files to avoid prompts
+        # Ensure the AIDE configuration directory exists
+        mkdir -p /etc/aide
+
+        # Check if the default configuration file exists
+        if [ ! -f /etc/aide/aide.conf ]; then
+            # If not, copy the example configuration
+            if [ -f /usr/share/aide/config/aide.conf ]; then
+                cp /usr/share/aide/config/aide.conf /etc/aide/aide.conf
+            else
+                # Create a basic configuration
+                cat > /etc/aide/aide.conf <<EOF
+# AIDE configuration file
+
+# The database file
+database=file:/var/lib/aide/aide.db
+database_out=file:/var/lib/aide/aide.db.new
+
+# Rule definitions
+All = R+a+sha512+rmd160+whirlpool
+Norm = R+rmd160+sha512
+
+# What to check
+/bin Norm
+/sbin Norm
+/usr/bin Norm
+/usr/sbin Norm
+/etc All
+/boot All
+EOF
+            fi
+            chmod 644 /etc/aide/aide.conf
+        fi
+
+        # Ensure the AIDE database directory exists
+        mkdir -p /var/lib/aide
+
+        # Remove existing database files to avoid prompts
+        if [ -f /var/lib/aide/aide.db.new ]; then
             rm -f /var/lib/aide/aide.db.new
         fi
 
-        # Run aide --init non-interactively
+        # Run aide initialization with explicit config file
         printf "\033[1;31m[+] Initializing AIDE database (this may take a few minutes)...\033[0m\n"
-        aide --init || {
+        if ! aide --config=/etc/aide/aide.conf --init; then
             printf "\033[1;31m[-] Failed to initialize AIDE database.\033[0m\n"
             return 1
-        }
+        fi
 
         # Move the new database file into place
         if [ -f /var/lib/aide/aide.db.new ]; then
@@ -319,28 +354,31 @@ enable_aide() {
         else
             printf "\033[1;31m[-] AIDE database initialization did not create expected file.\033[0m\n"
             return 1
-        }
+        fi
+
+        # Set up a daily cron job for AIDE checks
+        cat > /etc/cron.daily/aide <<EOF
+#!/bin/sh
+/usr/bin/aide --config=/etc/aide/aide.conf --check
+EOF
+        chmod 755 /etc/cron.daily/aide
 
         printf "\033[1;32m[+] AIDE successfully installed and configured.\033[0m\n"
 }
 
-
-enable_rkhunter(){
+enable_rkhunter() {
         printf "\033[1;31m[+] Installing rkhunter...\033[0m\n" | tee -a HARDN_alerts.txt
-        if ! apt install -y rkhunter; then
-            printf "\033[1;33m[!] Saving output to HARDN_alerts.txt" | tee -a HARDN_alerts.txt
-            return 0
+        if ! apt "$APT_OPTIONS" install rkhunter; then
+            printf "\033[1;33m[!] Failed to install rkhunter. Saving output to HARDN_alerts.txt\033[0m\n" | tee -a HARDN_alerts.txt
+            return 1
         fi
-
 
         sudo chown -R root:root /var/lib/rkhunter
         sudo chmod -R 755 /var/lib/rkhunter
 
-
         sed -i 's|^#*MIRRORS_MODE=.*|MIRRORS_MODE=1|' /etc/rkhunter.conf
         sed -i 's|^#*UPDATE_MIRRORS=.*|UPDATE_MIRRORS=1|' /etc/rkhunter.conf
         sed -i 's|^WEB_CMD=.*|WEB_CMD="/bin/true"|' /etc/rkhunter.conf
-
 
         if ! rkhunter --update --nocolors --check; then
             printf "\033[1;33m[!] rkhunter update failed. Check your network connection or proxy settings. Continuing...\033[0m\n" | tee -a HARDN_alerts.txt
@@ -854,7 +892,7 @@ main() {
                     return 1
                     ;;
             esac
-        elif [[ "$0" != "$BASH_SOURCE[0]" ]]; then
+        elif [[ "$0" != "${BASH_SOURCE[0]}" ]]; then
             # If being sourced, don't run the full setup
             return 0
         else
