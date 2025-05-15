@@ -56,6 +56,7 @@ EOF
 
 if [[ "$1" == "-h" || "$1" == "--help" ]]; then
     display_help_banner
+    list_menu_options
     exit 0
 fi
 
