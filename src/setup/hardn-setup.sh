@@ -539,6 +539,8 @@ grub_security() {
     else
         echo "[+] No virtual machine detected. Proceeding with GRUB configuration..."
     fi
+    
+    grub-mkpasswd-pbkdf2 | tee /etc/grub.d/40_custom_password
 
     # Detect GRUB path < support grub2
     if [ -f /boot/grub/grub.cfg ]; then
