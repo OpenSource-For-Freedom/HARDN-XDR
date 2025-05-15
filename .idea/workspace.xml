@@ -6,8 +6,7 @@
   <component name="ChangeListManager">
     <list default="true" id="1154ff61-838f-499b-adac-1d2601c549c3" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Setup/setup.sh" beforeDir="false" afterPath="$PROJECT_DIR$/setup.sh" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/setup/setup.sh" beforeDir="false" afterPath="$PROJECT_DIR$/src/setup/setup.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/setup.sh" beforeDir="false" afterPath="$PROJECT_DIR$/setup.sh" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -61,7 +60,7 @@
     "node.js.selected.package.eslint": "(autodetect)",
     "node.js.selected.package.tslint": "(autodetect)",
     "nodejs_package_manager_path": "npm",
-    "settings.editor.selected.configurable": "preferences.pluginManager",
+    "settings.editor.selected.configurable": "editor.preferences.fonts.default",
     "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
@@ -175,7 +174,7 @@
       <workItem from="1743989481551" duration="1247000" />
       <workItem from="1744483360878" duration="5440000" />
       <workItem from="1744489814688" duration="751000" />
-      <workItem from="1747248102911" duration="3145000" />
+      <workItem from="1747248102911" duration="17985000" />
     </task>
     <servers />
   </component>

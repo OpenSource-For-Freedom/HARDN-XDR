@@ -27,26 +27,31 @@
 # Parent fork main branch git url: https://github.com/OpenSource-For-Freedom/HARDN.git
 
 # urls to be changed after merge
+repo="https://github.com/LinuxUser255/HARDN.git"
 progsfile="https://raw.githubusercontent.com/LinuxUser255/HARDN/refs/heads/LinuxUser255-main/progs.csv"
 repobranch="LinuxUser255-main"
 name=$USER
-# repodir=""
 
 # Check for root privileges
 if [ "$(id -u)" -ne 0 ]; then
    echo ""
    echo "This script must be run as root."
    # change the fork url to the Parent fork above after merge with Tim's. Same curl -LO command.
-   echo "Install curl if you don't already have it"
-   echo "sudo apt install curl"
-   echo "How to use this install script:"
-   echo "curl -LO https://raw.githubusercontent.com/LinuxUser255/HARDN/refs/heads/LinuxUser255-main/setup.sh"
+   # sh -c "$(curl -fsSl https://raw.githubusercontent.com/LinuxUser255/HARDN/refs/heads/LinuxUser255-main/setup.sh")
+   # can alternatively try the curl command below
+   # echo "curl -LO https://raw.githubusercontent.com/LinuxUser255/HARDN/refs/heads/LinuxUser255-main/setup.sh"
    echo -e "sh setup.sh\n"
    exit 1
 fi
 
 installpkg() {
        dpkg -s "$1" >/dev/null 2>&1 || sudo apt install -y "$1" >/dev/null 2>&1
+}
+
+error() {
+	# Log to stderr and exit with failure.
+	printf "%s\n" "$1" >&2
+	exit 1
 }
 
 welcomemsg() {
@@ -76,7 +81,7 @@ update_system_packages() {
 # Install package dependencies from progs.csv
 install_package_dependencies() {
         whiptail --infobox "Installing package dependencies from progs.csv..." 7 60
-        # progsfile="$1"
+        progsfile="$1"
             if ! dpkg -s "$1" >/dev/null 2>&1; then
                 whiptail --infobox "Installing $1... ($2)" 7 60
                 sudo apt-get update -qq
@@ -103,8 +108,6 @@ aptinstalled=""
 isinstalled() {
         dpkg -s "$1" >/dev/null 2>&1
 }
-# And you'll need to set the n and total variables when calling this function to show the progress (e.g., "Installing package 3 of 20").
-# This function can be used in your main installation loop when processing the packages from your progs.csv file.
 
 # Function to build and install from Git repo
 gitmakeinstall() {
@@ -122,8 +125,8 @@ gitmakeinstall() {
 
 # Main loop to parse and install
 installationloop() {
-         { [ -f "$progsfile" ] && cp "$progsfile" /tmp/progs.csv ||
-                curl -Ls "$progsfile" | sed '/^#/d' >/tmp/progs.csv }
+          [ -f "$progsfile" ] && cp "$progsfile" /tmp/progs.csv ||
+                curl -Ls "$progsfile" | sed '/^#/d' >/tmp/progs.csv
         total=$(wc -l </tmp/progs.csv)
         #echo "[INFO] Found $total entries to process."
         # Get list of manually installed packages (not installed as dependencies)
@@ -156,47 +159,42 @@ putgitrepo() {
             --recurse-submodules "$1" "$dir"
         sudo -u "$name" cp -rfT "$dir" "$2"
 }
-# Be sure to Run the main install loop
-#installationloop
 
-# Install and configure SELinux
-install_selinux() {
-        printf "\033[1;31m[+] Installing and configuring SELinux...\033[0m\n"
-
-        # Install SELinux packages
-        apt update
-        apt install -y selinux-utils selinux-basics policycoreutils policycoreutils-python-utils selinux-policy-default
-
-        # Check if installation was successful
-        if ! command -v getenforce > /dev/null 2>&1; then
-            printf "\033[1;31m[-] SELinux installation failed. Please check system logs.\033[0m\n"
-            return 1
-        fi
+config_selinux() {
+        whiptail --infobox "Installing and configuring SELinux..." 7 60
 
         # Configure SELinux to enforcing mode
-        setenforce 1 2>/dev/null || printf "\033[1;31m[-] Could not set SELinux to enforcing mode immediately\033[0m\n"
+        setenforce 1 2>/dev/null || whiptail --msgbox "Could not set SELinux to enforcing mode immediately" 8 60
 
         # Configure SELinux to be enforcing at boot
         if [ -f /etc/selinux/config ]; then
             sed -i 's/SELINUX=disabled/SELINUX=enforcing/' /etc/selinux/config
             sed -i 's/SELINUX=permissive/SELINUX=enforcing/' /etc/selinux/config
-            printf "\033[1;31m[+] SELinux configured to enforcing mode at boot\033[0m\n"
+            whiptail --infobox "SELinux configured to enforcing mode at boot" 7 60
         else
-            printf "\033[1;31m[-] SELinux config file not found\033[0m\n"
+            whiptail --msgbox "SELinux config file not found" 8 60
         fi
 
-        printf "\033[1;31m[+] SELinux installation and configuration completed\033[0m\n"
+        whiptail --infobox "SELinux installation and configuration completed" 7 60
 }
 
 # Install system security tools
-install_security_tools() {
-        printf "\033[1;31m[+] Installing required system security tools...\033[0m\n"
-        apt install -y ufw fail2ban apparmor apparmor-profiles apparmor-utils firejail tcpd lynis debsums rkhunter libpam-pwquality libvirt-daemon-system libvirt-clients qemu-kvm docker.io docker-compose openssh-server
+# Check if packages are already installed before installing
+check_security_tools() {
+  whiptail --infobox "Checking for security packages are installed..."
+        for pkg in ufw fail2ban apparmor apparmor-profiles apparmor-utils firejail tcpd lynis debsums rkhunter libpam-pwquality libvirt-daemon-system libvirt-clients qemu-kvm docker.io docker-compose openssh-server; do
+            if ! dpkg -s "$pkg" >/dev/null 2>&1; then
+                whiptail --infobox "Installing $pkg..." 7 60
+                apt install -y "$pkg"
+            else
+                whiptail --infobox "$pkg is already installed." 7 60
+            fi
+        done
 }
 
 # UFW configuration
 configure_ufw() {
-        printf "\033[1;31m[+] Configuring UFW...\033[0m\n"
+        whiptail --infobox "Configuring UFW..."
         ufw allow out 53,80,443/tcp
         ufw allow out 53,123/udp
         ufw allow out 67,68/udp
@@ -205,18 +203,17 @@ configure_ufw() {
 
 # Enable and start Fail2Ban and AppArmor services
 enable_services() {
-       printf "\033[1;31m[+] Enabling and starting Fail2Ban and AppArmor services...\033[0m\n"
+       whiptail --infobox "Enabling and starting Fail2Ban and AppArmor services..."
        systemctl enable --now fail2ban
        systemctl enable --now apparmor
 }
 
 # Install chkrootkit, LMD, and rkhunter
 install_additional_tools() {
-        printf "\033[1;31m[+] Installing chkrootkit, LMD, and rkhunter...\033[0m\n"
+        whiptail --infobox "Installing chkrootkit..."
         apt install -y chkrootkit
 
-        # Install Linux Malware Detect (LMD)
-        printf "\033[1;31m[+] Installing Linux Malware Detect...\033[0m\n"
+        whiptail --infobox "Installing Linux Malware Detect..."
 
         # Create a temporary directory for the installation
         temp_dir=$(mktemp -d)
@@ -227,7 +224,8 @@ install_additional_tools() {
 
     # Try to install from GitHub
     if [ "$install_maldet_failed" != "true" ]; then
-        printf "\033[1;31m[+] Cloning Linux Malware Detect from GitHub...\033[0m\n"
+        whiptail --infobox "Cloning Linux Malware Detect from GitHub..."
+        #printf "\033[1;31m[+] Cloning Linux Malware Detect from GitHub...\033[0m\n"
         if git clone https://github.com/rfxn/linux-malware-detect.git; then
             cd linux-malware-detect || {
                 printf "\033[1;31m[-] Failed to change to maldetect directory\033[0m\n"
@@ -235,10 +233,12 @@ install_additional_tools() {
             }
 
             if [ "$install_maldet_failed" != "true" ]; then
-                printf "\033[1;31m[+] Running maldetect installer...\033[0m\n"
+                whiptail --infobox "Running maldetect installer..."
+                #printf "\033[1;31m[+] Running maldetect installer...\033[0m\n"
                 chmod +x install.sh
                 if ./install.sh; then
-                    printf "\033[1;31m[+] Linux Malware Detect installed successfully from GitHub\033[0m\n"
+                    whiptail --infobox "Linux Malware Detect installed successfully from GitHub."
+                    #printf "\033[1;31m[+] Linux Malware Detect installed successfully from GitHub\033[0m\n"
                     install_maldet_failed=false
                 else
                     printf "\033[1;31m[-] Maldetect installer failed\033[0m\n"
@@ -253,12 +253,15 @@ install_additional_tools() {
 
     # If GitHub method failed, try apt
     if [ "$install_maldet_failed" = "true" ]; then
-        printf "\033[1;31m[+] Attempting to install maldetect via apt...\033[0m\n"
+        whiptail --infobox "Attempting to install maldetect via apt..."
+        #printf "\033[1;31m[+] Attempting to install maldetect via apt...\033[0m\n"
         if apt install -y maldetect; then
-            printf "\033[1;31m[+] Maldetect installed via apt\033[0m\n"
+            whiptail --infobox "Maldetect installed via apt."
+            #printf "\033[1;31m[+] Maldetect installed via apt\033[0m\n"
             if command -v maldet >/dev/null 2>&1; then
                 maldet -u
-                printf "\033[1;31m[+] Maldetect updated successfully\033[0m\n"
+                whiptail --infobox "Maldetect updated successfully"
+                #printf "\033[1;31m[+] Maldetect updated successfully\033[0m\n"
                 install_maldet_failed=false
             fi
         else
@@ -278,33 +281,26 @@ install_additional_tools() {
     # Clean up and return to original directory
     cd /tmp || true
     rm -rf "$temp_dir"
-
-    # Install rkhunter
-    printf "\033[1;31m[+] Installing rkhunter...\033[0m\n"
-    apt install -y rkhunter
-    rkhunter --update
-    rkhunter --propupd
 }
 
 # Reload AppArmor profiles
 reload_apparmor() {
-        printf "\033[1;31m[+] Reloading AppArmor profiles...\033[0m\n"
+        whiptail --infobox "Reloading AppArmor profiles..." 7 60
 
         # Use systemd to reload AppArmor instead of manually parsing files
         if systemctl is-active --quiet apparmor; then
-            printf "\033[1;31m[+] Reloading AppArmor service...\033[0m\n"
+            whiptail --infobox "Reloading AppArmor service..." 7 60
             systemctl reload apparmor
         else
-            printf "\033[1;31m[+] Starting AppArmor service...\033[0m\n"
+            whiptail --infobox "Starting AppArmor service..." 7 60
             systemctl start apparmor
         fi
 
         # Verify AppArmor status
         if aa-status >/dev/null 2>&1; then
-            printf "\033[1;31m[+] AppArmor is running properly\033[0m\n"
+            whiptail --infobox "AppArmor is running properly" 7 60
         else
-            printf "\033[1;31m[-] Warning: AppArmor may not be running correctly\033[0m\n"
-            printf "\033[1;31m[-] You may need to reboot your system\033[0m\n"
+            whiptail --msgbox "Warning: AppArmor may not be running correctly\nYou may need to reboot your system" 8 60
         fi
 }
 
@@ -348,6 +344,7 @@ disable_usb_storage() {
 
 # Update system packages again
 update_sys_pkgs() {
+        whiptail --infobox "Updating system packages..."
         if ! update_system_packages; then
             # printf "\033[1;31m[-] System update failed.\033[0m\n"
             whiptail --title "System update failed"
@@ -370,8 +367,8 @@ main() {
         install_pkgdeps
         # Check dependencies. If needed, use commented conditional block below main
         installationloop
-        install_selinux
-        install_security_tools
+        config_selinu
+        check_security_tools
         configure_ufw
         enable_services
         install_additional_tools
@@ -380,44 +377,7 @@ main() {
         disable_usb_storage
         update_sys_pkgs
         finalize
-        # setup_complete
 }
 
 # Run the main function
 main
-
-#    deps_and_conflicts=$(check_pkgdeps)
-#    if [ -n "$deps_and_conflicts" ]; then
-#        echo "All dependencies and conflicts:"
-#        echo "$deps_and_conflicts"
-#        echo
-#
-#        # Extract only the lines prefixed with "Depends"
-#        depends_only=$(echo "$deps_and_conflicts" | grep -E '^\s*Depends:')
-#
-#        if [ -n "$depends_only" ]; then
-#            echo "Found dependencies:"
-#            echo "$depends_only"
-#            echo
-#            printf "Do you want to offer resolving these dependencies? (y/n): "
-#            read offer_answer
-#            case "$offer_answer" in
-#                [Yy]*)
-#                    offer_to_resolve_issues "$depends_only"
-#                    apt install $depends_only -y
-#                    ;;
-#                *)
-#                    echo "Skipping dependency resolution."
-#                    ;;
-#            esac
-#        fi
-#    fi
-
-#setup_complete() {
-#    echo " "
-#    echo "======================================================="
-#    echo "             [+] HARDN - Setup Complete                "
-#    echo "  [+] Please reboot your system to apply changes       "
-#    echo "======================================================="
-#    echo " "
-#}
