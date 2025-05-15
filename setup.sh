@@ -37,10 +37,8 @@ if [ "$(id -u)" -ne 0 ]; then
    echo ""
    echo "This script must be run as root."
    # change the fork url to the Parent fork above after merge with Tim's. Same curl -LO command.
-   # sh -c "$(curl -fsSl https://raw.githubusercontent.com/LinuxUser255/HARDN/refs/heads/LinuxUser255-main/setup.sh")
-   # can alternatively try the curl command below
-   # echo "curl -LO https://raw.githubusercontent.com/LinuxUser255/HARDN/refs/heads/LinuxUser255-main/setup.sh"
-   echo -e "sh setup.sh\n"
+   # curl -LO https://raw.githubusercontent.com/LinuxUser255/HARDN/refs/heads/LinuxUser255-main/setup.sh
+   # sh setup.sh\
    exit 1
 fi
 
@@ -60,7 +58,7 @@ welcomemsg() {
 
     	whiptail --title "Important Note!" --yes-button "All ready!" \
     		--no-button "Return..." \
-    		--yesno "Ensure you are up to date with apt.\\n\\nIf it does not, the installation of some programs might fail." 8 70
+    		--yesno "This installer will update your system first..\\n\\n." 8 70
 }
 
 preinstallmsg() {
