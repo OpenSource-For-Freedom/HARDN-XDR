@@ -1,5 +1,36 @@
 #!/bin/bash
 
+# Add these optimizations at the beginning of the script, after the shebang line
+# Speed up apt operations
+export DEBIAN_FRONTEND=noninteractive
+APT_OPTIONS="-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold -y"
+
+# Modify the apt install commands to use these options, for example:
+# Replace: apt install -y package_name
+# With: apt $APT_OPTIONS install package_name
+
+
+# Notes on the script's execution time:
+# -------------------------------------
+# If the execution seems to 'hang' for a few seconds. Keep the following in mind.
+# The script's slowness is primarily due to the nature of system hardening operations rather than script inefficiencies.
+# Most of these operations (package installations, system configurations, security tool initializations) are inherently time-consuming.
+# Future changes that may need to be made:
+# For production environments, consider:
+#    1. Creating a pre-configured system image with most hardening already applied
+#    2.Adding a "minimal" mode that only applies critical security settings
+#    3.Implementing a progress bar or detailed status updates to provide better feedback during long-running operations
+
+# - Remember that security hardening is a thorough process that necessarily involves many system-level changes,
+#   This will always take some time to complete properly
+
+# Some code optimization implementation to reduce lag time:
+# ----------------------------------------------------------
+# Added flags to skip certain time-consuming operations in the script,
+# Allow users to:
+# 1. Skip firmware updates with the -sf or --skip-firmware flag
+# 2. Perform a quick update that skips the full package upgrade with -u-quick or --update-quick
+
 
 set -e 
 
@@ -95,11 +126,39 @@ fi
 CYAN_BOLD="\033[1;36m"
 RESET="\033[0m"
 
+
+# progress bar
 update_system_packages() {
-        printf "\033[1;31m[+] Updating system packages...\033[0m\n"
-        apt update -y && apt upgrade -y
-        sudo apt-get install -f
-        apt --fix-broken install -y
+    # Check if we should skip firmware updates
+    local skip_firmware=${1:-"false"}
+    local skip_full_upgrade=${2:-"false"}
+
+    printf "\033[1;31m[+] Updating system packages (this may take a few minutes)...\033[0m\n"
+
+    # Always update package lists
+    printf "    ⏳ Updating package lists..."
+    apt update -y
+    printf " ✅\n"
+
+    # Skip full upgrade if requested
+    if [ "$skip_full_upgrade" != "true" ]; then
+        printf "    ⏳ Upgrading packages (may take several minutes)..."
+        apt upgrade -y
+        printf " ✅\n"
+    else
+        printf "    ⏳ Skipping full package upgrade as requested.\n"
+    fi
+
+    # Fix broken packages
+    printf "    ⏳ Fixing broken packages if any..."
+    apt-get install -f
+    apt --fix-broken install -y
+    printf " ✅\n"
+
+    # Use the skip_firmware parameter if needed
+    if [ "$skip_firmware" == "true" ]; then
+        printf "    ⏳ Skipping firmware updates as requested.\n"
+    fi
 }
 
 
@@ -107,7 +166,7 @@ update_system_packages() {
 print_ascii_banner() {
     cat <<EOF
 ${CYAN_BOLD}
-                              ▄█    █▄       ▄████████    ▄████████ ████████▄  ███▄▄▄▄   
+                              ▄█    █▄       ▄████████    ▄████████ ████████▄  ███▄▄▄▄
                              ███    ███     ███    ███   ███    ███ ███   ▀███ ███▀▀▀██▄ 
                              ███    ███     ███    ███   ███    ███ ███    ███ ███   ███ 
                             ▄███▄▄▄▄███▄▄   ███    ███  ▄███▄▄▄▄██▀ ███    ███ ███   ███ 
@@ -172,21 +231,26 @@ detect_os() {
 
 install_pkgdeps() {
         printf "\033[1;31m[+] Installing package dependencies...\033[0m\n"
-        apt install -y git gawk mariadb-common policycoreutils dpkg-dev \
+        # Replace: apt install -y package_name
+        apt "$APT_OPTIONS" git gawk mariadb-common policycoreutils dpkg-dev \
             unixodbc-common firejail python3-pyqt6 fonts-liberation libpam-pwquality
 }
 
 
+# Replace multiple apt install commands with a single one
 install_security_tools() {
-        printf "\033[1;31m[+] Installing required system security tools...\033[0m\n"
-        apt install -y ufw fail2ban apparmor apparmor-profiles apparmor-utils firejail tcpd lynis debsums \
-            libpam-pwquality libvirt-daemon-system libvirt-clients qemu-system-x86 openssh-server openssh-client rkhunter
+    printf "\033[1;31m[+] Installing required system security tools...\033[0m\n"
+    apt $APT_OPTIONS install ufw fail2ban apparmor apparmor-profiles apparmor-utils firejail tcpd lynis debsums \
+        libpam-pwquality libvirt-daemon-system libvirt-clients qemu-system-x86 openssh-server openssh-client rkhunter
 }
 
 
 enable_fail2ban() {
         printf "\033[1;31m[+] Installing and enabling Fail2Ban...\033[0m\n"
-        apt install -y fail2ban
+        # Modify the apt install commands to use these options, for example:
+        # Replace: apt install -y package_name
+        # With: apt $APT_OPTIONS install package_name
+        apt "$APT_OPTIONS" fail2ban
         systemctl enable --now fail2ban
         printf "\033[1;32m[+] Fail2Ban installed and enabled successfully.\033[0m\n"
 
@@ -206,7 +270,7 @@ EOF
 
 enable_apparmor() {
         printf "\033[1;31m[+] Installing and enabling AppArmor…\033[0m\n"
-        apt install -y apparmor apparmor-utils apparmor-profiles || {
+        apt "$APT_OPTIONS" apparmor apparmor-utils apparmor-profiles || {
             printf "\033[1;31m[-] Failed to install AppArmor.\033[0m\n"
             return 1
         }
@@ -227,7 +291,7 @@ enable_apparmor() {
 
 enable_aide() {
         printf "\033[1;31m[+] Installing AIDE and initializing database…\033[0m\n"
-        apt install -y aide aide-common || {
+        apt "$APT_OPTIONS" aide aide-common || {
             printf "\033[1;31m[-] Failed to install AIDE.\033[0m\n"
             return 1
         }
@@ -277,6 +341,7 @@ enable_rkhunter(){
 
 
 configure_firejail() {
+  # install Brave Browser? It's Security focused
         printf "\033[1;31m[+] Configuring Firejail for Firefox and Chrome...\033[0m\n"
 
         if ! command -v firejail > /dev/null 2>&1; then
@@ -350,7 +415,7 @@ stig_secure_filesystem() {
         chmod 640 /etc/shadow /etc/gshadow
 
         printf "\033[1;31m[+] Configuring audit rules...\033[0m\n"
-        apt install -y auditd audispd-plugins
+        apt "$APT_OPTIONS" auditd audispd-plugins
         tee /etc/audit/rules.d/stig.rules > /dev/null <<EOF
 -w /etc/passwd -p wa -k identity
 -w /etc/shadow -p wa -k identity
@@ -524,7 +589,7 @@ stig_configure_firewall() {
 
         if ! command -v ufw > /dev/null 2>&1; then
             printf "\033[1;31m[-] UFW is not installed. Installing UFW...\033[0m\n"
-            apt install -y ufw || { printf "\033[1;31m[-] Failed to install UFW.\033[0m\n"; return 1; }
+            apt "$APT_OPTIONS"  ufw || { printf "\033[1;31m[-] Failed to install UFW.\033[0m\n"; return 1; }
         fi
 
         printf "\033[1;31m[+] Resetting UFW to default settings...\033[0m\n"
@@ -587,7 +652,13 @@ apply_stig_hardening() {
         stig_disable_ipv6 || { printf "\033[1;31m[-] Failed to disable IPv6.\033[0m\n"; exit 1; }
         stig_configure_firewall || { printf "\033[1;31m[-] Failed to configure firewall.\033[0m\n"; exit 1; }
         stig_set_randomize_va_space || { printf "\033[1;31m[-] Failed to set randomize_va_space.\033[0m\n"; exit 1; }
-        update_firmware || { printf "\033[1;31m[-] Failed to update firmware.\033[0m\n"; exit 1; }
+
+        # Check if firmware updates should be skipped
+        if [ "${SKIP_FIRMWARE:-false}" != "true" ]; then
+            update_firmware || { printf "\033[1;31m[-] Failed to update firmware.\033[0m\n"; exit 1; }
+        else
+            printf "\033[1;33m[+] Firmware updates skipped as requested.\033[0m\n"
+        fi
 
         printf "\033[1;32m[+] STIG hardening tasks applied successfully.\033[0m\n"
 }
@@ -623,6 +694,7 @@ EOF
 # main function using heredoc format: eliminate repetitive echo statements
 main() {
         local arg="$1"
+        local SKIP_FIRMWARE="false"
         #print_ascii_banner
         sleep 5
 
@@ -646,6 +718,17 @@ main() {
                     ;;
                 -u|--update)
                     update_system_packages
+                    return 0
+                    ;;
+                -u-quick|--update-quick)
+                    update_system_packages "false" "true"
+                    echo "Quick update completed (skipped full package upgrade)."
+                    return 0
+                    ;;
+                -sf|--skip-firmware)
+                    # This flag will be used when calling update_firmware in apply_stig_hardening
+                    SKIP_FIRMWARE="true"
+                    echo "Firmware updates will be skipped during setup."
                     return 0
                     ;;
                 -cl|--check-HARDN-logs)
