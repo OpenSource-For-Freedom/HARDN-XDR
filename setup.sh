@@ -71,14 +71,13 @@ preinstallmsg() {
 }
 
 update_system_packages() {
-    #printf "\033[1;31m[+] Updating system packages...\033[0m\n"
-    whiptail --message "Updating system packages"
+    printf "\033[1;31m[+] Updating system packages...\033[0m\n"
     apt update && apt upgrade -y
 }
 
 # Install package dependencies from progs.csv
 install_package_dependencies() {
-        whiptail --infobox "Installing package dependencies from progs.csv..." 7 60
+        printf "\033[1;31[+] Installing package dependencies from progs.csv...\033[0m\n"
         progsfile="$1"
             if ! dpkg -s "$1" >/dev/null 2>&1; then
                 whiptail --infobox "Installing $1... ($2)" 7 60
@@ -101,22 +100,6 @@ aptinstall() {
 }
 
 
-manualinstall() {
-        	# Installs $1 manually. Used only for AUR helper here.
-        	# Should be run after repodir is created and var is set.
-          dpkg -s "$1" >/dev/null 2>&1
-        	whiptail --infobox "Installing \"$1\" manually." 7 50
-        	sudo -u "$name" mkdir -p "$repodir/$1"
-        	sudo -u "$name" git -C "$repodir" clone --depth 1 --single-branch \
-        		--no-tags -q "https://aur.archlinux.org/$1.git" "$repodir/$1" ||
-        		{
-        			cd "$repodir/$1" || return 1
-        			sudo -u "$name" git pull --force origin master
-        		}
-        	cd "$repodir/$1" || exit 1
-        	sudo -u "$name" \
-        		makepkg --noconfirm -si >/dev/null 2>&1 || return 1
-}
 
 maininstall() {
        	# Installs all needed programs from main repo.
@@ -144,7 +127,7 @@ installationloop() {
           [ -f "$progsfile" ] && cp "$progsfile" /tmp/progs.csv ||
                 curl -Ls "$progsfile" | sed '/^#/d' >/tmp/progs.csv
         total=$(wc -l </tmp/progs.csv)
-        #echo "[INFO] Found $total entries to process."
+        echo "[INFO] Found $total entries to process."
         # Get list of manually installed packages (not installed as dependencies)
         aptinstalled=$(apt-mark showmanual)
         while IFS=, read -r tag program comment; do
@@ -165,7 +148,7 @@ installationloop() {
 
 putgitrepo() {
         # Downloads a gitrepo $1 and places the files in $2 only overwriting conflicts
-        whiptail --infobox "Downloading and installing files..." 7 60
+        printf "\033[1;32[+] Downloading and installing files...\033[0m\n"
         [ -z "$3" ] && branch="master" || branch="$repobranch"
         dir=$(mktemp -d)
         [ ! -d "$2" ] && mkdir -p "$2"
@@ -177,7 +160,7 @@ putgitrepo() {
 }
 
 config_selinux() {
-        whiptail --infobox "Installing and configuring SELinux..." 7 60
+        printf "\033[1;31m[+] Installing and configuring SELinux...\033[0m\n"
 
         # Configure SELinux to enforcing mode
         setenforce 1 2>/dev/null || whiptail --msgbox "Could not set SELinux to enforcing mode immediately" 8 60
@@ -197,7 +180,7 @@ config_selinux() {
 # Install system security tools
 # Check if packages are already installed before installing
 check_security_tools() {
-  whiptail --infobox "Checking for security packages are installed..."
+  printf "\033[1;31m[+] Checking for security packages are installed...\033[0m\n"
         for pkg in ufw fail2ban apparmor apparmor-profiles apparmor-utils firejail tcpd lynis debsums rkhunter libpam-pwquality libvirt-daemon-system libvirt-clients qemu-kvm docker.io docker-compose openssh-server; do
             if ! dpkg -s "$pkg" >/dev/null 2>&1; then
                 whiptail --infobox "Installing $pkg..." 7 60
@@ -210,7 +193,7 @@ check_security_tools() {
 
 # UFW configuration
 configure_ufw() {
-        whiptail --infobox "Configuring UFW..."
+        printf "\033[1;31m[+] Configuring UFW...\033[0m\n"
         ufw allow out 53,80,443/tcp
         ufw allow out 53,123/udp
         ufw allow out 67,68/udp
@@ -219,14 +202,14 @@ configure_ufw() {
 
 # Enable and start Fail2Ban and AppArmor services
 enable_services() {
-       whiptail --infobox "Enabling and starting Fail2Ban and AppArmor services..."
+       printf "\033[1;31m[+] Enabling and starting Fail2Ban and AppArmor services...\033[0m\n"
        systemctl enable --now fail2ban
        systemctl enable --now apparmor
 }
 
 # Install chkrootkit, LMD, and rkhunter
 install_additional_tools() {
-        whiptail --infobox "Installing chkrootkit..."
+        printf "\033[1;31m[+] Installing chkrootkit...\033[0m\n"
         apt install -y chkrootkit
 
         whiptail --infobox "Installing Linux Malware Detect..."
@@ -240,8 +223,7 @@ install_additional_tools() {
 
     # Try to install from GitHub
     if [ "$install_maldet_failed" != "true" ]; then
-        whiptail --infobox "Cloning Linux Malware Detect from GitHub..."
-        #printf "\033[1;31m[+] Cloning Linux Malware Detect from GitHub...\033[0m\n"
+        printf "\033[1;31m[+] Cloning Linux Malware Detect from GitHub...\033[0m\n"
         if git clone https://github.com/rfxn/linux-malware-detect.git; then
             cd linux-malware-detect || {
                 printf "\033[1;31m[-] Failed to change to maldetect directory\033[0m\n"
@@ -250,11 +232,11 @@ install_additional_tools() {
 
             if [ "$install_maldet_failed" != "true" ]; then
                 whiptail --infobox "Running maldetect installer..."
-                #printf "\033[1;31m[+] Running maldetect installer...\033[0m\n"
+                printf "\033[1;31m[+] Running maldetect installer...\033[0m\n"
                 chmod +x install.sh
                 if ./install.sh; then
                     whiptail --infobox "Linux Malware Detect installed successfully from GitHub."
-                    #printf "\033[1;31m[+] Linux Malware Detect installed successfully from GitHub\033[0m\n"
+                    printf "\033[1;31m[+] Linux Malware Detect installed successfully from GitHub\033[0m\n"
                     install_maldet_failed=false
                 else
                     printf "\033[1;31m[-] Maldetect installer failed\033[0m\n"
@@ -269,15 +251,13 @@ install_additional_tools() {
 
     # If GitHub method failed, try apt
     if [ "$install_maldet_failed" = "true" ]; then
-        whiptail --infobox "Attempting to install maldetect via apt..."
-        #printf "\033[1;31m[+] Attempting to install maldetect via apt...\033[0m\n"
+        printf "\033[1;31m[+] Attempting to install maldetect via apt...\033[0m\n"
         if apt install -y maldetect; then
-            whiptail --infobox "Maldetect installed via apt."
-            #printf "\033[1;31m[+] Maldetect installed via apt\033[0m\n"
+            printf "\033[1;31m[+] Maldetect installed via apt\033[0m\n"
             if command -v maldet >/dev/null 2>&1; then
                 maldet -u
                 whiptail --infobox "Maldetect updated successfully"
-                #printf "\033[1;31m[+] Maldetect updated successfully\033[0m\n"
+                printf "\033[1;31m[+] Maldetect updated successfully\033[0m\n"
                 install_maldet_failed=false
             fi
         else
@@ -301,29 +281,28 @@ install_additional_tools() {
 
 # Reload AppArmor profiles
 reload_apparmor() {
-        whiptail --infobox "Reloading AppArmor profiles..." 7 60
+        printf "\033[1;31m[+] Reloading AppArmor profiles...\033[0m\n"
 
         # Use systemd to reload AppArmor instead of manually parsing files
         if systemctl is-active --quiet apparmor; then
-            whiptail --infobox "Reloading AppArmor service..." 7 60
+            printf "\033[1;31m[+] Reloading AppArmor service...\033[0m\n"
             systemctl reload apparmor
         else
-            whiptail --infobox "Starting AppArmor service..." 7 60
+            printf "\033[1;31m[+] Starting AppArmor service...\033[0m\n"
             systemctl start apparmor
         fi
 
         # Verify AppArmor status
         if aa-status >/dev/null 2>&1; then
-            whiptail --infobox "AppArmor is running properly" 7 60
+            printf "\033[1;31m[+] AppArmour is running properly...\033[0m\n"
         else
-            whiptail --msgbox "Warning: AppArmor may not be running correctly\nYou may need to reboot your system" 8 60
+            printf "\033[1;31m[-] Warning: AppArmor may not be running correctly. You may need to reboot your system.\033[0m\n"
         fi
 }
 
 # Configure cron jobs
 configure_cron() {
-        # printf "\033[1;31m[+] Configuring cron jobs...\033[0m\n"
-        whiptail --infobox "Configuring cron jobs.."
+        printf "\033[1;31m[+] Configuring cron jobs...\033[0m\n"
 
         # Remove existing cron jobs
         (crontab -l 2>/dev/null | grep -v "lynis audit system --cronjob" | \
@@ -349,13 +328,13 @@ EOFCRON
 
 # Disable USB storage
 disable_usb_storage() {
-        whiptail --infobox "Disabling USB storage..." 7 50
-        echo 'blacklist usb-storage' > /etc/modprobe.d/usb-storage.conf
-        if modprobe -r usb-storage 2>/dev/null; then
-            whiptail --msgbox "USB storage successfully disabled." 8 50
-        else
-            whiptail --msgbox "Warning: USB storage module in use, cannot unload." 8 60
-        fi
+         printf "\033[1;31m[+] Disabling USB storage...\033[0m\n"
+         echo 'blacklist usb-storage' > /etc/modprobe.d/usb-storage.conf
+         if modprobe -r usb-storage 2>/dev/null; then
+             printf "\033[1;31m[+] USB storage successfully disabled.\033[0m\n"
+         else
+             printf "\033[1;31m[-] Warning: USB storage module in use, cannot unload.\033[0m\n"
+         fi
 }
 
 # Update system packages again
@@ -382,7 +361,6 @@ main() {
         update_system_packages
         install_pkgdeps
         aptinstall
-        manualinstal
         maininstall
         gitdpkgbuild
         installationloop
