@@ -868,17 +868,6 @@ ${GREEN}         [+] $message${RESET}
 ${GREEN}=======================================================${RESET}
 
 EOF
-
-        # Function to display status messages in a consistent format
-        display_status() {
-            local message="$1"
-            cat <<EOF
-
-${GREEN}=======================================================${RESET}
-${GREEN}         [+] $message${RESET}
-${GREEN}=======================================================${RESET}
-
-EOF
         }
 
         # Execute each step and display status
