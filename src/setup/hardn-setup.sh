@@ -470,6 +470,25 @@ EOF
 }
 
 
+stig_harden_ssh() {
+    printf "\033[1;31m[+] Hardening SSH configuration...\033[0m\n"
+
+
+    sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
+
+    # Disable password authentication to enforce key-based authentication
+    sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+
+    # Restart the SSH service to apply changes
+    systemctl restart sshd || {
+        printf "\033[1;31m[-] Failed to restart SSH service. Check your configuration.\033[0m\n"
+        return 1
+    }
+
+    printf "\033[1;32m[+] SSH configuration hardened successfully.\033[0m\n"
+}
+
+
 stig_kernel_setup() {
     printf "\033[1;31m[+] Setting up STIG-compliant kernel parameters (login-safe)...\033[0m\n"
     tee /etc/sysctl.d/stig-kernel-safe.conf > /dev/null <<EOF
@@ -647,6 +666,7 @@ apply_stig_hardening() {
     printf "\033[1;31m[+] Applying STIG hardening tasks...\033[0m\n"
 
     stig_password_policy || { printf "\033[1;31m[-] Failed to apply password policy.\033[0m\n"; exit 1; }
+    stig_harden_ssh || { printf "\033[1;31m[-] Failed to secure ssh.\033[0m\n"; exit 1; }
     stig_lock_inactive_accounts || { printf "\033[1;31m[-] Failed to lock inactive accounts.\033[0m\n"; exit 1; }
     stig_login_banners || { printf "\033[1;31m[-] Failed to set login banners.\033[0m\n"; exit 1; }
     stig_kernel_setup || { printf "\033[1;31m[-] Failed to configure kernel parameters.\033[0m\n"; exit 1; }
