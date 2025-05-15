@@ -250,7 +250,7 @@ enable_fail2ban() {
         # Modify the apt install commands to use these options, for example:
         # Replace: apt install -y package_name
         # With: apt $APT_OPTIONS install package_name
-        apt "$APT_OPTIONS" fail2ban
+        apt "$APT_OPTIONS" install fail2ban
         systemctl enable --now fail2ban
         printf "\033[1;32m[+] Fail2Ban installed and enabled successfully.\033[0m\n"
 
