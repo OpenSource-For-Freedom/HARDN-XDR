@@ -297,16 +297,27 @@ enable_aide() {
         }
 
         if [ -f /var/lib/aide/aide.db ]; then
-            printf "\033[1;33m[!] AIDE database already exists. Skipping initialization.\033[0m\n"
-            return 0
+            printf "\033[1;33m[!] AIDE database already exists. Reinitializing...\033[0m\n"
+            # Remove existing database files to avoid prompts
+            rm -f /var/lib/aide/aide.db.new
         fi
 
-        aideinit || {
+        # Run aide --init non-interactively
+        printf "\033[1;31m[+] Initializing AIDE database (this may take a few minutes)...\033[0m\n"
+        aide --init || {
             printf "\033[1;31m[-] Failed to initialize AIDE database.\033[0m\n"
             return 1
         }
-        mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db || {
-            printf "\033[1;31m[-] Failed to replace AIDE database.\033[0m\n"
+
+        # Move the new database file into place
+        if [ -f /var/lib/aide/aide.db.new ]; then
+            mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db || {
+                printf "\033[1;31m[-] Failed to replace AIDE database.\033[0m\n"
+                return 1
+            }
+            printf "\033[1;32m[+] AIDE database initialized and installed.\033[0m\n"
+        else
+            printf "\033[1;31m[-] AIDE database initialization did not create expected file.\033[0m\n"
             return 1
         }
 
