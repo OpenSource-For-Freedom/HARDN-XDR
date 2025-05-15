@@ -834,3 +834,6 @@ EOF
 
         echo -e "${GREEN}HARDN setup completed successfully.${RESET}"
 }
+
+# using "$@" to pass all command line args
+main "$@"
