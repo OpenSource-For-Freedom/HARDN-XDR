@@ -707,7 +707,10 @@ main() {
             exit 1
         fi
 
-        list_menu_options
+        # Only display menu options if no arguments are provided or help is requested
+        if [[ -z "$arg" || "$arg" == "-h" || "$arg" == "--help" ]]; then
+            list_menu_options
+        fi
 
         # menu selection case statement
         # Ensure no unintended code runs unless explicitly triggered by a flag
