@@ -399,12 +399,20 @@ configure_firejail() {
 
 
 stig_password_policy() {
+    # Update password quality settings in pwquality.conf
     sed -i 's/^#\? *minlen *=.*/minlen = 14/' /etc/security/pwquality.conf
     sed -i 's/^#\? *dcredit *=.*/dcredit = -1/' /etc/security/pwquality.conf
     sed -i 's/^#\? *ucredit *=.*/ucredit = -1/' /etc/security/pwquality.conf
     sed -i 's/^#\? *ocredit *=.*/ocredit = -1/' /etc/security/pwquality.conf
     sed -i 's/^#\? *lcredit *=.*/lcredit = -1/' /etc/security/pwquality.conf
+    sed -i 's/^#\? *enforcing *=.*/enforcing = 1/' /etc/security/pwquality.conf
 
+    # Update password aging policies in login.defs
+    echo "PASS_MIN_DAYS 1" >> /etc/login.defs
+    echo "PASS_MAX_DAYS 90" >> /etc/login.defs
+    echo "PASS_WARN_AGE 7" >> /etc/login.defs
+
+    # Activate pwquality profile using pam-auth-update if available
     if command -v pam-auth-update > /dev/null; then
         pam-auth-update --package
         echo "[+] pam_pwquality profile activated via pam-auth-update"
