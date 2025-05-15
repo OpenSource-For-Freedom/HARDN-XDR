@@ -768,4 +768,3 @@ main() {
     echo "HARDN setup completed successfully."
 }
 
-main
