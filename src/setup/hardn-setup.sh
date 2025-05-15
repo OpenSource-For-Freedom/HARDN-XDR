@@ -267,10 +267,11 @@ detect_os() {
 }
 
 install_pkgdeps() {
-    
+
     printf "\033[1;31m[+] Installing package dependencies...\033[0m\n"
     apt install -y git fwupd gawk mariadb-common policycoreutils dpkg-dev \
         unixodbc-common firejail unattended-upgrades python3-pyqt6 fonts-liberation libpam-pwquality
+
 }
 
 enable_auto_updates() {
@@ -286,8 +287,27 @@ enable_auto_updates() {
 
 install_security_tools() {
     printf "\033[1;31m[+] Installing required system security tools...\033[0m\n"
+    apt update -y
     apt install -y ufw fail2ban apparmor apparmor-profiles apparmor-utils firejail tcpd lynis debsums aide \
         libpam-pwquality libvirt-daemon-system libvirt-clients qemu-system-x86 openssh-server openssh-client rkhunter 
+
+    TMPDIR=$(mktemp -d)
+    cd "$TMPDIR"
+    wget https://www.rfxn.com/downloads/maldetect-current.tar.gz
+    tar -xvzf maldetect-current.tar.gz
+    MALDETECT_DIR=$(find . -maxdepth 1 -type d -name "maldetect-*" | head -n 1)
+    if [ -d "$MALDETECT_DIR" ]; then
+        cd "$MALDETECT_DIR"
+        ./install.sh
+        sudo maldet --update
+    else
+        echo "[-] Maldetect directory not found after extraction."
+        cd /
+        rm -rf "$TMPDIR"
+        return 1
+    fi
+    cd /
+    rm -rf "$TMPDIR"
 }
 
 enable_fail2ban() {
@@ -317,9 +337,9 @@ enable_apparmor() {
         return 1
     }
 
-    systemctl enable --now apparmor || {
-        printf "\033[1;31m[-] Failed to enable AppArmor service.\033[0m\n"
-        return 1
+    systemctl enable apparmor || { 
+        printf "\033[1;31m[-] Failed to enable AppArmor at boot.\033[0m\n"
+        exit 1
     }
 
     aa-complain /etc/apparmor.d/* || {
@@ -442,13 +462,16 @@ stig_login_banners() {
 
 stig_secure_filesystem() {
     printf "\033[1;31m[+] Securing filesystem permissions...\033[0m\n"
+
+    # Set ownership and permissions for critical files
     chown root:root /etc/passwd /etc/group /etc/gshadow
     chmod 644 /etc/passwd
-    chmod 640 /etc/group  
+    chmod 644 /etc/group
 
     chown root:shadow /etc/shadow /etc/gshadow
     chmod 640 /etc/shadow /etc/gshadow
 
+    # Configure audit rules
     printf "\033[1;31m[+] Configuring audit rules...\033[0m\n"
     apt install -y auditd audispd-plugins
     tee /etc/audit/rules.d/stig.rules > /dev/null <<EOF
@@ -457,15 +480,18 @@ stig_secure_filesystem() {
 -w /etc/group -p wa -k identity
 -w /etc/gshadow -p wa -k identity
 -w /etc/security/opasswd -p wa -k identity
-
 EOF
 
+    # Set ownership and permissions for audit rules
     chown root:root /etc/audit/rules.d/*.rules
     chmod 600 /etc/audit/rules.d/*.rules
+
+    # Ensure audit log directory exists and is secured
     mkdir -p /var/log/audit
     chown -R root:root /var/log/audit
     chmod 700 /var/log/audit
 
+    # Load audit rules and enable auditd
     augenrules --load
     systemctl enable auditd || { printf "\033[1;31m[-] Failed to enable auditd.\033[0m\n"; return 1; }
     systemctl start auditd || { printf "\033[1;31m[-] Failed to start auditd.\033[0m\n"; return 1; }
@@ -713,11 +739,21 @@ detect_environment() {
     fi
 }
 
+check_internet() {
+    printf "\033[1;31m[+] Checking internet connectivity...\033[0m\n"
+    if ! ping -c 1 8.8.8.8 > /dev/null 2>&1; then
+        printf "\033[1;31m[-] Internet connectivity is not available. Please check your network.\033[0m\n"
+        exit 1
+    fi
+    printf "\033[1;32m[+] Internet connectivity is available.\033[0m\n"
+}
+
 main() {
     printf "\033[1;31m[+] Initializing HARDN setup...\033[0m\n"
 
     detect_environment
     enable_auto_updates
+    check_internet
     echo -e "\033[1;31m
 ================================================================================
                           [*] DETECTING OPERATING SYSTEM
@@ -877,7 +913,6 @@ main() {
                           [*] APPLYING STIG HARDENING TASKS
 ================================================================================
 \033[0m"
-    apply_stig_hardening
 
     echo -e "\033[1;31m
 ================================================================================
