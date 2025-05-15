@@ -870,6 +870,22 @@ ${GREEN}=======================================================${RESET}
 EOF
         }
 
+                # Define colors for better readability
+                GREEN="\033[1;32m"
+                RESET="\033[0m"
+
+                # Function to display status messages in a consistent format
+                display_status() {
+                    local message="$1"
+                    cat <<EOF
+
+        ${GREEN}=======================================================${RESET}
+        ${GREEN}         [+] $message${RESET}
+        ${GREEN}=======================================================${RESET}
+
+EOF
+        }
+
         # Execute each step and display status
         detect_os
         display_status "OS Detection Complete"
