@@ -212,7 +212,6 @@ install_additional_tools() {
         printf "\033[1;31m[+] Installing chkrootkit...\033[0m\n"
         apt install -y chkrootkit
 
-        whiptail --infobox "Installing Linux Malware Detect..."
 
         # Create a temporary directory for the installation
         temp_dir=$(mktemp -d)
@@ -231,7 +230,6 @@ install_additional_tools() {
             }
 
             if [ "$install_maldet_failed" != "true" ]; then
-                whiptail --infobox "Running maldetect installer..."
                 printf "\033[1;31m[+] Running maldetect installer...\033[0m\n"
                 chmod +x install.sh
                 if ./install.sh; then
