@@ -527,22 +527,24 @@ EOF
 
 
 grub_security() {
-    # Skip if UEFI < VM support
+    # Skip GRUB configuration for UEFI systems
     if [ -d /sys/firmware/efi ]; then
         echo "[*] UEFI system detected. Skipping GRUB configuration..."
         return 0
     fi
 
-    # Check for Virtual Machine environment
+    # Check if running VM
     if grep -q 'hypervisor' /proc/cpuinfo; then
         echo "[*] Virtual machine detected. Proceeding with GRUB configuration..."
     else
         echo "[+] No virtual machine detected. Proceeding with GRUB configuration..."
     fi
-    
+
+    # Set GRUB password + grub-mkpasswd-pbkdf2
+    echo "[+] Setting GRUB password..."
     grub-mkpasswd-pbkdf2 | tee /etc/grub.d/40_custom_password
 
-    # Detect GRUB path < support grub2
+    # Detect GRUB 
     if [ -f /boot/grub/grub.cfg ]; then
         GRUB_CFG="/boot/grub/grub.cfg"
         GRUB_DIR="/boot/grub"
@@ -555,23 +557,23 @@ grub_security() {
     fi
 
     echo "[+] Configuring GRUB security settings..."
-
-
+    
+    # Backup the existing GRUB 
     BACKUP_CFG="$GRUB_CFG.bak.$(date +%Y%m%d%H%M%S)"
     cp "$GRUB_CFG" "$BACKUP_CFG"
     echo "[+] Backup created at $BACKUP_CFG"
 
-
+    # Modify GRUB 
     sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT="/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash security=1 /' /etc/default/grub
 
-
+    # Set GRUB_TIMEOUT
     if grep -q '^GRUB_TIMEOUT=' /etc/default/grub; then
         sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=5/' /etc/default/grub
     else
         echo "GRUB_TIMEOUT=5" >> /etc/default/grub
     fi
 
-
+    # Update GRUB 
     if command -v update-grub >/dev/null 2>&1; then
         update-grub || echo "[-] Failed to update GRUB using update-grub."
     elif command -v grub2-mkconfig >/dev/null 2>&1; then
@@ -586,6 +588,7 @@ grub_security() {
     chown root:root "$GRUB_CFG"
     echo "[+] GRUB configuration secured: $GRUB_CFG"
 }
+
 
 
 stig_disable_usb() {
