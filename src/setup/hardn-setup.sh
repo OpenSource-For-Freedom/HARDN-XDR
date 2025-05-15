@@ -102,122 +102,6 @@ update_system_packages() {
         apt --fix-broken install -y
 }
 
-# menu selection case statement
-# Ensure no unintended code runs unless explicitly triggered by a flag
-if [[ -n "$1" ]]; then
-  main
-    case $1 in
-        -s|--setup)
-     #       main
-            ;;
-        -u|--update)
-            update_system_packages
-            ;;
-        -cl|--check-HARDN-logs)
-            if [ -f HARDN_alerts.txt ]; then
-                echo "HARDN logs found:"
-                cat HARDN_alerts.txt
-            else
-                echo "No HARDN logs found."
-            fi
-            ;;
-        -i|--install-security-tools)
-            install_security_tools
-            ;;
-        -d-st|--disable-security-tools)
-            systemctl disable --now ufw fail2ban apparmor firejail rkhunter aide
-            echo "Security tools disabled."
-            ;;
-        -e-st|--enable-security-tools)
-            systemctl enable --now ufw fail2ban apparmor firejail rkhunter aide
-            echo "Security tools enabled."
-            ;;
-        -d-aa|--disable-apparmor)
-            systemctl disable --now apparmor
-            echo "AppArmor disabled."
-            ;;
-        -e-aa|--enable-apparmor)
-            systemctl enable --now apparmor
-            echo "AppArmor enabled."
-            ;;
-        -d-fb|--disable-fail2ban)
-            systemctl disable --now fail2ban
-            echo "Fail2Ban disabled."
-            ;;
-        -e-fb|--enable-fail2ban)
-            systemctl enable --now fail2ban
-            echo "Fail2Ban enabled."
-            ;;
-        -d-f|--disable-firejail)
-            systemctl disable --now firejail
-            echo "Firejail disabled."
-            ;;
-        -e-f|--enable-firejail)
-            systemctl enable --now firejail
-            echo "Firejail enabled."
-            ;;
-        -d-rk|--disable-rkhunter)
-            systemctl disable --now rkhunter
-            echo "RKHunter disabled."
-            ;;
-        -e-rk|--enable-rkhunter)
-            systemctl enable --now rkhunter
-            echo "RKHunter enabled."
-            ;;
-        -d-a|--disable-aide)
-            systemctl disable --now aide
-            echo "AIDE disabled."
-            ;;
-        -e-a|--enable-aide)
-            systemctl enable --now aide
-            echo "AIDE enabled."
-            ;;
-        -d-u|--disable-ufw)
-            systemctl disable --now ufw
-            echo "UFW disabled."
-            ;;
-        -e-u|--enable-ufw)
-            systemctl enable --now ufw
-            echo "UFW enabled."
-            ;;
-        -t|--show-tools)
-            echo "Installed security tools:"
-            echo "  - AppArmor"
-            echo "  - Fail2Ban"
-            echo "  - Firejail"
-            echo "  - RKHunter"
-            echo "  - AIDE"
-            echo "  - UFW"
-            ;;
-        -stig|--show-stig)
-            echo "STIG hardening tasks:"
-            echo "  - Password policy"
-            echo "  - Lock inactive accounts"
-            echo "  - Login banners"
-            echo "  - Kernel parameters"
-            echo "  - Secure filesystem permissions"
-            echo "  - Disable USB storage"
-            echo "  - Disable core dumps"
-            echo "  - Disable Ctrl+Alt+Del"
-            echo "  - Disable IPv6"
-            echo "  - Configure firewall (UFW)"
-            echo "  - Set randomize_va_space"
-            ;;
-        -h|--help)
-            display_help_banner
-            list_menu_options
-            exit 0
-            ;;
-        *)
-            echo "Unknown option: $1"
-            echo "Use -h or --help for usage information."
-            exit 1
-            ;;
-    esac
-else
-    echo "No option provided. Use -h or --help for usage information."
-    exit 1
-fi
 
 
 print_ascii_banner() {
@@ -738,6 +622,7 @@ EOF
 
 # main function using heredoc format: eliminate repetitive echo statements
 main() {
+        local arg="$1"
         #print_ascii_banner
         sleep 5
 
@@ -751,6 +636,148 @@ main() {
         fi
 
         list_menu_options
+
+        # menu selection case statement
+        # Ensure no unintended code runs unless explicitly triggered by a flag
+        if [[ -n "$arg" ]]; then
+            case $arg in
+                -s|--setup)
+                    # Skip the case statement for setup to avoid recursion
+                    ;;
+                -u|--update)
+                    update_system_packages
+                    return 0
+                    ;;
+                -cl|--check-HARDN-logs)
+                    if [ -f HARDN_alerts.txt ]; then
+                        echo "HARDN logs found:"
+                        cat HARDN_alerts.txt
+                    else
+                        echo "No HARDN logs found."
+                    fi
+                    return 0
+                    ;;
+                -i|--install-security-tools)
+                    install_security_tools
+                    return 0
+                    ;;
+                -d-st|--disable-security-tools)
+                    systemctl disable --now ufw fail2ban apparmor firejail rkhunter aide
+                    echo "Security tools disabled."
+                    return 0
+                    ;;
+                -e-st|--enable-security-tools)
+                    systemctl enable --now ufw fail2ban apparmor firejail rkhunter aide
+                    echo "Security tools enabled."
+                    return 0
+                    ;;
+                -d-aa|--disable-apparmor)
+                    systemctl disable --now apparmor
+                    echo "AppArmor disabled."
+                    return 0
+                    ;;
+                -e-aa|--enable-apparmor)
+                    systemctl enable --now apparmor
+                    echo "AppArmor enabled."
+                    return 0
+                    ;;
+                -d-fb|--disable-fail2ban)
+                    systemctl disable --now fail2ban
+                    echo "Fail2Ban disabled."
+                    return 0
+                    ;;
+                -e-fb|--enable-fail2ban)
+                    systemctl enable --now fail2ban
+                    echo "Fail2Ban enabled."
+                    return 0
+                    ;;
+                -d-f|--disable-firejail)
+                    systemctl disable --now firejail
+                    echo "Firejail disabled."
+                    return 0
+                    ;;
+                -e-f|--enable-firejail)
+                    systemctl enable --now firejail
+                    echo "Firejail enabled."
+                    return 0
+                    ;;
+                -d-rk|--disable-rkhunter)
+                    systemctl disable --now rkhunter
+                    echo "RKHunter disabled."
+                    return 0
+                    ;;
+                -e-rk|--enable-rkhunter)
+                    systemctl enable --now rkhunter
+                    echo "RKHunter enabled."
+                    return 0
+                    ;;
+                -d-a|--disable-aide)
+                    systemctl disable --now aide
+                    echo "AIDE disabled."
+                    return 0
+                    ;;
+                -e-a|--enable-aide)
+                    systemctl enable --now aide
+                    echo "AIDE enabled."
+                    return 0
+                    ;;
+                -d-u|--disable-ufw)
+                    systemctl disable --now ufw
+                    echo "UFW disabled."
+                    return 0
+                    ;;
+                -e-u|--enable-ufw)
+                    systemctl enable --now ufw
+                    echo "UFW enabled."
+                    return 0
+                    ;;
+                -t|--show-tools)
+                    echo "Installed security tools:"
+                    echo "  - AppArmor"
+                    echo "  - Fail2Ban"
+                    echo "  - Firejail"
+                    echo "  - RKHunter"
+                    echo "  - AIDE"
+                    echo "  - UFW"
+                    return 0
+                    ;;
+                -stig|--show-stig)
+                    echo "STIG hardening tasks:"
+                    echo "  - Password policy"
+                    echo "  - Lock inactive accounts"
+                    echo "  - Login banners"
+                    echo "  - Kernel parameters"
+                    echo "  - Secure filesystem permissions"
+                    echo "  - Disable USB storage"
+                    echo "  - Disable core dumps"
+                    echo "  - Disable Ctrl+Alt+Del"
+                    echo "  - Disable IPv6"
+                    echo "  - Configure firewall (UFW)"
+                    echo "  - Set randomize_va_space"
+                    return 0
+                    ;;
+                -h|--help)
+                    display_help_banner
+                    list_menu_options
+                    return 0
+                    ;;
+                *)
+                    echo "Unknown option: $arg"
+                    echo "Use -h or --help for usage information."
+                    return 1
+                    ;;
+            esac
+        elif [[ "$0" != "$BASH_SOURCE" ]]; then
+            # If being sourced, don't run the full setup
+            return 0
+        else
+            # Only show this message when run directly without arguments
+            # and not when called from the -s|--setup option
+            if [[ "$arg" != "-s" && "$arg" != "--setup" ]]; then
+                echo "No option provided. Use -h or --help for usage information."
+                return 1
+            fi
+        fi
 
         # Define colors for better readability
         GREEN="\033[1;32m"
@@ -766,7 +793,7 @@ ${GREEN}         [+] $message${RESET}
 ${GREEN}=======================================================${RESET}
 
 EOF
-    }
+        }
 
         # Execute each step and display status
         detect_os

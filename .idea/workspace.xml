@@ -5,7 +5,6 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="1154ff61-838f-499b-adac-1d2601c549c3" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/setup/hardn-setup.sh" beforeDir="false" afterPath="$PROJECT_DIR$/src/setup/hardn-setup.sh" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
