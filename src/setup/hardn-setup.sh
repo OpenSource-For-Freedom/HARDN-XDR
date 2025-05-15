@@ -208,7 +208,9 @@ if [[ -n "$1" ]]; then
             echo "  - Set randomize_va_space"
             ;;
         -h|--help)
-            "$0" -h
+            display_help_banner
+            list_menu_options
+            exit 0
             ;;
         *)
             echo "Unknown option: $1"
