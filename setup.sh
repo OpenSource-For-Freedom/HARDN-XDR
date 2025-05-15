@@ -101,16 +101,33 @@ aptinstall() {
         # Add to installed packages list
         aptinstalled="$aptinstalled\n$1"
 }
-# You Need to Initialize list of installed packages
-aptinstalled=""
 
-# Function to check if a package is installed
-isinstalled() {
-        dpkg -s "$1" >/dev/null 2>&1
+
+manualinstall() {
+        	# Installs $1 manually. Used only for AUR helper here.
+        	# Should be run after repodir is created and var is set.
+          dpkg -s "$1" >/dev/null 2>&1
+        	whiptail --infobox "Installing \"$1\" manually." 7 50
+        	sudo -u "$name" mkdir -p "$repodir/$1"
+        	sudo -u "$name" git -C "$repodir" clone --depth 1 --single-branch \
+        		--no-tags -q "https://aur.archlinux.org/$1.git" "$repodir/$1" ||
+        		{
+        			cd "$repodir/$1" || return 1
+        			sudo -u "$name" git pull --force origin master
+        		}
+        	cd "$repodir/$1" || exit 1
+        	sudo -u "$name" \
+        		makepkg --noconfirm -si >/dev/null 2>&1 || return 1
+}
+
+maininstall() {
+       	# Installs all needed programs from main repo.
+       	whiptail --title "HARDN Installation" --infobox "Installing \`$1\` ($n of $total). $1 $2" 9 70
+       	installpkg "$1"
 }
 
 # Function to build and install from Git repo
-gitmakeinstall() {
+gitdpkgbuild() {
         repo_url="$1"
         description="$2"
         dir="/tmp/$(basename "$repo_url" .git)"
@@ -119,9 +136,10 @@ gitmakeinstall() {
         git clone --depth=1 "$repo_url" "$dir" >/dev/null 2>&1
         cd "$dir" || exit
         whiptail --infobox "Building and installing $description..." 7 70
-        make >/dev/null 2>&1 && sudo make install >/dev/null 2>&1
+        sudo dpkg-buildpackage -us -uc 2>&1 && sudo dpkg -i  ../hardn_*.deb
         cd - >/dev/null 2>&1 || exit
 }
+
 
 # Main loop to parse and install
 installationloop() {
@@ -141,7 +159,7 @@ installationloop() {
 
             case "$tag" in
                 a) aptinstall "$program" "$comment" ;;
-                G) gitmakeinstall "$program" "$comment" ;;
+                G) gitdpkgbuild "$program" "$comment" ;;
                 *) maininstall "$program" "$comment"
             esac
         done </tmp/progs.csv
@@ -365,7 +383,10 @@ main() {
         preinstallmsg || error "User exited."
         update_system_packages
         install_pkgdeps
-        # Check dependencies. If needed, use commented conditional block below main
+        aptinstall
+        manualinstal
+        maininstall
+        gitdpkgbuild
         installationloop
         config_selinu
         check_security_tools
