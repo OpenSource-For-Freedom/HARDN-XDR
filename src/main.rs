@@ -21,6 +21,7 @@ mod gui_input;
 mod hardn_logging;
 mod gui_api;
 mod setup;
+
 //mod r#main_func
 // use for unit testing
 // mod main_auth_srv;
@@ -29,6 +30,9 @@ mod setup;
 mod test {
     pub mod network_monitor_tests;
 }
+
+mod setup;
+
 
 // =================== Constants ===================
 const LOG_FILE: &str = "/var/log/hardn.log";
