@@ -19,7 +19,8 @@
 
 
 ### HARDN Endpoint
-- This Debian Package is only for **BARE-METAL installs of Debian 12 and Ubuntu 24.04 Bare Metal and Virtual Machines**
+- **Our** Goal: assist the open source community in building a Debian based system **"GOLDEN IMAGE"**
+- This Debian Package is only tested for **BARE-METAL installs of Debian based distributions and Virtual Machines**
 -  Is a robust and secure endpoint management solution designed to simplify and enhance the management of devices in your network. It provides advanced features for monitoring, securing, and maintaining endpoints efficiently.
 - We also bring you with this release `STIG` COMPLIANCE to align with the Security Technical Information Guides provided by the DOD Cyber Exchange.
 
@@ -144,7 +145,7 @@ These flags allow users to customize the setup process according to their requir
 
 <p align="center">
   <img src="https://img.shields.io/badge/LICENSE-white?style=for-the-badge&labelColor=black" alt="LICENSE"><br><br>
-This project is licensed under the GPLicense
+This project is licensed under the MIT License
   
 </p>
 
