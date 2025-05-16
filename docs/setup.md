@@ -10,7 +10,7 @@
 
 2. Build the Debian package:
     ```bash
-    cd c:\dev\linux\HARDN
+    cd ~/HARDN
     dpkg-buildpackage -us -uc
     ```
 
