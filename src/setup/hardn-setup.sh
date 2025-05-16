@@ -179,6 +179,11 @@ ${CYAN_BOLD}
                                                    S E T U P
                                                    
                                                     v 1.1.5
+
+                                                   Created by
+                                                    Tim Burns
+                                                       &
+                                                   Chris Bingham
 ${RESET}
 EOF
 }
