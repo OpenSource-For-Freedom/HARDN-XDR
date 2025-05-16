@@ -1,7 +1,7 @@
 [package]
 name = "hardn"
 version = "1.1.4"
-# changed edition from 2025 to 2021 for compatable unit testing via cargo
+# changed edition from 2025 to 2021 for compatible unit testing via cargo
 edition = "2021"
 
 [dependencies]
