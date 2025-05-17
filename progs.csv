@@ -1,0 +1,27 @@
+#TAG,NAME IN REPO (or git url),PURPOSE (should be a verb phrase to sound right while installing).
+,wget,non-interactive download of online files from the web.
+,curl,tool for transferring data from or to a server.
+,git,version control system for tracking changes in files.
+,gawk,pattern scanning and processing language.
+,mariadb-common,common files for MariaDB database server.
+,mysql-common,MySQL database common files.
+,policycoreutils,SELinux policy core utilities.
+,python-matplotlib-data,Python based plotting system (data package).
+,unixodbc-common,ODBC tools libraries common files.
+,gawk-doc,documentation for the GNU awk language.
+,gpg,GNU Privacy Guard encryption and signing tool.
+,pass,lightweight directory-based password manager.
+,selinux-utils,SELinux utility programs.
+,selinux-basics,SELinux basic support.
+,apparmor,user-space parser utility for AppArmor.
+,apparmor-profiles,profiles for AppArmor Security policies.
+,apparmor-utils,utilities for controlling AppArmor.
+,firejail,security sandbox for isolating applications.
+,tcpd,Wietse Venema's TCP wrapper utilities.
+,lynis,security auditing tool for Unix based systems.
+,debsums,verification tool for installed package files.
+,rkhunter,rootkit backdoor local exploit scanner.
+,libpam-pwquality,PAM module to check password strength.
+,ufw,program for managing a netfilter firewall.
+,fail2ban,ban hosts that cause multiple authentication errors.
+,debhelper-compat devscripts git-buildpackage,package build dendancies.
