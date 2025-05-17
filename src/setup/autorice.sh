@@ -4,14 +4,13 @@
 #        HARDN - Auto Rice Script      #
 #            main branch               #
 #                                      #
-#       Author: Chris Bingham          #
-#           Date: 4/5/2025             #
-#         Updated: 5/16/2025           #
+#       Author:  Chris Bingham         #
+#       Date:    4/5/2025              #
+#       Updated: 5/16/2025             #
 #                                      #
 ########################################
 
 
-# urls to be changed after merge
 repo="https://github.com/OpenSource-For-Freedom/HARDN/"
 progsfile="https://raw.githubusercontent.com/LinuxUser255/HARDN/refs/heads/main-dev/progs.csv"
 repobranch="main-patch"
@@ -109,7 +108,7 @@ gitdpkgbuild() {
         fi
 
         # Run dpkg-source before building
-       dpkg-source --before-build . >/dev/null 2>&1
+        dpkg-source --before-build . >/dev/null 2>&1
 
         # Build and install the package
         if sudo dpkg-buildpackage -u -uc 2>&1; then
@@ -245,9 +244,6 @@ enable_services() {
 
           # Initialize the variable
           install_maldet_failed=false
-
-          # Create a temporary directory for the installation
-          # ... rest of the function
 
 
         printf "\033[1;31m[+] Installing chkrootkit...\033[0m\n"
@@ -418,7 +414,6 @@ main() {
         finalize
 }
 
-# Run the main function
 main
 
 
