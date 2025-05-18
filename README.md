@@ -103,13 +103,19 @@ After installation, you can always start the hardening setup by running `sudo ha
 > - All dependencies are handled by the package.
 > - For help, run: `hardn --help`
 
-### Updates in Version 1.1.5
+### Updates in Version 1.1.6
 - Built and tested Debian packaging.
 - Enhanced GRUB security to respect GUI changes and user-defined settings in setup.
 - Improved error handling and script optimization.
 - Updated documentation and ensured cron jobs are non-intrusive.
 
-### New Features in HARDN v1.1.5
+### New Features in HARDN v1.1.6
+
+
+<p align="center">
+  <img src="docs/assets/hardn_menu.png" alt="cybersynapse Logo" />
+</p>
+
 
 - **Menu in Setup Script**: The `hardn` setup script now supports various flags for enhanced flexibility:
   - `--setup`: Start hardn setup.
@@ -140,7 +146,6 @@ These flags allow users to customize the setup process according to their requir
 <p align="center">
   <img src="docs/assets/cybersynapse.png" alt="cybersynapse Logo" />
 </p>
-
 
 
 <p align="center">
