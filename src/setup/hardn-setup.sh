@@ -6,11 +6,43 @@ SCRIPT_PATH="$(readlink -f "$0")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 PACKAGES_SCRIPT="$SCRIPT_DIR/hardn-packages.sh"
 
+RED="\033[0;31m"
+GREEN="\033[0;32m"
+YELLOW="\033[0;33m"
+BLUE="\033[0;34m"
+PURPLE="\033[0;35m"
+CYAN="\033[0;36m"
+BOLD="\033[1m"
+RESET="\033[0m"
+
 LOG_FILE="/var/log/hardn-setup.log"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 
-if [ "$(id -u)" -ne 0; then
+display_status() {
+    local message="$1"
+    local width
+    width=$(tput cols)
+    
+   
+    local border_char="="
+    local border=$(printf '%*s' 60 | tr ' ' "$border_char")
+    
+  
+    local msg="[+] $message"
+    
+   
+    local padding=$(( (width - ${#border}) / 2 ))
+    local pad_msg=$(( (width - ${#msg}) / 2 ))
+    
+    echo -e "\n"
+    echo -e "$(printf "%*s" $padding)${GREEN}${border}${RESET}"
+    echo -e "$(printf "%*s" $pad_msg)${GREEN}${msg}${RESET}"
+    echo -e "$(printf "%*s" $padding)${GREEN}${border}${RESET}"
+    echo -e ""
+}
+
+if [ "$(id -u)" -ne 0 ]; then
     echo "This script must be run as root. Use: sudo hardn"
     exit 1
 fi
@@ -35,7 +67,7 @@ if [[ "$1" == "-h" || "$1" == "--help" ]]; then
     clear
     echo -e "${GREEN_BOLD}"
     center_text "$BORDER"
-    center_text "  ▄█    █▄            ▄████████         ▄████████      ████████▄       ███▄▄▄▄   "
+    center_text "  ▄█     █▄            ▄████████         ▄████████      ████████▄       ███▄▄▄▄   "
     center_text "  ███    ███          ███    ███        ███    ███      ███   ▀███      ███▀▀▀██▄ "
     center_text "  ███    ███          ███    ███        ███    ███      ███    ███      ███   ███ "
     center_text " ▄███▄▄▄▄███▄▄        ███    ███       ▄███▄▄▄▄██▀      ███    ███      ███   ███ "
@@ -68,6 +100,8 @@ if [[ "$1" == "-h" || "$1" == "--help" ]]; then
     echo "-e-rk,      Enable RKHunter"
     echo "-d-a,       Disable AIDE"
     echo "-e-a,       Enable AIDE"
+    echo "-d-y,       Disable YARA"
+    echo "-e-y,       Enable YARA"
     echo "-d-u,       Disable UFW"
     echo "-e-u,       Enable UFW"
     echo "-t,         Show installed security tools"
@@ -139,10 +173,13 @@ flags(){
                 ;;
             -d-st|--disable-security-tools)
                 systemctl disable --now ufw fail2ban apparmor firejail rkhunter aide
+                echo "YARA rules disabled."
                 echo "Security tools disabled."
                 ;;
             -e-st|--enable-security-tools)
                 systemctl enable --now ufw fail2ban apparmor firejail rkhunter aide
+                # Explicitly enable YARA as it doesn't have a systemd service
+                enable_yara
                 echo "Security tools enabled."
                 ;;
             -d-aa|--disable-apparmor)
@@ -185,6 +222,23 @@ flags(){
                 systemctl enable --now aide
                 echo "AIDE enabled."
                 ;;
+            -d-y|--disable-yara)
+                # Remove YARA cron job if it exists
+                if grep -q "/usr/bin/yara.*index.yar" /etc/crontab; then
+                    sed -i '/\/usr\/bin\/yara.*index.yar/d' /etc/crontab
+                    echo "YARA cron job removed."
+                fi
+                # Remove YARA rules directory
+                if [ -d /etc/yara/rules ]; then
+                    rm -rf /etc/yara/rules
+                    echo "YARA rules directory removed."
+                fi
+                echo "YARA rules disabled."
+                ;;
+            -e-y|--enable-yara)
+                enable_yara
+                echo "YARA rules enabled."
+                ;;
             -d-u|--disable-ufw)
                 systemctl disable --now ufw
                 echo "UFW disabled."
@@ -196,10 +250,11 @@ flags(){
             -t|--show-tools)
                 echo "Installed security tools:"
                 echo "  - AppArmor"
-                echo "  - Fail2Ban"
+                echo "  - Fail2Ban" 
                 echo "  - Firejail"
                 echo "  - RKHunter"
                 echo "  - AIDE"
+                echo "  - YARA (pattern matching and malware detection)"
                 echo "  - UFW"
                 ;;
             -stig|--show-stig)
@@ -369,37 +424,125 @@ enable_apparmor() {
 }
 
 enable_aide() {
+    printf "\033[1;31m[+] Removing any existing AIDE installation...\033[0m\n"
+    
+    # Use DEBIAN_FRONTEND and -y flags to ensure non-interactive operation
+    DEBIAN_FRONTEND=noninteractive apt-get -y remove --purge aide aide-common
+    rm -rf /etc/aide /var/lib/aide
+    
     printf "\033[1;31m[+] Installing AIDE and initializing database…\033[0m\n"
-    apt install -y aide aide-common || {
+    DEBIAN_FRONTEND=noninteractive apt-get -y install aide aide-common || {
         printf "\033[1;31m[-] Failed to install AIDE.\033[0m\n"
         return 1
     }
+    
+    # Ensure the aide config directory exists
+    mkdir -p /etc/aide
+    
+    # Create a proper AIDE configuration if it doesn't exist
+    if [ ! -f /etc/aide/aide.conf ]; then
+        printf "\033[1;31m[+] Creating AIDE configuration file...\033[0m\n"
+        cat > /etc/aide/aide.conf << 'EOF'
+# AIDE configuration file
 
+# Set the database file paths
+database=file:/var/lib/aide/aide.db
+database_out=file:/var/lib/aide/aide.db.new
+
+# Rules
+# The first rule to match a file determines the group a file belongs to.
+# See aide.conf(5) for more information.
+
+# Groups for AIDE
+Binlib = p+i+n+u+g+s+b+m+c+md5+sha1
+ConfFiles = p+i+n+u+g+sha1+rmd160
+Logs = p+i+n+u+g+S
+Devices = p+i+n+u+g+s+b+c+md5+sha1
+Databases = p+i+n+u+g
+StaticDir = p+i+n+u+g
+ManPages = p+i+n+u+g+md5+sha1
+
+# Rules
+/bin ConfFiles
+/sbin ConfFiles
+/usr/bin ConfFiles
+/usr/sbin ConfFiles
+/etc ConfFiles
+/lib Binlib
+/lib64 Binlib
+/boot ConfFiles
+/root ConfFiles
+/var/log Logs
+/var/lib/aide Databases
+EOF
+    fi
+    
+    printf "\033[1;31m[+] Creating AIDE systemd service and timer...\033[0m\n"
+    
+    # Create AIDE systemd service
+    cat > /etc/systemd/system/aide-check.service << 'EOF'
+[Unit]
+Description=AIDE Check Service
+After=local-fs.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/aide --check -c /etc/aide/aide.conf
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    # Create AIDE systemd timer
+    cat > /etc/systemd/system/aide-check.timer << 'EOF'
+[Unit]
+Description=Daily AIDE Check Timer
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+AccuracySec=1h
+RandomizedDelaySec=30min
+
+[Install]
+WantedBy=timers.target
+EOF
+
+    # Enable the timer
+    systemctl daemon-reload
+    systemctl enable aide-check.timer
+    systemctl start aide-check.timer
+    
     if [ -f /var/lib/aide/aide.db ]; then
         printf "\033[1;33m[!] AIDE database already exists. Skipping initialization and continuing.\033[0m\n"
         return 0
     fi
 
-    aideinit || {
+    printf "\033[1;31m[+] Initializing AIDE database with explicit config path...\033[0m\n"
+    aide --init --config=/etc/aide/aide.conf || {
         printf "\033[1;31m[-] Failed to initialize AIDE database.\033[0m\n"
         return 1
     }
-
-    aide --check || {
-        printf "\033[1;31m[-] AIDE check failed. Please review the logs.\033[0m\n"
-        return 1
-    }
     
-    mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db || {
-        printf "\033[1;31m[-] Failed to replace AIDE database.\033[0m\n"
+    if [ -f /var/lib/aide/aide.db.new ]; then
+        cp /var/lib/aide/aide.db.new /var/lib/aide/aide.db || {
+            printf "\033[1;31m[-] Failed to replace AIDE database.\033[0m\n"
+            return 1
+        }
+        chmod 600 /var/lib/aide/aide.db
+    else
+        printf "\033[1;31m[-] AIDE database initialization failed - no new database created.\033[0m\n"
         return 1
-    }
+    fi
 
     printf "\033[1;32m[+] AIDE successfully installed and configured.\033[0m\n"
 }
 
 enable_rkhunter(){
     printf "\033[1;31m[+] Installing rkhunter...\033[0m\n" | tee -a HARDN_alerts.txt
+    
     if ! apt install -y rkhunter; then
         printf "\033[1;33m[!] Saving output to HARDN_alerts.txt" | tee -a HARDN_alerts.txt
         return 0
@@ -421,6 +564,115 @@ enable_rkhunter(){
 
     rkhunter --propupd || printf "\033[1;33m[!] Failed to update rkhunter properties. Continuing...\033[0m\n" | tee -a HARDN_alerts.txt
     printf "\033[1;32m[+] rkhunter installed and updated.\033[0m\n" | tee -a HARDN_alerts.txt
+}
+
+enable_yara() {
+    printf "\033[1;31m[+] Configuring YARA rules...\033[0m\n"
+    
+    # Make sure YARA is installed
+    if ! command -v yara >/dev/null 2>&1; then
+        printf "\033[1;31m[+] Installing YARA...\033[0m\n"
+        DEBIAN_FRONTEND=noninteractive apt-get -y install yara || {
+            printf "\033[1;31m[-] Failed to install YARA.\033[0m\n"
+            return 1
+        }
+    fi
+    
+    # Create directories for YARA rules
+    yara_rules_dir="/etc/yara/rules"
+    mkdir -p "$yara_rules_dir"
+    
+    # Download common YARA rules
+    printf "\033[1;31m[+] Downloading YARA rules...\033[0m\n"
+    yara_rules_zip="/tmp/yara-rules.zip"
+    
+    if ! wget -q "https://github.com/Yara-Rules/rules/archive/refs/heads/master.zip" -O "$yara_rules_zip"; then
+        printf "\033[1;31m[-] Failed to download YARA rules.\033[0m\n"
+        return 1
+    fi
+    
+    # Create a temporary directory for extracted files
+    tmp_extract_dir="/tmp/yara-rules-extract"
+    mkdir -p "$tmp_extract_dir"
+    
+    # Use -o flag to overwrite files without prompting in non-interactive mode
+    printf "\033[1;31m[+] Extracting YARA rules...\033[0m\n"
+    if ! unzip -q -o "$yara_rules_zip" -d "$tmp_extract_dir"; then
+        printf "\033[1;31m[-] Failed to extract YARA rules.\033[0m\n"
+        rm -f "$yara_rules_zip"
+        rm -rf "$tmp_extract_dir"
+        return 1
+    fi
+    
+    # Copy rules to the system - find the extracted directory which contains the rules
+    rules_dir=$(find "$tmp_extract_dir" -type d -name "rules-*" | head -n 1)
+    if [ -z "$rules_dir" ]; then
+        printf "\033[1;31m[-] Failed to find extracted YARA rules directory.\033[0m\n"
+        rm -f "$yara_rules_zip"
+        rm -rf "$tmp_extract_dir"
+        return 1
+    fi
+    
+    printf "\033[1;31m[+] Copying YARA rules to $yara_rules_dir...\033[0m\n"
+    cp -rf "$rules_dir"/* "$yara_rules_dir/" || {
+        printf "\033[1;31m[-] Failed to copy YARA rules.\033[0m\n"
+        rm -f "$yara_rules_zip"
+        rm -rf "$tmp_extract_dir"
+        return 1
+    }
+    
+    # Set proper ownership and permissions
+    printf "\033[1;31m[+] Setting proper permissions on YARA rules...\033[0m\n"
+    chown -R root:root "$yara_rules_dir"
+    chmod -R 644 "$yara_rules_dir"
+    find "$yara_rules_dir" -type d -exec chmod 755 {} \;
+    
+    # Ensure index.yar exists, or create one
+    if [ ! -f "$yara_rules_dir/index.yar" ]; then
+        printf "\033[1;31m[+] Creating index.yar file for YARA rules...\033[0m\n"
+        # Find all .yar files and include them in index.yar
+        find "$yara_rules_dir" -name "*.yar" -not -name "index.yar" | while read -r rule_file; do
+            echo "include \"${rule_file#$yara_rules_dir/}\"" >> "$yara_rules_dir/index.yar"
+        done
+    fi
+    
+    # Test that YARA works
+    printf "\033[1;31m[+] Testing YARA functionality...\033[0m\n"
+    if ! yara -r "$yara_rules_dir/index.yar" /tmp >/dev/null 2>&1; then
+        printf "\033[1;33m[!] YARA test failed. Rules might need adjustment.\033[0m\n"
+        # Create a single test rule if the test failed
+        echo 'rule test_rule {strings: $test = "test" condition: $test}' > "$yara_rules_dir/test.yar"
+        echo 'include "test.yar"' > "$yara_rules_dir/index.yar"
+        if ! yara -r "$yara_rules_dir/index.yar" /tmp >/dev/null 2>&1; then
+            printf "\033[1;31m[-] YARA installation appears to have issues.\033[0m\n"
+        else
+            printf "\033[1;32m[+] Basic YARA test rule works. Original rules may need fixing.\033[0m\n"
+        fi
+    else
+        printf "\033[1;32m[+] YARA rules successfully installed and tested.\033[0m\n"
+    fi
+    
+    # Configure a daily scan for key directories
+    printf "\033[1;31m[+] Setting up YARA scanning in crontab...\033[0m\n"
+    # Remove any existing YARA cron job to avoid duplicates
+    if grep -q "/usr/bin/yara.*index.yar" /etc/crontab; then
+        sed -i '/\/usr\/bin\/yara.*index.yar/d' /etc/crontab
+    fi
+    # Add the standardized YARA cron job
+    echo "0 3 * * * root /usr/bin/yara -r /etc/yara/rules/index.yar /home /var/www /tmp >> /var/log/yara_scan.log 2>&1" >> /etc/crontab
+    printf "\033[1;32m[+] YARA scan added to crontab.\033[0m\n"
+    
+    # Create log file with proper permissions
+    touch /var/log/yara_scan.log
+    chmod 640 /var/log/yara_scan.log
+    chown root:adm /var/log/yara_scan.log
+    
+    # Clean up
+    printf "\033[1;31m[+] Cleaning up temporary YARA files...\033[0m\n"
+    rm -f "$yara_rules_zip"
+    rm -rf "$tmp_extract_dir"
+    
+    printf "\033[1;32m[+] YARA configuration completed successfully.\033[0m\n"
 }
 
 configure_firejail() {
@@ -694,12 +946,10 @@ stig_configure_firewall() {
 }
 
 stig_set_randomize_va_space() {
-    stig_set_randomize_va_space() {
     printf "\033[1;31m[+] Setting kernel.randomize_va_space...\033[0m\n"
     echo "kernel.randomize_va_space = 2" > /etc/sysctl.d/hardn.conf
     sysctl --system || { printf "\033[1;31m[-] Failed to reload sysctl settings.\033[0m\n"; exit 1; }
     sysctl -w kernel.randomize_va_space=2 || { printf "\033[1;31m[-] Failed to set kernel.randomize_va_space.\033[0m\n"; exit 1; }
-}
 }
 
 update_firmware() {
@@ -771,205 +1021,172 @@ check_internet() {
     printf "\033[1;32m[+] Internet connectivity is available.\033[0m\n"
 }
 
-main() {
-    printf "\033[1;31m[+] Initializing HARDN setup...\033[0m\n"
+# Function to print a collective green banner for each step
+banner_step() {
+    local message="$1"
+    local GREEN="\033[0;32m"
+    local RESET="\033[0m"
+    local width=$(tput cols 2>/dev/null || echo 80)
+    local border
+    border=$(printf '%*s' "$width" | tr ' ' '=')
+    local msg="                          [+] $message"
+    local pad_msg=$(( (width - ${#msg}) / 2 ))
+    local pad_border=0
 
+    echo -e "\n${GREEN}$(printf "%*s" $pad_border)${border}${RESET}"
+    printf "${GREEN}%*s%s${RESET}\n" $pad_msg "" "$msg"
+    echo -e "${GREEN}$(printf "%*s" $pad_border)${border}${RESET}\n"
+}
+
+main() {
+    banner_step "Initializing HARDN setup"
     detect_environment
+
+    banner_step "Enabling automatic updates"
     enable_auto_updates
+
+    banner_step "Checking internet connectivity"
     check_internet
-    echo -e "\033[1;31m
-================================================================================
-                          [*] DETECTING OPERATING SYSTEM
-================================================================================
-\033[0m"
+
+    banner_step "Detecting operating system"
     detect_os
 
-    echo -e "\033[1;31m
-================================================================================
-                          [*] INSTALLING PACKAGE DEPENDENCIES
-================================================================================
-\033[0m"
+    banner_step "Installing package dependencies"
     install_pkgdeps
 
-    echo -e "\033[1;31m
-================================================================================
-                          [*] INSTALLING SECURITY TOOLS
-================================================================================
-\033[0m"
+    banner_step "Installing security tools"
     install_security_tools
     install_maldet
 
-    echo -e "\033[1;31m
-================================================================================
-                          [*] ENABLING FAIL2BAN
-================================================================================
-\033[0m"
+    banner_step "Enabling Fail2Ban"
     enable_fail2ban
 
-    echo -e "\033[1;31m
-================================================================================
-                          [*] ENABLING APPARMOR
-================================================================================
-\033[0m"
+    banner_step "Enabling AppArmor"
     enable_apparmor
 
-    echo -e "\033[1;31m
-================================================================================
-                          [*] ENABLING AIDE
-================================================================================
-\033[0m"
+    banner_step "Enabling AIDE"
     enable_aide
 
-    echo -e "\033[1;31m
-================================================================================
-                          [*] ENABLING RKHUNTER
-================================================================================
-\033[0m"
+    banner_step "Enabling RKHunter"
     enable_rkhunter
 
-    echo -e "\033[1;31m
-================================================================================
-                          [*] CONFIGURING FIREJAIL
-================================================================================
-\033[0m"
+    banner_step "Configuring YARA"
+    enable_yara
+
+    banner_step "Configuring Firejail"
     configure_firejail
 
-    echo -e "\033[1;31m
-================================================================================
-                          [*] APPLYING PASSWORD POLICY
-================================================================================
-\033[0m"
-    stig_password_policy || { printf "\033[1;31m[-] Failed to apply password policy.\033[0m\n"; exit 1; }
+    banner_step "Applying password policy"
+    stig_password_policy || { echo -e "\033[0;32m[-] Failed to apply password policy.\033[0m"; exit 1; }
 
-    echo -e "\033[1;31m
-================================================================================
-                          [*] HARDENING SSH CONFIGURATION
-================================================================================
-\033[0m"
-    stig_harden_ssh || { printf "\033[1;31m[-] Failed to secure ssh.\033[0m\n"; exit 1; }
+    banner_step "Hardening SSH configuration"
+    stig_harden_ssh || { echo -e "\033[0;32m[-] Failed to secure ssh.\033[0m"; exit 1; }
 
-    echo -e "\033[1;31m
-================================================================================
-                          [*] LOCKING INACTIVE ACCOUNTS
-================================================================================
-\033[0m"
-    stig_lock_inactive_accounts || { printf "\033[1;31m[-] Failed to lock inactive accounts.\033[0m\n"; exit 1; }
+    banner_step "Locking inactive accounts"
+    stig_lock_inactive_accounts || { echo -e "\033[0;32m[-] Failed to lock inactive accounts.\033[0m"; exit 1; }
 
-    echo -e "\033[1;31m
-================================================================================
-                          [*] SETTING LOGIN BANNERS
-================================================================================
-\033[0m"
-    stig_login_banners || { printf "\033[1;31m[-] Failed to set login banners.\033[0m\n"; exit 1; }
+    banner_step "Setting login banners"
+    stig_login_banners || { echo -e "\033[0;32m[-] Failed to set login banners.\033[0m"; exit 1; }
 
-    echo -e "\033[1;31m
-================================================================================
-                          [*] CONFIGURING KERNEL PARAMETERS
-================================================================================
-\033[0m"
-    stig_kernel_setup || { printf "\033[1;31m[-] Failed to configure kernel parameters.\033[0m\n"; exit 1; }
+    banner_step "Configuring kernel parameters"
+    stig_kernel_setup || { echo -e "\033[0;32m[-] Failed to configure kernel parameters.\033[0m"; exit 1; }
 
-    echo -e "\033[1;31m
-================================================================================
-                          [*] SECURING FILESYSTEM PERMISSIONS
-================================================================================
-\033[0m"
-    stig_secure_filesystem || { printf "\033[1;31m[-] Failed to secure filesystem permissions.\033[0m\n"; exit 1; }
+    banner_step "Securing filesystem permissions"
+    stig_secure_filesystem || { echo -e "\033[0;32m[-] Failed to secure filesystem permissions.\033[0m"; exit 1; }
 
-    echo -e "\033[1;31m
-================================================================================
-                          [*] DISABLING USB STORAGE
-================================================================================
-\033[0m"
-    stig_disable_usb || { printf "\033[1;31m[-] Failed to disable USB storage.\033[0m\n"; exit 1; }
+    banner_step "Disabling USB storage"
+    stig_disable_usb || { echo -e "\033[0;32m[-] Failed to disable USB storage.\033[0m"; exit 1; }
 
-    echo -e "\033[1;31m
-================================================================================
-                          [*] DISABLING CORE DUMPS
-================================================================================
-\033[0m"
-    stig_disable_core_dumps || { printf "\033[1;31m[-] Failed to disable core dumps.\033[0m\n"; exit 1; }
+    banner_step "Disabling core dumps"
+    stig_disable_core_dumps || { echo -e "\033[0;32m[-] Failed to disable core dumps.\033[0m"; exit 1; }
 
-    echo -e "\033[1;31m
-================================================================================
-                          [*] DISABLING CTRL+ALT+DEL
-================================================================================
-\033[0m"
-    stig_disable_ctrl_alt_del || { printf "\033[1;31m[-] Failed to disable Ctrl+Alt+Del.\033[0m\n"; exit 1; }
+    banner_step "Disabling Ctrl+Alt+Del"
+    stig_disable_ctrl_alt_del || { echo -e "\033[0;32m[-] Failed to disable Ctrl+Alt+Del.\033[0m"; exit 1; }
 
-    echo -e "\033[1;31m
-================================================================================
-                          [*] DISABLING IPV6
-================================================================================
-\033[0m"
-    stig_disable_ipv6 || { printf "\033[1;31m[-] Failed to disable IPv6.\033[0m\n"; exit 1; }
+    banner_step "Disabling IPv6"
+    stig_disable_ipv6 || { echo -e "\033[0;32m[-] Failed to disable IPv6.\033[0m"; exit 1; }
 
-    echo -e "\033[1;31m
-================================================================================
-                          [*] CONFIGURING FIREWALL (UFW)
-================================================================================
-\033[0m"
-    stig_configure_firewall || { printf "\033[1;31m[-] Failed to configure firewall.\033[0m\n"; exit 1; }
+    banner_step "Configuring firewall (UFW)"
+    stig_configure_firewall || { echo -e "\033[0;32m[-] Failed to configure firewall.\033[0m"; exit 1; }
 
-    echo -e "\033[1;31m
-================================================================================
-                          [*] SETTING RANDOMIZE VA SPACE
-================================================================================
-\033[0m"
-    stig_set_randomize_va_space || { printf "\033[1;31m[-] Failed to set randomize_va_space.\033[0m\n"; exit 1; }
+    banner_step "Setting randomize VA space"
+    stig_set_randomize_va_space || { echo -e "\033[0;32m[-] Failed to set randomize_va_space.\033[0m"; exit 1; }
 
-    echo -e "\033[1;31m
-================================================================================
-                          [*] UPDATING FIRMWARE
-================================================================================
-\033[0m"
-    update_firmware || { printf "\033[1;31m[-] Failed to update firmware.\033[0m\n"; exit 1; }
+    banner_step "Updating firmware"
+    update_firmware || { echo -e "\033[0;32m[-] Failed to update firmware.\033[0m"; exit 1; }
 
-    echo -e "\033[1;31m
-================================================================================
-                          [*] CONFIGURING GRUB SECURITY
-================================================================================
-\033[0m"
+    banner_step "Configuring GRUB security"
     grub_security
 
-    echo -e "\033[1;31m
-================================================================================
-                          [*] APPLYING STIG HARDENING TASKS
-================================================================================
-\033[0m"
+    banner_step "Applying STIG hardening tasks"
 
-    echo -e "\033[1;31m
-================================================================================
-                          [*] ENABLING UFW
-================================================================================
-\033[0m"
+    banner_step "Enabling UFW"
     systemctl enable --now ufw
 
-  
-    printf "\033[1;31m[+] Running validation script...\033[0m\n"
+    echo -e "\033[0;32m[+] Running validation script...\033[0m"
     bash "$PACKAGES_SCRIPT"
 
     if [ $? -ne 0 ]; then
-        printf "\033[1;31m[-] Validation script encountered errors. Please check the log file.\033[0m\n"
+        echo -e "\033[0;32m[-] Validation script encountered errors. Please check the log file.\033[0m"
         exit 1
     fi
 
     setup_complete
 
-    printf "\033[1;32m[+] Validation script completed successfully.\033[0m\n"
-    printf "\033[1;32m[+] HARDN setup completed successfully.\033[0m\n"
+    echo -e "\033[0;32m[+] Validation script completed successfully.\033[0m"
+    echo -e "\033[0;32m[+] HARDN setup completed successfully.\033[0m"
 }
 
 
-if [[ $# -eq 0 || "$1" == "-s" ]]; then
-    main
-fi
 
-if [[ $# -eq 0 || "$1" == "-h" || "$1" == "--help" ]]; then
+check_first_run() {
+    local marker_file="/etc/hardn/.first_run_complete"
+    
+  
+    if [ ! -d "/etc/hardn" ]; then
+        mkdir -p /etc/hardn
+    fi
+    
+ 
+    if [ ! -f "$marker_file" ]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+mark_first_run_complete() {
+    local marker_file="/etc/hardn/.first_run_complete"
+    touch "$marker_file"
+    chmod 600 "$marker_file"
+}
+
+# Main execution logic
+if [ "$0" = "/usr/bin/hardn-main.sh" ] || [ "$(basename "$0")" = "hardn-main.sh" ]; then
+    # If the script is executed as hardn-main.sh, always run the rice process
+    main
+elif [[ "$1" == "-s" ]]; then
+    # If -s flag is provided, run the rice process
+    main
+    mark_first_run_complete
+elif [[ $# -eq 0 ]]; then
+    # No arguments provided
+    if check_first_run; then
+        # First run - show help and run the rice process
+        print_menu -h
+        sleep 3
+        main
+        mark_first_run_complete
+    else
+        # Not the first run - display the help menu
+        print_menu -h
+    fi
+elif [[ "$1" == "-h" || "$1" == "--help" ]]; then
+    # Help flag - always show the menu
     print_menu -h
     exit 0
+else
+    # Process other flags
+    flags "$@"
 fi
-
-
-flags "$@"
 

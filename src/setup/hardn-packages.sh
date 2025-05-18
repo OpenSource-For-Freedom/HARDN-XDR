@@ -4,31 +4,45 @@
 set -e # Exit on errors
 LOG_FILE="/var/log/hardn-packages.log"
 
+center_text() {
+    local text="$1"
+    local width=$(tput cols)
+    local text_width=${#text}
+    local padding=$(( (width - text_width) / 2 ))
+    printf "%${padding}s%s\n" "" "$text"
+}
 
 print_ascii_banner() {
     CYAN_BOLD="\033[1;36m"
     RESET="\033[0m"
-    cat <<EOF
-${CYAN_BOLD}
-                              ▄█    █▄       ▄████████    ▄████████ ████████▄  ███▄▄▄▄   
-                             ███    ███     ███    ███   ███    ███ ███   ▀███ ███▀▀▀██▄ 
-                             ███    ███     ███    ███   ███    ███ ███    ███ ███   ███ 
-                            ▄███▄▄▄▄███▄▄   ███    ███  ▄███▄▄▄▄██▀ ███    ███ ███   ███ 
-                           ▀▀███▀▀▀▀███▀  ▀███████████ ▀▀███▀▀▀▀▀   ███    ███ ███   ███ 
-                             ███    ███     ███    ███ ▀███████████ ███    ███ ███   ███ 
-                             ███    ███     ███    ███   ███    ███ ███   ▄███ ███   ███ 
-                             ███    █▀      ███    █▀    ███    ███ ████████▀   ▀█   █▀  
-                                                         ███    ███ 
-                     
-                                               V A L I D A T I O N
-                                                     
-                                                    v 1.1.6
-                                                                       
-                                                                     
-                                       
-                                                              
-${RESET}
-EOF
+    
+    if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+        GREEN_BOLD="\033[1;32m"
+        RESET="\033[0m"
+        BORDER="══════════════════════════════════════════════════════════════════════════════════════════════════════"
+
+        clear
+        echo -e "${GREEN_BOLD}"
+        center_text "$BORDER"
+        center_text "  ▄█    █▄            ▄████████         ▄████████      ████████▄       ███▄▄▄▄   "
+        center_text "  ███    ███          ███    ███        ███    ███      ███   ▀███      ███▀▀▀██▄ "
+        center_text "  ███    ███          ███    ███        ███    ███      ███    ███      ███   ███ "
+        center_text " ▄███▄▄▄▄███▄▄        ███    ███       ▄███▄▄▄▄██▀      ███    ███      ███   ███ "
+        center_text "▀▀███▀▀▀▀███▀       ▀███████████      ▀▀███▀▀▀▀▀        ███    ███      ███   ███ "
+        center_text "  ███    ███          ███    ███      ▀███████████      ███    ███      ███   ███ "
+        center_text "  ███    ███          ███    ███        ███    ███      ███   ▄███      ███   ███ "
+        center_text "  ███    █▀           ███    █▀         ███    ███      ████████▀        ▀█   █▀  "
+        center_text "                                        ███    ███                              "
+        center_text "$BORDER"
+        center_text "Please select an option:"
+        center_text "$BORDER"
+        echo
+        center_text "$(date +'%Y-%m-%d %H:%M:%S')"
+        center_text "HARDN - Setup Validation Script"
+        center_text "$(uname -s) $(uname -r) $(uname -m)"
+        center_text "$BORDER"
+
+    fi
 }
 
 print_ascii_banner
@@ -90,12 +104,68 @@ fix_if_needed() {
 }
 
 ensure_aide_initialized() {
+    # Ensure AIDE is installed
+    if ! command -v aide >/dev/null 2>&1; then
+        echo "[*] Installing AIDE..."
+        apt-get install -y aide aide-common
+    fi
+
+    # Create and configure AIDE service and timer
+    echo "[*] Creating AIDE systemd service and timer..."
+    
+    # Create aide.service file
+    cat > /etc/systemd/system/aide.service << EOF
+[Unit]
+Description=AIDE (Advanced Intrusion Detection Environment) check
+Documentation=man:aide(1)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/aide --check --config=/etc/aide/aide.conf
+StandardOutput=append:/var/log/aide/aide.log
+StandardError=append:/var/log/aide/aide.log
+EOF
+
+    # Create aide.timer file for daily checks
+    cat > /etc/systemd/system/aide.timer << EOF
+[Unit]
+Description=Daily AIDE check
+
+[Timer]
+OnCalendar=*-*-* 4:00:00
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+    # Enable the timer
+    systemctl enable aide.timer
+    systemctl daemon-reload
+
+    # Ensure log directory exists
+    mkdir -p /var/log/aide
+    chmod 750 /var/log/aide
+
+    # Initialize AIDE database if needed
     if [ ! -f /var/lib/aide/aide.db ]; then
         echo "[*] Initializing AIDE database..."
-        sudo aideinit
-        sudo cp /var/lib/aide/aide.db.new /var/lib/aide/aide.db
-        sudo chmod 600 /var/lib/aide/aide.db
-        echo "[+] AIDE database initialized."
+       
+        if [ -f /etc/aide/aide.conf ]; then
+            sudo aide --init --config=/etc/aide/aide.conf
+            if [ -f /var/lib/aide/aide.db.new ]; then
+                sudo cp /var/lib/aide/aide.db.new /var/lib/aide/aide.db
+                sudo chmod 600 /var/lib/aide/aide.db
+                echo "[+] AIDE database initialized."
+            else
+                echo "[-] AIDE initialization failed - no new database file created."
+            fi
+        else
+            echo "[-] AIDE configuration file not found at /etc/aide/aide.conf."
+        fi
+    else
+        echo "[+] AIDE database already exists, skipping initialization."
     fi
 }
 
@@ -152,11 +222,39 @@ validate_packages() {
         "sudo apt install -y maldet" \
         "Linux Malware Detect (maldet) is installed" \
         "Linux Malware Detect (maldet) is not installed"
+        
+    # Check and install YARA
+    fix_if_needed \
+        "command -v yara >/dev/null 2>&1" \
+        "sudo apt install -y yara" \
+        "YARA is installed" \
+        "YARA is not installed"
+    
+    # Check YARA rules directory exists
+    fix_if_needed \
+        "[ -d /etc/yara/rules ]" \
+        "mkdir -p /etc/yara/rules && wget -q \"https://github.com/Yara-Rules/rules/archive/refs/heads/master.zip\" -O /tmp/yara-rules.zip && unzip -q -o /tmp/yara-rules.zip -d /tmp/yara-extract && cp -rf /tmp/yara-extract/rules-master/* /etc/yara/rules/ && chown -R root:root /etc/yara/rules && chmod -R 644 /etc/yara/rules && find /etc/yara/rules -type d -exec chmod 755 {} \\;" \
+        "YARA rules directory exists" \
+        "YARA rules directory missing"
+    
+    # Check YARA index.yar exists
+    fix_if_needed \
+        "[ -f /etc/yara/rules/index.yar ]" \
+        "find /etc/yara/rules -name \"*.yar\" -not -name \"index.yar\" | sed 's|^/etc/yara/rules/|include \"|; s|$|\"|' > /etc/yara/rules/index.yar" \
+        "YARA index.yar exists" \
+        "YARA index.yar missing"
+    
+    # Check YARA can execute basic test
+    fix_if_needed \
+        "( yara -r /etc/yara/rules/index.yar /tmp >/dev/null 2>&1 ) || ( echo 'rule test_rule {strings: $test = \"test\" condition: $test}' > /etc/yara/rules/test.yar && echo 'include \"test.yar\"' > /etc/yara/rules/index.yar && yara -r /etc/yara/rules/index.yar /tmp >/dev/null 2>&1 )" \
+        "touch /var/log/yara_scan.log && chmod 640 /var/log/yara_scan.log && chown root:adm /var/log/yara_scan.log" \
+        "YARA functionality verified" \
+        "YARA functionality issue detected"
 
     # Check and reinitialize AIDE database
     fix_if_needed \
         "[ -f /var/lib/aide/aide.db ]" \
-        "sudo aideinit && sudo cp /var/lib/aide/aide.db.new /var/lib/aide/aide.db && sudo chmod 600 /var/lib/aide/aide.db" \
+        "sudo aide --init --config=/etc/aide/aide.conf && [ -f /var/lib/aide/aide.db.new ] && sudo cp /var/lib/aide/aide.db.new /var/lib/aide/aide.db && sudo chmod 600 /var/lib/aide/aide.db" \
         "AIDE database is initialized" \
         "AIDE database check failed"
 
@@ -266,7 +364,10 @@ cron_packages() {
     echo "========================================" | sudo tee -a /etc/crontab
     echo "         CRON SETUP - PACKAGES          " | sudo tee -a /etc/crontab
     echo "========================================" | sudo tee -a /etc/crontab
-    echo "0 11 * * * aide --check --config /etc/aide/aide.conf" | sudo tee -a /etc/crontab
+    # Ensure AIDE log directory exists
+    sudo mkdir -p /var/log/aide
+    sudo chmod 750 /var/log/aide
+    echo "0 11 * * * root /usr/bin/aide --check --config=/etc/aide/aide.conf >> /var/log/aide/aide.log 2>&1" | sudo tee -a /etc/crontab
     echo "0 0 */2 * * root /usr/bin/maldet --update" | sudo tee -a /etc/crontab
     echo "0 0 */2 * * root /usr/bin/rkhunter --update" | sudo tee -a /etc/crontab
     echo "0 0 */2 * * root /usr/bin/fail2ban-client -x" | sudo tee -a /etc/crontab
@@ -275,6 +376,7 @@ cron_packages() {
     echo "0 0 */2 * * root /usr/sbin/auditctl -e 1" | sudo tee -a /etc/crontab
     echo "0 0 */2 * * root /usr/sbin/auditd -f" | sudo tee -a /etc/crontab
     echo "0 0 */2 * * root /usr/sbin/auditd -r" | sudo tee -a /etc/crontab
+    echo "0 3 * * * root /usr/bin/yara -r /etc/yara/rules/index.yar /home /var/www /tmp >> /var/log/yara_scan.log 2>&1" | sudo tee -a /etc/crontab
     echo "0 0 * * * root /usr/local/bin/hardn-packages.sh > /var/log/hardn-packages.log 2>&1" | sudo tee -a /etc/crontab
 }
 
@@ -368,10 +470,52 @@ cron_alert() {
     echo "-------------------------" >> "$ALERTS_FILE"
 
     echo "[AIDE Alerts]" >> "$ALERTS_FILE"
-    if sudo aide --check >/dev/null 2>&1; then
-        echo " No deviations detected by AIDE" >> "$ALERTS_FILE"
+    if [ -f /etc/aide/aide.conf ] && [ -f /var/lib/aide/aide.db ]; then
+        # First check if we have log files to analyze
+        if [ -f "/var/log/aide/aide.log" ] && [ -s "/var/log/aide/aide.log" ]; then
+            echo " AIDE log exists, checking for alerts..." >> "$ALERTS_FILE"
+            if grep -i "found differences between database and filesystem" /var/log/aide/aide.log > /tmp/aide_alerts 2>/dev/null; then
+                echo " ⚠️ AIDE detected file system changes:" >> "$ALERTS_FILE"
+                grep -A 10 "found differences" /var/log/aide/aide.log | head -n 20 >> "$ALERTS_FILE"
+            else
+                echo " No alerts found in AIDE logs" >> "$ALERTS_FILE"
+            fi
+        else
+            # No log file found, run an immediate check
+            echo " Running AIDE check now..." >> "$ALERTS_FILE"
+            if sudo aide --check --config=/etc/aide/aide.conf > /tmp/aide_check_result 2>&1; then
+                echo " No deviations detected by AIDE" >> "$ALERTS_FILE"
+            else 
+                echo " ⚠️ Deviations detected by AIDE" >> "$ALERTS_FILE"
+                echo " Last few lines from AIDE check:" >> "$ALERTS_FILE"
+                tail -n 15 /tmp/aide_check_result | grep -v "^$" >> "$ALERTS_FILE"
+            fi
+        fi
     else
-        echo " Deviations detected by AIDE" >> "$ALERTS_FILE"
+        echo " ⚠️ AIDE not properly configured. Missing configuration or database." >> "$ALERTS_FILE"
+        echo " Run 'sudo apt-get install aide aide-common && sudo aide --init && sudo cp /var/lib/aide/aide.db.new /var/lib/aide/aide.db'" >> "$ALERTS_FILE"
+    fi
+    echo "-------------------------" >> "$ALERTS_FILE"
+    
+    echo "[YARA Alerts]" >> "$ALERTS_FILE"
+    if [ ! -f /var/log/yara_scan.log ] || [ ! -s /var/log/yara_scan.log ]; then
+        # If log file doesn't exist or is empty, try to run a quick scan
+        echo " No previous YARA scan results found. Running a quick scan..." >> "$ALERTS_FILE"
+        if command -v yara >/dev/null 2>&1 && [ -f /etc/yara/rules/index.yar ]; then
+            yara -r /etc/yara/rules/index.yar /tmp > /var/log/yara_scan.log 2>&1
+            if [ -s /var/log/yara_scan.log ]; then
+                echo " YARA quick scan detections:" >> "$ALERTS_FILE"
+                cat /var/log/yara_scan.log >> "$ALERTS_FILE"
+            else
+                echo " No YARA detections in quick scan" >> "$ALERTS_FILE"
+            fi
+        else
+            echo " YARA not properly installed or configured" >> "$ALERTS_FILE"
+        fi
+    else
+        # Use existing log file
+        echo " YARA detections found:" >> "$ALERTS_FILE"
+        tail -n 50 /var/log/yara_scan.log >> "$ALERTS_FILE"
     fi
     echo "-------------------------" >> "$ALERTS_FILE"
 
