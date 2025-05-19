@@ -20,9 +20,10 @@ name=$(whoami)
 ############# ADD MENU HERE #############
 ############# ADD LOGIN BANNER FIX ######
 ############# IMPLIMENT MENU STATUS FOR LONG INSTALL AND SETUPS#####
+############# ADD rkhunter config back from setup########
 
 
-# Check for root privileges
+
 if [ "$(id -u)" -ne 0 ]; then
         echo ""
         echo "This script must be run as root."
@@ -33,7 +34,7 @@ installpkg() {
        dpkg -s "$1" >/dev/null 2>&1 || sudo apt install -y "$1" >/dev/null 2>&1
 }
 
-# Log to stderr and exit with failure.
+
 error() {
         printf "%s\n" "$1" >&2
         exit 1
@@ -94,7 +95,7 @@ maininstall() {
        	installpkg "$1"
 }
 
-# Function to build and install from Git repo
+
 gitdpkgbuild() {
         repo_url="$1"
         description="$2"
@@ -491,10 +492,10 @@ stig_login_banners() {
         center_issue_text "════════════════════════════"
         center_issue_text "   _____   _____    _____   "
         center_issue_text "  / ____| |_   _|  / ____|  "
-        center_issue_text " | (___     | |   | |  __   "
-        center_issue_text "  \___ \  | |   | |  | |  "
+        center_issue_text " | (___     | |   | |       "
+        center_issue_text "  \___ \  | | | | | |  ___  "
         center_issue_text "  ____) |  _| |_  | |__| |  "
-        center_issue_text " |_____/  |_____|  \____|  "
+        center_issue_text " |_____/  |_____|  \____|   "
         center_issue_text "                            "
         center_issue_text "════════════════════════════"
         echo -e "\033[0m"
@@ -577,10 +578,11 @@ enable_services() {
        systemctl enable --now apparmor
 }
 
-# Install chkrootkit, LMD, and rkhunter
+# Install chkrootkit + MALDET
 install_additional_tools() {
           printf "\033[1;31m[+] Installing chkrootkit...\033[0m\n"
           apt install -y chkrootkit
+
 
           # Initialize the variable
           install_maldet_failed=false
@@ -679,7 +681,7 @@ stig_password_policy() {
 
 enable_aide() {
     printf "\033[1;31m[+] Installing and configuring AIDE...\033[0m\n"
-# enable and config
+
     {
         echo 10
         sleep 0.2
@@ -934,6 +936,7 @@ stig_file_permissions() {
 }
 
 stig_hardn_services() {
+    whiptail --infobox "Disabling Vulnerable Services..." 7 50
     printf "\033[1;31m[+] Disabling unnecessary and potentially vulnerable services...\033[0m\n"
 
     systemctl disable --now avahi-daemon
@@ -953,6 +956,7 @@ stig_hardn_services() {
 }
 
 stig_disable_core_dumps() {
+    whiptail --infobox "Disabling Core Dumps..." 7 50
     echo "* hard core 0" | tee -a /etc/security/limits.conf > /dev/null
     echo "fs.suid_dumpable = 0" | tee /etc/sysctl.d/99-coredump.conf > /dev/null
     sysctl -w fs.suid_dumpable=0
@@ -1013,33 +1017,8 @@ update_sys_pkgs() {
         fi
 }
 
-# Function to update ClamAV to the latest version
-update_clamav() {
-    printf "\033[1;31m[+] Checking and updating ClamAV to the latest version...\033[0m\n"
 
-    # Update package list and upgrade ClamAV if available
-    apt update && apt install --only-upgrade -y clamav clamav-daemon
-
-    # If the latest version is not available, provide instructions for manual update
-    if clamscan --version | grep -q "1.0.7"; then
-        printf "\033[1;33m[!] ClamAV is outdated. Manual update required.\033[0m\n"
-        printf "\033[1;33m[!] Visit https://www.clamav.net/downloads for the latest version.\033[0m\n"
-    else
-        printf "\033[1;32m[+] ClamAV is up-to-date.\033[0m\n"
-    fi
-
-    # Restart ClamAV services
-    systemctl restart clamav-daemon
-    systemctl restart clamav-freshclam
-}
-
-finalize() { # EDIT THE WORDING 
-        whiptail --title "HARDN-XDR Complete" \
-            --msgbox "This device is now HARDN-XDR and STIG Compliant\\n\\nPlease reboot to apply installation." 12 80
-}
-
-# Function to configure kernel hardening
-configure_kernel_hardening() {
+stig_kernel_hardening() {
     printf "\033[1;31m[+] Configuring kernel hardening...\033[0m\n"
     cat <<EOF > /etc/sysctl.d/hardening.conf
 # Disable IP forwarding
@@ -1060,17 +1039,6 @@ EOF
 }
 
 
-
-
-# Function to initialize and configure AIDE
-configure_aide() {
-    printf "\033[1;31m[+] Installing and configuring AIDE...\033[0m\n"
-    apt install -y aide aide-common
-    aideinit
-    mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db
-    echo "0 3 * * * root /usr/bin/aide --check" >> /etc/crontab
-}
-
 # Function to configure Fail2Ban
 enhance_fail2ban() {
     printf "\033[1;31m[+] Enhancing Fail2Ban configuration...\033[0m\n"
@@ -1086,40 +1054,19 @@ EOF
     systemctl restart fail2ban
 }
 
-# Function to configure Docker hardening
-configure_docker() {
-    printf "\033[1;31m[+] Configuring Docker hardening...\033[0m\n"
-    mkdir -p /etc/docker
-    cat <<EOF > /etc/docker/daemon.json
-{
-  "icc": false,
-  "userns-remap": "default",
-  "no-new-privileges": true
-}
-EOF
-    systemctl restart docker
-}
 
-# Function to restrict compiler access
+
 restrict_compilers() {
     printf "\033[1;31m[+] Restricting compiler access...\033[0m\n"
     chmod o-rx /usr/bin/gcc /usr/bin/g++ /usr/bin/make
 }
 
-# Function to install and configure ClamAV
-setup_clamav() {
-    printf "\033[1;31m[+] Installing and configuring ClamAV...\033[0m\n"
-    apt install -y clamav clamav-daemon
-    systemctl stop clamav-freshclam
-    freshclam
-    systemctl start clamav-freshclam
-    echo "0 2 * * * root /usr/bin/clamscan -r / --exclude-dir=^/sys/ --exclude-dir=^/proc/ --exclude-dir=^/dev/" >> /etc/crontab
-}
 
-# Add calls to the new functions in the main script
+# Add calls to the new functions in the moain script
 main() {
         welcomemsg || error "User exited."
         preinstallmsg || error "User exited."
+       # BUILD
         update_system_packages
         aptinstall
         maininstall
@@ -1138,6 +1085,7 @@ main() {
         reload_apparmor
         grub_security
         stig_harden_ssh
+       # STIG
         stig_file_permissions
         stig_login_banners
         stig_enable_auditd
@@ -1148,15 +1096,16 @@ main() {
         stig_kernel_setup
         stig_disable_core_dumps
         stig_set_randomize_va_space
+        stig_kernel_hardening
+        stig_hardn_services
+       # FINISH
         configure_cron
         disable_usb_storage
         update_sys_pkgs
-        configure_kernel_hardening
         enhance_fail2ban
-        configure_docker
         restrict_compilers
         finalize
 }
 
-# Run the main function
+
 main
