@@ -18,6 +18,8 @@ name=$(whoami)
 
 
 ############# ADD MENU HERE #############
+############# ADD LOGIN BANNER FIX ######
+############# IMPLIMENT MENU STATUS FOR LONG INSTALL AND SETUPS#####
 
 
 # Check for root privileges
@@ -949,8 +951,8 @@ update_sys_pkgs() {
 
 
 finalize() { # EDIT THE WORDING 
-        whiptail --title "Complete" \
-            --msgbox "Congrats! Provided there were no hidden errors, the script completed successfully and all the programs and configuration files should be in place.\\n\\nPlease reboot to apply installation." 12 80
+        whiptail --title "HARDN-XDR Complete" \
+            --msgbox "This device is now HARDN-XDR and STIG Compliant\\n\\nPlease reboot to apply installation." 12 80
 }
 
 # Main function
