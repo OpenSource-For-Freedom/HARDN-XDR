@@ -1042,6 +1042,9 @@ EOF
     sysctl --system
 }
 
+
+
+
 # Function to initialize and configure AIDE
 configure_aide() {
     printf "\033[1;31m[+] Installing and configuring AIDE...\033[0m\n"
