@@ -745,6 +745,8 @@ EOF
             return 1
             }
             mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db
+            }
+            mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db
             chmod 600 /var/lib/aide/aide.db
         fi
 
