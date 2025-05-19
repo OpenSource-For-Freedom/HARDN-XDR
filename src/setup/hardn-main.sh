@@ -1013,6 +1013,25 @@ update_sys_pkgs() {
         fi
 }
 
+# Function to update ClamAV to the latest version
+update_clamav() {
+    printf "\033[1;31m[+] Checking and updating ClamAV to the latest version...\033[0m\n"
+
+    # Update package list and upgrade ClamAV if available
+    apt update && apt install --only-upgrade -y clamav clamav-daemon
+
+    # If the latest version is not available, provide instructions for manual update
+    if clamscan --version | grep -q "1.0.7"; then
+        printf "\033[1;33m[!] ClamAV is outdated. Manual update required.\033[0m\n"
+        printf "\033[1;33m[!] Visit https://www.clamav.net/downloads for the latest version.\033[0m\n"
+    else
+        printf "\033[1;32m[+] ClamAV is up-to-date.\033[0m\n"
+    fi
+
+    # Restart ClamAV services
+    systemctl restart clamav-daemon
+    systemctl restart clamav-freshclam
+}
 
 finalize() { # EDIT THE WORDING 
         whiptail --title "HARDN-XDR Complete" \
@@ -1132,14 +1151,11 @@ main() {
         configure_cron
         disable_usb_storage
         update_sys_pkgs
-        finalize
-
         configure_kernel_hardening
-        configure_aide
         enhance_fail2ban
         configure_docker
         restrict_compilers
-        setup_clamav
+        finalize
 }
 
 # Run the main function
