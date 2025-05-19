@@ -105,14 +105,13 @@ fix_if_needed() {
 
 ensure_aide_initialized() {
     # Ensure AIDE is installed
+    whiptail --title "AIDE Initialization" --gauge "Checking if AIDE is installed..." 5 60 5
     if ! command -v aide >/dev/null 2>&1; then
-        echo "[*] Installing AIDE..."
+        whiptail --title "AIDE Initialization" --gauge "Installing AIDE..." 5 60 10
         apt-get install -y aide aide-common
     fi
 
-    # Create and configure AIDE service and timer
-    echo "[*] Creating AIDE systemd service and timer..."
-    
+    whiptail --title "AIDE Initialization" --gauge "Creating AIDE systemd service and timer..." 5 60 20
     # Create aide.service file
     cat > /etc/systemd/system/aide.service << EOF
 [Unit]
@@ -140,53 +139,60 @@ Persistent=true
 WantedBy=timers.target
 EOF
 
-    # Enable the timer
+    whiptail --title "AIDE Initialization" --gauge "Enabling AIDE timer and reloading systemd..." 5 60 40
     systemctl enable aide.timer
     systemctl daemon-reload
 
-    # Ensure log directory exists
+    whiptail --title "AIDE Initialization" --gauge "Ensuring log directory exists..." 5 60 60
     mkdir -p /var/log/aide
     chmod 750 /var/log/aide
 
     # Initialize AIDE database if needed
     if [ ! -f /var/lib/aide/aide.db ]; then
-        echo "[*] Initializing AIDE database..."
-       
+        whiptail --title "AIDE Initialization" --gauge "Initializing AIDE database..." 5 60 80
         if [ -f /etc/aide/aide.conf ]; then
             sudo aide --init --config=/etc/aide/aide.conf
             if [ -f /var/lib/aide/aide.db.new ]; then
                 sudo cp /var/lib/aide/aide.db.new /var/lib/aide/aide.db
                 sudo chmod 600 /var/lib/aide/aide.db
-                echo "[+] AIDE database initialized."
+                whiptail --title "AIDE Initialization" --gauge "AIDE database initialized." 5 60 100
             else
-                echo "[-] AIDE initialization failed - no new database file created."
+                whiptail --title "AIDE Initialization" --msgbox "AIDE initialization failed - no new database file created." 7 60
             fi
         else
-            echo "[-] AIDE configuration file not found at /etc/aide/aide.conf."
+            whiptail --title "AIDE Initialization" --msgbox "AIDE configuration file not found at /etc/aide/aide.conf." 7 60
         fi
     else
-        echo "[+] AIDE database already exists, skipping initialization."
+        whiptail --title "AIDE Initialization" --gauge "AIDE database already exists, skipping initialization." 5 60 100
     fi
 }
 
 validate_environment() {
     echo "[INFO] Validating system environment..." | tee -a "$LOG_FILE"
 
+    # UEFI/BIOS detection with whiptail status bar
     if [ -d /sys/firmware/efi ]; then
+        whiptail --gauge "UEFI system detected. Ensuring UEFI configurations are applied..." 6 60 20
         echo "[*] UEFI system detected. Ensuring UEFI configurations are applied..." | tee -a "$LOG_FILE"
         # Add UEFI-specific validation here if needed
     else
+        whiptail --gauge "Legacy BIOS system detected. Ensuring BIOS configurations are applied..." 6 60 20
         echo "[*] Legacy BIOS system detected. Ensuring BIOS configurations are applied..." | tee -a "$LOG_FILE"
         # Add BIOS-specific validation here if needed
     fi
 
+    # VM/Bare metal detection with whiptail status bar
     if grep -q 'hypervisor' /proc/cpuinfo; then
+        whiptail --gauge "Virtual machine detected. Validating VM-specific configurations..." 6 60 40
         echo "[*] Virtual machine detected. Validating VM-specific configurations..." | tee -a "$LOG_FILE"
         # Add VM-specific validation here if needed
     else
+        whiptail --gauge "Bare metal system detected. Validating bare metal configurations..." 6 60 40
         echo "[*] Bare metal system detected. Validating bare metal configurations..." | tee -a "$LOG_FILE"
         # Add bare metal-specific validation here if needed
     fi
+
+    whiptail --gauge "System environment validation complete." 6 60 100
 }
 
 validate_packages() {
@@ -195,96 +201,173 @@ validate_packages() {
     # Validate system environment
     validate_environment
 
-    # Check and fix internet connectivity
+    # Use whiptail status bar for progress
+    local step=0
+    local total=18
+
+    # 1. Check and fix internet connectivity
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Checking internet connectivity..." 6 60 $((step*100/total))
     fix_if_needed \
         "ping -c 1 google.com >/dev/null 2>&1" \
         "sudo systemctl restart networking && sudo dhclient" \
         "Internet connectivity is restored" \
         "Internet connectivity is not available"
 
-    # Check and fix Fail2Ban
+    # 2. Check and fix Fail2Ban
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Checking Fail2Ban status..." 6 60 $((step*100/total))
     fix_if_needed \
         "sudo systemctl is-active --quiet fail2ban" \
         "sudo systemctl start fail2ban" \
         "Fail2Ban is active" \
         "Fail2Ban not running"
 
-    # Check and fix AppArmor
+    # 3. Check and fix AppArmor
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Checking AppArmor status..." 6 60 $((step*100/total))
     fix_if_needed \
         "sudo systemctl is-active --quiet apparmor" \
         "sudo systemctl enable --now apparmor" \
         "AppArmor is active" \
         "AppArmor not active"
 
-    # Check and install maldet
+    # 4. Check and install maldet
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Checking maldet installation..." 6 60 $((step*100/total))
     fix_if_needed \
         "command -v maldet >/dev/null 2>&1" \
         "sudo apt install -y maldet" \
         "Linux Malware Detect (maldet) is installed" \
         "Linux Malware Detect (maldet) is not installed"
         
-    # Check and install YARA
+    # 5. Check and install YARA
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Checking YARA installation..." 6 60 $((step*100/total))
     fix_if_needed \
         "command -v yara >/dev/null 2>&1" \
         "sudo apt install -y yara" \
         "YARA is installed" \
         "YARA is not installed"
     
-    # Check YARA rules directory exists
+    # 6. Check YARA rules directory exists
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Checking YARA rules directory..." 6 60 $((step*100/total))
     fix_if_needed \
         "[ -d /etc/yara/rules ]" \
         "mkdir -p /etc/yara/rules && wget -q \"https://github.com/Yara-Rules/rules/archive/refs/heads/master.zip\" -O /tmp/yara-rules.zip && unzip -q -o /tmp/yara-rules.zip -d /tmp/yara-extract && cp -rf /tmp/yara-extract/rules-master/* /etc/yara/rules/ && chown -R root:root /etc/yara/rules && chmod -R 644 /etc/yara/rules && find /etc/yara/rules -type d -exec chmod 755 {} \\;" \
         "YARA rules directory exists" \
         "YARA rules directory missing"
     
-    # Check YARA index.yar exists
+    # 7. Check YARA index.yar exists
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Checking YARA index.yar..." 6 60 $((step*100/total))
     fix_if_needed \
         "[ -f /etc/yara/rules/index.yar ]" \
         "find /etc/yara/rules -name \"*.yar\" -not -name \"index.yar\" | sed 's|^/etc/yara/rules/|include \"|; s|$|\"|' > /etc/yara/rules/index.yar" \
         "YARA index.yar exists" \
         "YARA index.yar missing"
     
-    # Check YARA can execute basic test
+    # 8. Check YARA can execute basic test
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Verifying YARA functionality..." 6 60 $((step*100/total))
     fix_if_needed \
-        "( yara -r /etc/yara/rules/index.yar /tmp >/dev/null 2>&1 ) || ( echo 'rule test_rule {strings: $test = \"test\" condition: $test}' > /etc/yara/rules/test.yar && echo 'include \"test.yar\"' > /etc/yara/rules/index.yar && yara -r /etc/yara/rules/index.yar /tmp >/dev/null 2>&1 )" \
+        "( yara -r /etc/yara/rules/index.yar /tmp >/dev/null 2>&1 ) || ( echo 'rule test_rule {strings: \$test = \"test\" condition: \$test}' > /etc/yara/rules/test.yar && echo 'include \"test.yar\"' > /etc/yara/rules/index.yar && yara -r /etc/yara/rules/index.yar /tmp >/dev/null 2>&1 )" \
         "touch /var/log/yara_scan.log && chmod 640 /var/log/yara_scan.log && chown root:adm /var/log/yara_scan.log" \
         "YARA functionality verified" \
         "YARA functionality issue detected"
 
-    # Check and reinitialize AIDE database
+    # 9. Check and reinitialize AIDE database
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Checking AIDE database..." 6 60 $((step*100/total))
     fix_if_needed \
         "[ -f /var/lib/aide/aide.db ]" \
         "sudo aide --init --config=/etc/aide/aide.conf && [ -f /var/lib/aide/aide.db.new ] && sudo cp /var/lib/aide/aide.db.new /var/lib/aide/aide.db && sudo chmod 600 /var/lib/aide/aide.db" \
         "AIDE database is initialized" \
         "AIDE database check failed"
 
-    # Check and fix /etc/shadow permissions
+    # 10. Check and fix /etc/shadow permissions
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Checking /etc/shadow permissions..." 6 60 $((step*100/total))
     fix_if_needed \
         "[ $(stat -c '%a' /etc/shadow) -eq 640 ] && [ $(stat -c '%U:%G' /etc/shadow) == 'root:shadow' ]" \
         "sudo chmod 640 /etc/shadow && sudo chown root:shadow /etc/shadow" \
         "/etc/shadow permissions are correct" \
         "Incorrect /etc/shadow permissions"
 
-    # Enable Fail2Ban at boot
+    # 11. Enable Fail2Ban at boot
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Ensuring Fail2Ban enabled at boot..." 6 60 $((step*100/total))
     fix_if_needed \
         "sudo systemctl is-enabled --quiet fail2ban" \
         "sudo systemctl enable fail2ban" \
         "Fail2Ban is enabled at boot" \
         "Fail2Ban is disabled at boot"
 
-    # Enable auditd at boot
+    # 12. Enable auditd at boot
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Ensuring auditd enabled at boot..." 6 60 $((step*100/total))
     fix_if_needed \
         "sudo systemctl is-enabled --quiet auditd" \
         "sudo systemctl enable auditd" \
         "auditd is enabled at boot" \
         "auditd is disabled at boot"
 
-    # Enable AppArmor at boot
+    # 13. Enable AppArmor at boot
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Ensuring AppArmor enabled at boot..." 6 60 $((step*100/total))
     fix_if_needed \
         "sudo systemctl is-enabled --quiet apparmor" \
         "sudo systemctl enable apparmor" \
         "AppArmor is enabled at boot" \
         "AppArmor is disabled at boot"
+
+    # 14. Check and install firejail
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Checking firejail installation..." 6 60 $((step*100/total))
+    fix_if_needed \
+        "command -v firejail >/dev/null 2>&1" \
+        "sudo apt install -y firejail" \
+        "firejail is installed" \
+        "firejail is not installed"
+
+    # 15. Check and install rkhunter
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Checking rkhunter installation..." 6 60 $((step*100/total))
+    fix_if_needed \
+        "command -v rkhunter >/dev/null 2>&1" \
+        "sudo apt install -y rkhunter" \
+        "rkhunter is installed" \
+        "rkhunter is not installed"
+
+    # 16. Check and install chkrootkit
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Checking chkrootkit installation..." 6 60 $((step*100/total))
+    fix_if_needed \
+        "command -v chkrootkit >/dev/null 2>&1" \
+        "sudo apt install -y chkrootkit" \
+        "chkrootkit is installed" \
+        "chkrootkit is not installed"
+
+    # 17. Check and install lynis
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Checking lynis installation..." 6 60 $((step*100/total))
+    fix_if_needed \
+        "command -v lynis >/dev/null 2>&1" \
+        "sudo apt install -y lynis" \
+        "lynis is installed" \
+        "lynis is not installed"
+
+    # 18. Check and install auditd
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Checking auditd installation..." 6 60 $((step*100/total))
+    fix_if_needed \
+        "command -v auditd >/dev/null 2>&1" \
+        "sudo apt install -y auditd" \
+        "auditd is installed" \
+        "auditd is not installed"
+
+    whiptail --gauge "Package validation complete." 6 60 100
 
     echo "[INFO] Summary of changes made during validation:" | tee -a "$LOG_FILE"
     grep "[+]" "$LOG_FILE" | tee -a "$LOG_FILE"
@@ -292,92 +375,204 @@ validate_packages() {
 
 validate_stig_hardening() {
     echo "[+] Validating STIG compliance..." | tee -a "$LOG_FILE"
+    local step=0
+    local total=4
+
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Checking password minlen policy..." 6 60 $((step*100/total))
     fix_if_needed \
         "grep -q 'minlen = 14' /etc/security/pwquality.conf" \
         "sudo sed -i 's/^#\\? *minlen.*/minlen = 14/' /etc/security/pwquality.conf" \
         "Password policy minlen is set" \
         "Password policy minlen missing or wrong"
+
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Checking /etc/shadow permissions..." 6 60 $((step*100/total))
     fix_if_needed \
         "[[ $(stat -c '%a' /etc/shadow) -eq 600 ]]" \
         "sudo chmod 600 /etc/shadow" \
         "/etc/shadow permissions are 600" \
         "Incorrect /etc/shadow permissions"
+
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Checking IPv6 disablement..." 6 60 $((step*100/total))
     fix_if_needed \
         "grep -q 'net.ipv6.conf.all.disable_ipv6 = 1' /etc/sysctl.d/99-sysctl.conf" \
         "echo 'net.ipv6.conf.all.disable_ipv6 = 1' | sudo tee -a /etc/sysctl.d/99-sysctl.conf && sudo sysctl -w net.ipv6.conf.all.disable_ipv6=1" \
         "IPv6 is disabled" \
         "IPv6 not disabled"
+
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Checking core dump disablement..." 6 60 $((step*100/total))
     fix_if_needed \
         "grep -q 'fs.suid_dumpable = 0' /etc/sysctl.d/99-coredump.conf" \
         "echo 'fs.suid_dumpable = 0' | sudo tee /etc/sysctl.d/99-coredump.conf && sudo sysctl -w fs.suid_dumpable=0" \
         "Core dumps are disabled" \
         "Core dumps enabled"
+
+    whiptail --gauge "STIG compliance validation complete." 6 60 100
 }
 
 validate_boot_services() {
     echo "[*] Validating boot services..." | tee -a "$LOG_FILE"
+    local step=0
+    local total=4
 
-    echo "[*] Checking if Fail2Ban is enabled at boot..." | tee -a "$LOG_FILE"
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Checking if Fail2Ban is enabled at boot..." 6 60 $((step*100/total))
     fix_if_needed \
-        "! sudo systemctl is-enabled fail2ban | grep -q 'enabled'" \
+        "sudo systemctl is-enabled --quiet fail2ban" \
         "sudo systemctl enable fail2ban" \
         "Fail2Ban is enabled at boot" \
         "Fail2Ban is disabled at boot"
 
-    echo "[*] Checking if auditd is enabled at boot..." | tee -a "$LOG_FILE"
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Checking if auditd is enabled at boot..." 6 60 $((step*100/total))
     fix_if_needed \
-        "! sudo systemctl is-enabled auditd | grep -q 'enabled'" \
+        "sudo systemctl is-enabled --quiet auditd" \
         "sudo systemctl enable auditd" \
         "auditd is enabled at boot" \
         "auditd is disabled at boot"
 
-    echo "[*] Checking if AppArmor is enabled at boot..." | tee -a "$LOG_FILE"
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Checking if AppArmor is enabled at boot..." 6 60 $((step*100/total))
     fix_if_needed \
-        "! sudo systemctl is-enabled apparmor | grep -q 'enabled'" \
+        "sudo systemctl is-enabled --quiet apparmor" \
         "sudo systemctl enable apparmor" \
         "AppArmor is enabled at boot" \
         "AppArmor is disabled at boot"
 
-    echo "[*] Checking if sshd is enabled at boot..." | tee -a "$LOG_FILE"
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Checking if sshd is enabled at boot..." 6 60 $((step*100/total))
     fix_if_needed \
-        "! sudo systemctl is-enabled sshd | grep -q 'enabled'" \
+        "sudo systemctl is-enabled --quiet sshd" \
         "sudo systemctl enable sshd" \
         "sshd is enabled at boot" \
         "sshd is disabled at boot"
+
+    whiptail --gauge "Boot services validation complete." 6 60 100
 }
 
 cron_clean(){
+    local step=0
+    local total=9
+
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Adding CRON header for CLEAN..." 6 60 $((step*100/total))
     echo "========================================" | sudo tee -a /etc/crontab
     echo "           CRON SETUP - CLEAN           " | sudo tee -a /etc/crontab
     echo "========================================" | sudo tee -a /etc/crontab
+
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Adding apt-get update/upgrade jobs..." 6 60 $((step*100/total))
     echo "0 0 */2 * * root /usr/bin/apt-get update && /usr/bin/apt-get upgrade -y" | sudo tee -a /etc/crontab
     echo "0 0 */2 * * root /usr/bin/apt-get dist-upgrade -y" | sudo tee -a /etc/crontab
+
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Adding autoremove/autoclean jobs..." 6 60 $((step*100/total))
     echo "0 0 */2 * * root /usr/bin/apt-get autoremove -y" | sudo tee -a /etc/crontab
     echo "0 0 */2 * * root /usr/bin/apt-get autoclean -y" | sudo tee -a /etc/crontab
+
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Adding apt-get check/clean jobs..." 6 60 $((step*100/total))
     echo "0 0 */2 * * root /usr/bin/apt-get check" | sudo tee -a /etc/crontab
     echo "0 0 */2 * * root /usr/bin/apt-get clean" | sudo tee -a /etc/crontab
+
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Adding apt update/upgrade jobs..." 6 60 $((step*100/total))
     echo "0 0 */2 * * root /usr/bin/apt update && apt upgrade -y" | sudo tee -a /etc/crontab
     echo "0 0 */2 * * root /usr/bin/apt full-upgrade" | sudo tee -a /etc/crontab
+
+    whiptail --gauge "CRON CLEAN setup complete." 6 60 100
 }
 
 cron_packages() {
+    local step=0
+    local total=17
+
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Adding CRON header for PACKAGES..." 6 60 $((step*100/total))
     echo "========================================" | sudo tee -a /etc/crontab
     echo "         CRON SETUP - PACKAGES          " | sudo tee -a /etc/crontab
     echo "========================================" | sudo tee -a /etc/crontab
-    # Ensure AIDE log directory exists
+
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Ensuring AIDE log directory exists..." 6 60 $((step*100/total))
     sudo mkdir -p /var/log/aide
     sudo chmod 750 /var/log/aide
+
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Adding AIDE check job..." 6 60 $((step*100/total))
     echo "0 11 * * * root /usr/bin/aide --check --config=/etc/aide/aide.conf >> /var/log/aide/aide.log 2>&1" | sudo tee -a /etc/crontab
+
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Adding maldet update job..." 6 60 $((step*100/total))
     echo "0 0 */2 * * root /usr/bin/maldet --update" | sudo tee -a /etc/crontab
+
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Adding rkhunter update job..." 6 60 $((step*100/total))
     echo "0 0 */2 * * root /usr/bin/rkhunter --update" | sudo tee -a /etc/crontab
+
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Adding fail2ban-client reload job..." 6 60 $((step*100/total))
     echo "0 0 */2 * * root /usr/bin/fail2ban-client -x" | sudo tee -a /etc/crontab
+
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Adding apparmor_parser reload job..." 6 60 $((step*100/total))
     echo "0 0 */2 * * root /usr/bin/apparmor_parser -r /etc/apparmor.d/*" | sudo tee -a /etc/crontab
+
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Adding grub-mkconfig job..." 6 60 $((step*100/total))
     echo "0 0 */2 * * root /usr/sbin/grub-mkconfig -o /boot/grub/grub.cfg" | sudo tee -a /etc/crontab
+
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Adding auditctl enable job..." 6 60 $((step*100/total))
     echo "0 0 */2 * * root /usr/sbin/auditctl -e 1" | sudo tee -a /etc/crontab
+
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Adding auditd foreground job..." 6 60 $((step*100/total))
     echo "0 0 */2 * * root /usr/sbin/auditd -f" | sudo tee -a /etc/crontab
+
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Adding auditd reload job..." 6 60 $((step*100/total))
     echo "0 0 */2 * * root /usr/sbin/auditd -r" | sudo tee -a /etc/crontab
+
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Adding YARA scan job..." 6 60 $((step*100/total))
     echo "0 3 * * * root /usr/bin/yara -r /etc/yara/rules/index.yar /home /var/www /tmp >> /var/log/yara_scan.log 2>&1" | sudo tee -a /etc/crontab
+
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Adding debsecan report job..." 6 60 $((step*100/total))
+    echo "0 4 * * * root /usr/bin/debsecan --suite $(lsb_release -sc) --format detail > /var/log/debsecan_report.log 2>&1" | sudo tee -a /etc/crontab
+
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Adding hardn-packages.sh self-check job..." 6 60 $((step*100/total))
     echo "0 0 * * * root /usr/local/bin/hardn-packages.sh > /var/log/hardn-packages.log 2>&1" | sudo tee -a /etc/crontab
+
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Adding duplicate YARA scan job (legacy)..." 6 60 $((step*100/total))
+    echo "0 3 * * * root /usr/bin/yara -r /etc/yara/rules/index.yar /home /var/www /tmp >> /var/log/yara_scan.log 2>&1" >> /etc/crontab
+
+  
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Adding firejail cron job..." 6 60 $((step*100/total))
+    if ! grep -q "firejail" /etc/crontab; then
+        echo "0 2 * * * root /usr/bin/firejail --list > /var/log/firejail_list.log 2>&1" | sudo tee -a /etc/crontab
+    fi
+
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Adding chkrootkit scan job..." 6 60 $((step*100/total))
+    if ! grep -q "chkrootkit" /etc/crontab; then
+        echo "0 5 * * * root /usr/sbin/chkrootkit > /var/log/chkrootkit.log 2>&1" | sudo tee -a /etc/crontab
+    fi
+
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Adding lynis audit job..." 6 60 $((step*100/total))
+    if ! grep -q "lynis" /etc/crontab; then
+        echo "30 2 * * 0 root /usr/bin/lynis audit system --cronjob > /var/log/lynis.log 2>&1" | sudo tee -a /etc/crontab
+    fi
+
+    whiptail --gauge "CRON PACKAGES setup complete." 6 60 100
 }
 
 cron_alert() {
@@ -387,10 +582,19 @@ cron_alert() {
     [ -d "$ALERTS_DIR" ] || mkdir -p "$ALERTS_DIR"
     : > "$ALERTS_FILE"
 
-    echo "[Package Installation Alerts]" >> "$ALERTS_FILE"
+    # List of all packages to check (including new ones: debsecan, yara)
     local pkgs=(
+        ufw fail2ban apparmor firejail rkhunter chkrootkit maldet aide auditd lynis debsecan yara
+    )
+    local svcs=(
         ufw fail2ban apparmor firejail rkhunter chkrootkit maldet aide auditd lynis
     )
+    local total=10
+    local step=0
+
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Checking package installation..." 6 60 $((step*100/total))
+    echo "[Package Installation Alerts]" >> "$ALERTS_FILE"
     for pkg in "${pkgs[@]}"; do
         if dpkg -s "$pkg" &>/dev/null; then
             printf " OK      %s\n" "$pkg" >> "$ALERTS_FILE"
@@ -400,37 +604,36 @@ cron_alert() {
     done
     echo "-------------------------" >> "$ALERTS_FILE"
 
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Checking service status..." 6 60 $((step*100/total))
     echo "[Service Status Alerts]" >> "$ALERTS_FILE"
-    local svcs=(
-      ufw fail2ban apparmor firejail rkhunter chkrootkit maldet aide auditd lynis
-    )
     for svc in "${svcs[@]}"; do
         if ! systemctl list-unit-files "${svc}.service" &>/dev/null; then
             printf " %s: not installed\n" "$svc" >> "$ALERTS_FILE"
             continue
         fi
-
         systemctl is-active --quiet "$svc" && st="active" || st="inactive"
         systemctl is-enabled --quiet "$svc" && e="enabled" || e="disabled"
         printf " %s: %s (%s)\n" "$svc" "$st" "$e" >> "$ALERTS_FILE"
     done
     echo "-------------------------" >> "$ALERTS_FILE"
 
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Checking STIG settings..." 6 60 $((step*100/total))
     echo "[STIG Settings Alerts]" >> "$ALERTS_FILE"
     grep -q '^minlen = 14' /etc/security/pwquality.conf \
         && echo " OK      password minlen=14" >> "$ALERTS_FILE" \
         || echo " MISSING password minlen=14" >> "$ALERTS_FILE"
-
     sysctl -n net.ipv6.conf.all.disable_ipv6 | grep -q '^1$' \
         && echo " OK      IPv6 disabled" >> "$ALERTS_FILE" \
         || echo " MISSING IPv6 disabled" >> "$ALERTS_FILE"
-
     systemctl is-enabled ctrl-alt-del.target &>/dev/null \
         && echo " MISSING Ctrl+Alt+Del disabled" >> "$ALERTS_FILE" \
         || echo " OK      Ctrl+Alt+Del disabled" >> "$ALERTS_FILE"
-
     echo "-------------------------" >> "$ALERTS_FILE"
 
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Checking maldet alerts..." 6 60 $((step*100/total))
     echo "[Maldet Alerts]" >> "$ALERTS_FILE"
     if command -v maldet &>/dev/null; then
         local malist
@@ -443,6 +646,8 @@ cron_alert() {
     fi
     echo "-------------------------" >> "$ALERTS_FILE"
 
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Checking Fail2Ban alerts..." 6 60 $((step*100/total))
     echo "[Fail2Ban Alerts]" >> "$ALERTS_FILE"
     if command -v fail2ban-client &>/dev/null && systemctl is-active --quiet fail2ban; then
         local flist
@@ -457,6 +662,8 @@ cron_alert() {
     fi
     echo "-------------------------" >> "$ALERTS_FILE"
 
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Checking AppArmor alerts..." 6 60 $((step*100/total))
     echo "[AppArmor Alerts]" >> "$ALERTS_FILE"
     if command -v aa-status &>/dev/null; then
         local alist
@@ -469,9 +676,10 @@ cron_alert() {
     fi
     echo "-------------------------" >> "$ALERTS_FILE"
 
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Checking AIDE alerts..." 6 60 $((step*100/total))
     echo "[AIDE Alerts]" >> "$ALERTS_FILE"
     if [ -f /etc/aide/aide.conf ] && [ -f /var/lib/aide/aide.db ]; then
-        # First check if we have log files to analyze
         if [ -f "/var/log/aide/aide.log" ] && [ -s "/var/log/aide/aide.log" ]; then
             echo " AIDE log exists, checking for alerts..." >> "$ALERTS_FILE"
             if grep -i "found differences between database and filesystem" /var/log/aide/aide.log > /tmp/aide_alerts 2>/dev/null; then
@@ -481,7 +689,6 @@ cron_alert() {
                 echo " No alerts found in AIDE logs" >> "$ALERTS_FILE"
             fi
         else
-            # No log file found, run an immediate check
             echo " Running AIDE check now..." >> "$ALERTS_FILE"
             if sudo aide --check --config=/etc/aide/aide.conf > /tmp/aide_check_result 2>&1; then
                 echo " No deviations detected by AIDE" >> "$ALERTS_FILE"
@@ -496,10 +703,11 @@ cron_alert() {
         echo " Run 'sudo apt-get install aide aide-common && sudo aide --init && sudo cp /var/lib/aide/aide.db.new /var/lib/aide/aide.db'" >> "$ALERTS_FILE"
     fi
     echo "-------------------------" >> "$ALERTS_FILE"
-    
+
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Checking YARA alerts..." 6 60 $((step*100/total))
     echo "[YARA Alerts]" >> "$ALERTS_FILE"
     if [ ! -f /var/log/yara_scan.log ] || [ ! -s /var/log/yara_scan.log ]; then
-        # If log file doesn't exist or is empty, try to run a quick scan
         echo " No previous YARA scan results found. Running a quick scan..." >> "$ALERTS_FILE"
         if command -v yara >/dev/null 2>&1 && [ -f /etc/yara/rules/index.yar ]; then
             yara -r /etc/yara/rules/index.yar /tmp > /var/log/yara_scan.log 2>&1
@@ -513,12 +721,27 @@ cron_alert() {
             echo " YARA not properly installed or configured" >> "$ALERTS_FILE"
         fi
     else
-        # Use existing log file
         echo " YARA detections found:" >> "$ALERTS_FILE"
         tail -n 50 /var/log/yara_scan.log >> "$ALERTS_FILE"
     fi
     echo "-------------------------" >> "$ALERTS_FILE"
 
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Checking debsecan alerts..." 6 60 $((step*100/total))
+    echo "[Debsecan Alerts]" >> "$ALERTS_FILE"
+    if command -v debsecan &>/dev/null; then
+        if [ -f /var/log/debsecan_report.log ] && [ -s /var/log/debsecan_report.log ]; then
+            grep -E "CRITICAL|HIGH" /var/log/debsecan_report.log >> "$ALERTS_FILE" || echo " No critical/high vulnerabilities found" >> "$ALERTS_FILE"
+        else
+            echo " No debsecan report found" >> "$ALERTS_FILE"
+        fi
+    else
+        echo " debsecan not installed" >> "$ALERTS_FILE"
+    fi
+    echo "-------------------------" >> "$ALERTS_FILE"
+
+    step=$((step+1))
+    whiptail --gauge "[$step/$total] Checking general system alerts..." 6 60 $((step*100/total))
     echo "[General Alerts]" >> "$ALERTS_FILE"
     if sudo grep -i alert /var/log/syslog /var/log/auth.log /var/log/kern.log &>/dev/null; then
         sudo grep -i alert /var/log/syslog /var/log/auth.log /var/log/kern.log >> "$ALERTS_FILE"
@@ -536,6 +759,7 @@ cron_alert() {
 
 main() {
     printf "\033[1;31m[+] Validating configuration...\033[0m\n"
+    initialize_log
     ensure_aide_initialized
     validate_packages
     validate_stig_hardening

@@ -1,32 +1,37 @@
-#!/bin/sh
+#!/bin/bash
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 
 ########################################
 #        HARDN - Auto Rice Script      #
-#            main branch               #
+#             main branch              #
 #                                      #
 #       Author: Chris Bingham          #
+#       Enhancer:  Tim Burns           #
 #           Date: 4/5/2025             #
 #         Updated: 5/18/2025           #
 #                                      #
 ########################################
 
-# This script automatically starts the rice process when executed with sudo sh hardn-main.sh
 
-# Run main() function to start the rice process automatically
+
 auto_start() {
-    echo "HARDN installation process starting automatically..."
+    echo "START..."
     sleep 1
-    # The main rice process will start automatically
+   
 }
 
+    SCRIPT_PATH="$(readlink -f "$0")"
+    SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
+    SETUP_SCRIPT="$SCRIPT_DIR/hardn-setup.sh"
+    chmod +x "$SETUP_SCRIPT"
 
-# urls to be changed after merge
+
 repo="https://github.com/OpenSource-For-Freedom/HARDN/"
-progsfile="https://raw.githubusercontent.com/LinuxUser255/HARDN/refs/heads/main-dev/progs.csv"
-repobranch="main-patch"
+progsfile="$SCRIPT_DIR/../../progs.csv" 
+repobranch="main"
 name=$(whoami)
 
-# Check for root privileges
+
 if [ "$(id -u)" -ne 0 ]; then
         echo ""
         echo "This script must be run as root."
@@ -34,53 +39,69 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 installpkg() {
-       dpkg -s "$1" >/dev/null 2>&1 || sudo apt install -y "$1" >/dev/null 2>&1
+       dpkg -s "$1" >/dev/null 2>&1
 }
 
-# Log to stderr and exit with failure.
+
 error() {
         printf "%s\n" "$1" >&2
         exit 1
 }
 
 welcomemsg() {
-        whiptail --title "Welcome!" --backtitle "HARDN OS Security" --fb \
-            --msgbox "\n\n\nWelcome to HARDN OS Security!\n\nThis script will automatically install everything you need to fully security harden your Linux machine.\n\n-Chris" 15 60
+        whiptail --title "HARDN-XDR" --backtitle "SIG-OS Security" --fb \
+            --msgbox "\n\n\n        Welcome to HARDN OS Security!\n\n        HARDN-XDR installs all needed Debian based Security tools for monitoring and response" 15 60
 
-        whiptail --title "Important Note!" --backtitle "HARDN OS Security" --fb \
-            --yes-button "All ready!" \
+        whiptail --title "Welcome to Unix Security" --backtitle "HARDN-XDR" --fb \
+            --yes-button "Confirm" \
             --no-button "Return..." \
-            --yesno "\n\n\nThis installer will update your system first..\n\n" 12 70
+            --yesno "\n\n\n        This installer will update your system first..\n\n" 12 70
 }
 
+
 preinstallmsg() {
-        whiptail --title "Welcome to HARDN. A Linux Security Hardening program." --yes-button "Let's go!" \
-            --no-button "No, nevermind!" \
-            --yesno "\n\n\nThe rest of the installation will now be totally automated, so you can sit back and relax.\n\nIt will take some time, but when done, you can enjoy your security hardened Linux OS.\n\nNow just press <Let's go!> and the system will begin installation!\n\n" 13 60 || {
+        whiptail --title "Welcome to HARDN-XDR." --yes-button "Confirm" \
+            --no-button "Return" \
+            --yesno "\n\n\n        The rest of the install will quickly complete.\n\n        This will take time, so you will have a fully configured HARDN-XDR OS.\n\n        Press <HARDN> and the system will begin installation!\n\n" 13 60 || {
             clear
             exit 1
     }
 }
 
 update_system_packages() {
-    printf "\033[1;31m[+] Updating system packages...\033[0m\n"
-    apt update && apt upgrade -y
+    {
+        echo 10; sleep 0.5
+        apt update >/dev/null 2>&1 && echo 40
+        apt upgrade -y >/dev/null 2>&1 && echo 80
+        apt autoremove -y >/dev/null 2>&1 && echo 90
+        apt autoclean -y >/dev/null 2>&1 && echo 100
+    } | whiptail --gauge "Updating system packages..." 6 50 0 || {
+        whiptail --title "Error" --msgbox "Failed to update system packages." 10 60
+        exit 1
+    }
 }
 
-# Install package dependencies from progs.csv
 install_package_dependencies() {
-        printf "\033[1;31[+] Installing package dependencies from progs.csv...\033[0m\n"
-        progsfile="$1"
-            if ! dpkg -s "$1" >/dev/null 2>&1; then
-                whiptail --infobox "Installing $1... ($2)" 7 60
-                sudo apt install update -qq
-                sudo apt install -y "$1"
-            else
-                whiptail --infobox "$1 is already installed." 7 60
-            fi
+    progsfile="$1"
+    if [ ! -f "$progsfile" ]; then
+        whiptail --msgbox "progs.csv not found: $progsfile" 10 60
+        return 1
+    fi
+
+    total=$(grep -cv '^#' "$progsfile")
+    n=0
+
+    while IFS=, read -r tag pkg comment || [ -n "$tag" ]; do
+        [ -z "$pkg" ] && continue
+        n=$((n + 1))
+        percent=$(( n * 100 / total ))
+        whiptail --gauge "Installing dependency: $pkg ($n of $total)" 6 60 "$percent"
+        if ! dpkg -s "$pkg" >/dev/null 2>&1; then
+            apt-get install -y "$pkg" >/dev/null 2>&1
+        fi
+    done < <(grep -v '^#' "$progsfile")
 }
 
-# Function to install packages with visual feedback
   aptinstall() {
           package="$1"
           comment="$2"
@@ -88,17 +109,14 @@ install_package_dependencies() {
               --infobox "Installing \`$package\` ($n of $total) from the repository. $comment" 9 70
           echo "$aptinstalled" | grep -q "^$package$" && return 1
           apt-get install -y "$package" >/dev/null 2>&1
-          # Add to installed packages list
           aptinstalled="$aptinstalled\n$package"
   }
 
 maininstall() {
-       	# Installs all needed programs from main repo.
        	whiptail --title "HARDN Installation" --infobox "Installing \`$1\` ($n of $total). $1 $2" 9 70
        	installpkg "$1"
 }
 
-# Function to build and install from Git repo
 gitdpkgbuild() {
         repo_url="$1"
         description="$2"
@@ -109,7 +127,6 @@ gitdpkgbuild() {
         cd "$dir" || exit
         whiptail --infobox "Building and installing $description..." 7 70
 
-        # Check and isntall build dependencies
         whiptail --infobox "Checking build dependencies for $description..." 7 70
         build_deps=$(dpkg-checkbuilddeps 2>&1 | grep -oP 'Unmet build dependencies: \K.*')
         if [ -n "$build_deps" ];  then
@@ -117,17 +134,12 @@ gitdpkgbuild() {
           apt install -y $build_deps >/dev/null 2>&1
         fi
 
-        # Run dpkg-source before building
        dpkg-source --before-build . >/dev/null 2>&1
-
-        # Build and install the package
         if sudo dpkg-buildpackage -u -uc 2>&1; then
           sudo dpkg -i ../hardn.deb
         else
           whiptail --infobox "$description Failed to build package. Please check build dependencies." 10 60
-          # try to install common build dependencies
           apt install -y debhelper-compat devscripts git-buildpackage
-          # Try building again
           sudo dpkg-buildpackage -us -uc 2>&1 && sudo dpkg -i  ../hardn.deb
         fi
 }
@@ -135,93 +147,158 @@ gitdpkgbuild() {
 build_hardn_package() {
     whiptail --infobox "Building HARDN Debian package..." 7 60
 
-    # Create temporary directory
     temp_dir=$(mktemp -d)
     cd "$temp_dir" || exit 1
 
-    # Clone the repository
     git clone --depth=1 -b main-patch https://github.com/OpenSource-For-Freedom/HARDN.git
     cd HARDN || exit 1
 
-    # Build the package
     whiptail --infobox "Running dpkg-buildpackage..." 7 60
     dpkg-buildpackage -us -uc
 
-    # Install the package
     cd .. || exit 1
     whiptail --infobox "Installing HARDN package..." 7 60
     dpkg -i hardn_*.deb
 
-    # Handle dependencies if needed
     apt-get install -f -y
 
-    # Clean up
     cd / || exit 1
     rm -rf "$temp_dir"
 
     whiptail --infobox "HARDN package installed successfully" 7 60
 }
 
-# Main loop to parse and install
-installationloop() {
-          [ -f "$progsfile" ] && cp "$progsfile" /tmp/progs.csv ||
-                curl -Ls "$progsfile" | sed '/^#/d' >/tmp/progs.csv
-        total=$(wc -l </tmp/progs.csv)
-        echo "[INFO] Found $total entries to process."
-        # Get list of manually installed packages (not installed as dependencies)
-        aptinstalled=$(apt-mark showmanual)
-        while IFS=, read -r tag program comment; do
-            n=$((n + 1))
-            echo "➤ Processing: $program [$tag]"
-
-            # Strip quotes from comments
-            echo "$comment" | grep -q "^\".*\"$" &&
-                comment="$(echo "$comment" | sed -E "s/(^\"|\"$)//g")"
-
-            case "$tag" in
-                a) aptinstall "$program" "$comment" ;;
-                G) gitdpkgbuild "$program" "$comment" ;;
-                *) maininstall "$program" "$comment"
-            esac
-        done </tmp/progs.csv
-}
-
 putgitrepo() {
-        # Downloads a gitrepo $1 and places the files in $2 only overwriting conflicts
-        printf "\033[1;32[+] Downloading and installing files...\033[0m\n"
-        [ -z "$3" ] && branch="master" || branch="$repobranch"
-        dir=$(mktemp -d)
-        [ ! -d "$2" ] && mkdir -p "$2"
-        chown "$name":wheel "$dir" "$2"
-        sudo -u "$name" git -C "$repodir" clone --depth 1 \
-            --single-branch --no-tags -q --recursive -b "$branch" \
-            --recurse-submodules "$1" "$dir"
-        sudo -u "$name" cp -rfT "$dir" "$2"
+    printf "\033[1;32m[+] Downloading files from Git repo %s to %s...\033[0m\n" "$1" "$2"
+    local repo_url="$1"
+    local target_dir="$2"
+    local branch_override="$3"
+    local branch_to_use
+    local temp_dir
+    local return_status=1 
+
+    if [ -n "$branch_override" ]; then
+        branch_to_use="$branch_override"
+    elif [ -n "$repobranch" ]; then
+        branch_to_use="$repobranch"
+    else
+        branch_to_use="master"
+    fi
+
+    temp_dir=$(mktemp -d)
+    if [ -z "$temp_dir" ] || [ ! -d "$temp_dir" ]; then
+        whiptail --msgbox "Failed to create temporary directory." 10 70
+        return 1
+    fi
+
+    if [ ! -d "$target_dir" ]; then
+        mkdir -p "$target_dir"
+        if [ $? -ne 0 ]; then
+            whiptail --msgbox "Failed to create target directory: $target_dir" 10 70
+            rm -rf "$temp_dir"
+            return 1
+        fi
+    fi
+
+   
+    if ! chown "$name:$(id -gn "$name")" "$temp_dir"; then
+        whiptail --msgbox "Warning: Failed to chown temp directory $temp_dir to $name. Git operations might fail." 10 70
+    fi
+    
+
+    echo "Cloning $repo_url (branch: $branch_to_use) into $temp_dir..."
+    if sudo -u "$name" git clone --depth 1 --single-branch --no-tags -q \
+        --recursive -b "$branch_to_use" --recurse-submodules "$repo_url" "$temp_dir"; then
+        
+        echo "Copying files from $temp_dir to $target_dir..."
+
+        if sudo -u "$name" cp -rfT "$temp_dir/." "$target_dir/"; then
+            printf "Files from %s installed to %s successfully.\n" "$repo_url" "$target_dir"
+            return_status=0 
+        else
+            whiptail --msgbox "Failed to copy files from cloned repo $repo_url to $target_dir." 10 70
+        fi
+    else
+        whiptail --msgbox "Failed to clone repository: $repo_url (branch: $branch_to_use). Check URL, branch, and permissions." 10 70
+    fi
+    
+    rm -rf "$temp_dir"
+    return $return_status
 }
 
-config_selinux() {
-        printf "\033[1;31m[+] Installing and configuring SELinux...\033[0m\n"
 
-        # Configure SELinux to enforcing mode
-        setenforce 1 2>/dev/null || whiptail --msgbox "Could not set SELinux to enforcing mode immediately" 8 60
+installationloop() {
+    local progs_csv_path="/tmp/progs.csv"
+   
+    if [ -z "$progsfile" ]; then
+        error "FATAL: progsfile variable is not set. Cannot fetch package list."
+       
+    fi
 
-        # Configure SELinux to be enforcing at boot
-        if [ -f /etc/selinux/config ]; then
-            sed -i 's/SELINUX=disabled/SELINUX=enforcing/' /etc/selinux/config
-            sed -i 's/SELINUX=permissive/SELINUX=enforcing/' /etc/selinux/config
-            whiptail --infobox "SELinux configured to enforcing mode at boot" 7 60
-        else
-            whiptail --msgbox "SELinux config file not found" 8 60
+   
+    printf "Fetching package list from %s to %s...\n" "$progsfile" "$progs_csv_path"
+    if [ -f "$progsfile" ]; then 
+        if ! cp "$progsfile" "$progs_csv_path"; then
+             error "FATAL: Failed to copy local progsfile $progsfile to $progs_csv_path."
+        fi
+    else # Assume $progsfile is a URL
+        # sed '/^#/d' removes comment lines
+        if ! curl -Ls "$progsfile" | sed '/^#/d' > "$progs_csv_path"; then
+            error "FATAL: Failed to download package list from $progsfile."
+        fi
+    fi
+
+    if [ ! -s "$progs_csv_path" ]; then # Check if file is empty or not created
+        error "FATAL: Package list $progs_csv_path is empty or could not be fetched."
+    fi
+
+    total=$(wc -l < "$progs_csv_path")
+    echo "[INFO] Found $total entries to process from $progs_csv_path."
+    aptinstalled=$(apt-mark showmanual)
+    n=0
+
+    while IFS=, read -r tag program comment || [ -n "$tag" ]; do
+
+        [ -z "$tag" ] && [ -z "$program" ] && continue
+
+        n=$((n + 1))
+        
+     
+        tag=$(echo "$tag" | awk '{$1=$1};1')
+        program=$(echo "$program" | awk '{$1=$1};1')
+        comment=$(echo "$comment" | awk '{$1=$1};1')
+
+   
+        [ -z "$program" ] && echo "INFO: Skipping entry $n, program field is empty. Tag: '$tag'." && continue
+
+        echo "➤ Processing ($n of $total): Program='$program', Tag='$tag', Comment='$comment'"
+
+      
+        if echo "$comment" | grep -q "^\".*\"$"; then
+            comment="$(echo "$comment" | sed -E 's/(^"|"$)//g')"
         fi
 
-        whiptail --infobox "SELinux installation and configuration completed" 7 60
+        case "$tag" in
+            a) aptinstall "$program" "$comment" ;;
+            G) gitdpkgbuild "$program" "$comment" ;;
+            # Add other tags here as needed, e.g.:
+            # R) putgitrepo "$program" "$comment" ;; # If 'R' is for general repo download
+            *)
+                echo "INFO: Unknown tag '$tag' for program '$program'. Skipping."
+                ;;
+        esac
+    done < "$progs_csv_path"
+    
+    # Optional: Clean up the temporary CSV file
+    # rm -f "$progs_csv_path" 
+    # Keeping it for now might be useful for debugging if issues occur.
+    echo "[INFO] Finished processing $n entries from package list."
 }
 
-# Install system security tools
-# Check if packages are already installed before installing
+
 check_security_tools() {
-    printf "\033[1;31m[+] Checking for security packages are installed...\033[0m\n"
-                for pkg in ufw yara fail2ban apparmor apparmor-profiles apparmor-utils firejail tcpd lynis debsums rkhunter libpam-pwquality libvirt-daemon-system libvirt-clients qemu-kvm docker.io docker-compose openssh-server; do
+    printf "\\033[1;31m[+] Checking for security packages are installed...\\033[0m\\n"
+                for pkg in ufw yara fail2ban aide apparmor apparmor-profiles apparmor-utils firejail tcpd lynis debsums rkhunter libpam-pwquality libvirt-daemon-system libvirt-clients qemu-kvm docker.io docker-compose openssh-server suricata psad debsecan needrestart tripwire logwatch; do
                         if ! dpkg -s "$pkg" >/dev/null 2>&1; then
                                 whiptail --infobox "Installing $pkg..." 7 60
                                 apt install -y "$pkg"
@@ -230,176 +307,20 @@ check_security_tools() {
                         fi
                 done
 
-                # Ensure yara is installed (redundant, but explicit as requested)
-                if ! command -v yara >/dev/null 2>&1; then
-                        whiptail --infobox "Installing yara..." 7 60
-                        apt install -y yara
-                else
-                        whiptail --infobox "yara is already installed." 7 60
+                if ! dpkg -s "yara" >/dev/null 2>&1; then
+                    whiptail --infobox "Installing yara..." 7 60
+                    apt install -y "yara"
                 fi
 }
 
-# UFW configuration
-configure_ufw() {
-        printf "\033[1;31m[+] Configuring UFW...\033[0m\n"
-        ufw allow out 53,80,443/tcp
-        ufw allow out 53,123/udp
-        ufw allow out 67,68/udp
-        ufw reload
-}
-
-# Enable and start Fail2Ban and AppArmor services
-enable_services() {
-       printf "\033[1;31m[+] Enabling and starting Fail2Ban and AppArmor services...\033[0m\n"
-       systemctl enable --now fail2ban
-       systemctl enable --now apparmor
-}
-
-# Install chkrootkit, LMD, and rkhunter
-  install_additional_tools() {
-          printf "\033[1;31m[+] Installing chkrootkit...\033[0m\n"
-          apt install -y chkrootkit
-
-          # Initialize the variable
-          install_maldet_failed=false
-
-          # Create a temporary directory for the installation
-          # ... rest of the function
 
 
-        printf "\033[1;31m[+] Installing chkrootkit...\033[0m\n"
-        apt install -y chkrootkit
-
-
-        # Create a temporary directory for the installation
-        temp_dir=$(mktemp -d)
-        cd "$temp_dir" || {
-            printf "\033[1;31m[-] Failed to create temporary directory\033[0m\n"
-            install_maldet_failed=true
-    }
-
-    # Try to install from GitHub
-    if [ "$install_maldet_failed" != "true" ]; then
-        printf "\033[1;31m[+] Cloning Linux Malware Detect from GitHub...\033[0m\n"
-        if git clone https://github.com/rfxn/linux-malware-detect.git; then
-            cd linux-malware-detect || {
-                printf "\033[1;31m[-] Failed to change to maldetect directory\033[0m\n"
-                install_maldet_failed=true
-            }
-
-            if [ "$install_maldet_failed" != "true" ]; then
-                printf "\033[1;31m[+] Running maldetect installer...\033[0m\n"
-                chmod +x install.sh
-                if ./install.sh; then
-                    whiptail --infobox "Linux Malware Detect installed successfully from GitHub."
-                    printf "\033[1;31m[+] Linux Malware Detect installed successfully from GitHub\033[0m\n"
-                    install_maldet_failed=false
-                else
-                    printf "\033[1;31m[-] Maldetect installer failed\033[0m\n"
-                    install_maldet_failed=true
-                fi
-            fi
-        else
-            printf "\033[1;31m[-] Failed to clone maldetect repository\033[0m\n"
-            install_maldet_failed=true
-        fi
-    fi
-
-    # If GitHub method failed, try apt
-    if [ "$install_maldet_failed" = "true" ]; then
-        printf "\033[1;31m[+] Attempting to install maldetect via apt...\033[0m\n"
-        if apt install -y maldetect; then
-            printf "\033[1;31m[+] Maldetect installed via apt\033[0m\n"
-            if command -v maldet >/dev/null 2>&1; then
-                maldet -u
-                whiptail --infobox "Maldetect updated successfully"
-                printf "\033[1;31m[+] Maldetect updated successfully\033[0m\n"
-                install_maldet_failed=false
-            fi
-        else
-            printf "\033[1;31m[-] Apt installation failed\033[0m\n"
-            install_maldet_failed=true
-        fi
-    fi
-
-    # If both methods failed, provide manual instructions
-    if [ "$install_maldet_failed" = "true" ]; then
-        printf "\033[1;31m[-] All installation methods for maldetect failed.\033[0m\n"
-        printf "\033[1;31m[-] Please install manually after setup completes using one of these methods:\033[0m\n"
-        printf "\033[1;31m[-] 1. apt install maldetect\033[0m\n"
-        printf "\033[1;31m[-] 2. git clone https://github.com/rfxn/linux-malware-detect.git && cd linux-malware-detect && ./install.sh\033[0m\n"
-    fi
-
-    # Clean up and return to original directory
-    cd /tmp || true
-    rm -rf "$temp_dir"
-}
-
-# Reload AppArmor profiles
-reload_apparmor() {
-  whiptail --infobox "Reloading AppArmor profiles..." 7 40
-        #printf "\033[1;31m[+] Reloading AppArmor profiles...\033[0m\n"
-
-        # Use systemd to reload AppArmor instead of manually parsing files
-        if systemctl is-active --quiet apparmor; then
-            printf "\033[1;31m[+] Reloading AppArmor service...\033[0m\n"
-            systemctl reload apparmor
-        else
-            printf "\033[1;31m[+] Starting AppArmor service...\033[0m\n"
-            systemctl start apparmor
-        fi
-
-        # Verify AppArmor status
-        if aa-status >/dev/null 2>&1; then
-            printf "\033[1;31m[+] AppArmour is running properly...\033[0m\n"
-        else
-            printf "\033[1;31m[-] Warning: AppArmor may not be running correctly. You may need to reboot your system.\033[0m\n"
-        fi
-}
-
-# Configure cron jobs
-configure_cron() {
-  	whiptail --infobox "Configuring cron jobs... \"$name\"..." 7 50
-        #printf "\033[1;31m[+] Configuring cron jobs...\033[0m\n"
-
-        # Remove existing cron jobs
-        (crontab -l 2>/dev/null | grep -v "lynis audit system --cronjob" | \
-         grep -v "apt update && apt upgrade -y" | \
-         grep -v "/opt/eset/esets/sbin/esets_update" | \
-         grep -v "chkrootkit" | \
-         grep -v "maldet --update" | \
-         grep -v "maldet --scan-all" | \
-         crontab -) || true
-
-        # Create new cron jobs
-        (crontab -l 2>/dev/null || true) > mycron
-        cat >> mycron << 'EOFCRON'
-0 1 * * * lynis audit system --cronjob >> /var/log/lynis_cron.log 2>&1
-0 3 * * * /opt/eset/esets/sbin/esets_update
-0 4 * * * chkrootkit
-0 5 * * * maldet --update
-0 6 * * * maldet --scan-all / >> /var/log/maldet_scan.log 2>&1
-EOFCRON
-    crontab mycron
-    rm mycron
-}
-
-# Disable USB storage
-disable_usb_storage() {
-     whiptail --infobox "Disabling USB storage..." 7 50
-         #printf "\033[1;31m[+] Disabling USB storage...\033[0m\n"
-         echo 'blacklist usb-storage' > /etc/modprobe.d/usb-storage.conf
-         if modprobe -r usb-storage 2>/dev/null; then
-             printf "\033[1;31m[+] USB storage successfully disabled.\033[0m\n"
-         else
-             printf "\033[1;31m[-] Warning: USB storage module in use, cannot unload.\033[0m\n"
-         fi
-}
-
-# Update system packages again
 update_sys_pkgs() {
      whiptail --infobox "Updating system packages..." 7 50
-            #printf "\033[1;31m[-] System update.\033[0m\n"
+         
+            apt update && apt upgrade -y
+            apt autoremove -y
+            apt autoclean -y
         if ! update_system_packages; then
              printf "\033[1;31m[-] System update failed.\033[0m\n"
             whiptail --title "System update failed"
@@ -409,30 +330,47 @@ update_sys_pkgs() {
 
 
 finalize() {
-        whiptail --title "All done!" \
-            --msgbox "Congrats! Provided there were no hidden errors, the script completed successfully and all the programs and configuration files should be in place.\\n\\nPlease reboot to apply installation." 12 80
+        whiptail --title "Complete!" \
+            --msgbox "HARDN-XDR Install Complete." 12 80
 }
 
-# Main function
+hardn_setup() {
+    if [ -x "$SETUP_SCRIPT" ]; then
+        bash "$SETUP_SCRIPT" -s
+        whiptail --title "HARDN-XDR Setup" \
+            --msgbox "HARDN-XDR\n\nSystem is Validating Configurations and Setup." 12 80
+    else
+        whiptail --title "Error" --msgbox "Setup script not found or not executable: $SETUP_SCRIPT" 10 60
+    fi
+}
+
+
+
 main() {
-        welcomemsg || error "User exited."
-        preinstallmsg || error "User exited."
-        update_system_packages
-        aptinstall
-        maininstall
-        gitdpkgbuild
-        build_hardn_package
-        installationloop
-        config_selinux
-        check_security_tools
-        configure_ufw
-        enable_services
-        install_additional_tools
-        reload_apparmor
-        configure_cron
-        disable_usb_storage
-        update_sys_pkgs
-        finalize
+    welcomemsg || error "User exited."
+    preinstallmsg || error "User exited."
+
+    whiptail --title "Cron Jobs and Alerting Setup" --yesno \
+        "\n\n\n        Do you want to proceed with setting up cron jobs and alerting?\n\n        This includes tools like AIDE, Fail2Ban, and others." 12 70 || {
+        printf "\033[1;31m[-] User declined cron jobs and alerting setup. Exiting...\033[0m\n"
+        exit 1
+    }
+
+    update_system_packages
+ 
+    local progs_csv_path="/tmp/progs.csv"
+    printf "Fetching package list from %s to %s...\n" "$progsfile" "$progs_csv_path"
+    if ! cp "$progsfile" "$progs_csv_path"; then
+        error "FATAL: Failed to copy package list from $progsfile."
+    fi
+
+    if [ ! -s "$progs_csv_path" ]; then
+        error "FATAL: Package list $progs_csv_path is empty or could not be fetched."
+    fi
+    installationloop
+    check_security_tools
+    finalize
+    hardn_setup
 }
 
 
