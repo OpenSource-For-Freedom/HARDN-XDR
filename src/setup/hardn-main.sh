@@ -228,6 +228,21 @@ check_security_tools() {
         done
 }
 
+enable_debsums() {
+    printf "\033[1;31m[+] Enabling debsums...\033[0m\n"
+    if ! dpkg -s debsums >/dev/null 2>&1; then
+        whiptail --infobox "Installing debsums..." 7 60
+        apt install -y debsums
+    else
+        whiptail --infobox "debsums is already installed." 7 60
+    fi
+
+    # Enable debsums
+    sed -i 's/^#\?ENABLED=.*/ENABLED=1/' /etc/default/debsums
+    debsums --generate --all
+
+}
+
 configure_firejail() {
     {
         echo 10
@@ -724,10 +739,12 @@ EOF
 
         if [ ! -f /var/lib/aide/aide.db ]; then
             aide --init --config=/etc/aide/aide.conf || {
-                printf "\033[1;31m[-] Failed to initialize AIDE database.\033[0m\n"
-                echo 100
-                sleep 0.2
-                return 1
+            printf "\033[1;31m[-] Failed to initialize AIDE database.\033[0m\n"
+            echo 100
+            sleep 0.2
+            return 1
+            }
+            mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db
             }
             mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db
             chmod 600 /var/lib/aide/aide.db
@@ -893,6 +910,50 @@ grub_security() {
     } | whiptail --gauge "Configuring GRUB security..." 8 60 0
 }
 
+stig_enable_auditd() {
+    whiptail --infobox "Configuring auditd..." 7 50
+    printf "\033[1;31m[+] Configuring auditd...\033[0m\n"
+    apt install -y auditd audispd-plugins
+    cat > /etc/audit/rules.d/hardening.rules <<EOF
+-w /etc/passwd -p wa -k passwd_changes
+-w /etc/shadow -p wa -k shadow_changes
+-w /etc/group -p wa -k group_changes
+-w /etc/gshadow -p wa -k gshadow_changes
+-w /var/log/ -p wa -k log_changes
+EOF
+    systemctl restart auditd
+}
+
+stig_file_permissions() {
+    whiptail --infobox "Hardening file permissions..." 7 50
+    printf "\033[1;31m[+] Hardening file permissions...\033[0m\n"
+    chmod 600 /etc/passwd-
+    chmod 600 /etc/shadow
+    chmod 600 /etc/gshadow
+    chmod 600 /etc/group-
+    chmod 700 /root
+    chmod 600 /boot/grub/grub.cfg
+}
+
+stig_hardn_services() {
+    printf "\033[1;31m[+] Disabling unnecessary and potentially vulnerable services...\033[0m\n"
+
+    systemctl disable --now avahi-daemon
+    systemctl disable --now cups
+    systemctl disable --now rpcbind
+    systemctl disable --now nfs-server
+    systemctl disable --now smbd
+    systemctl disable --now snmpd
+    systemctl disable --now apache2
+    systemctl disable --now mysql
+    systemctl disable --now bind9
+
+    
+    apt remove -y telnet vsftpd proftpd tftpd postfix exim4
+
+    printf "\033[1;32m[+] All unnecessary services have been disabled or removed.\033[0m\n"
+}
+
 stig_disable_core_dumps() {
     echo "* hard core 0" | tee -a /etc/security/limits.conf > /dev/null
     echo "fs.suid_dumpable = 0" | tee /etc/sysctl.d/99-coredump.conf > /dev/null
@@ -901,26 +962,31 @@ stig_disable_core_dumps() {
 
 # Configure cron jobs
 configure_cron() {
-  	whiptail --infobox "Configuring cron jobs... \"$name\"..." 7 50
-        #printf "\033[1;31m[+] Configuring cron jobs...\033[0m\n"
+    whiptail --infobox "Configuring cron jobs... \"$name\"..." 7 50
 
-        # Remove existing cron jobs
-        (crontab -l 2>/dev/null | grep -v "lynis audit system --cronjob" | \
-         grep -v "apt update && apt upgrade -y" | \
-         grep -v "/opt/eset/esets/sbin/esets_update" | \
-         grep -v "chkrootkit" | \
-         grep -v "maldet --update" | \
-         grep -v "maldet --scan-all" | \
-         crontab -) || true
+    # Remove existing cron jobs for these tools
+    (crontab -l 2>/dev/null | grep -v "lynis audit system --cronjob" | \
+     grep -v "apt update && apt upgrade -y" | \
+     grep -v "/opt/eset/esets/sbin/esets_update" | \
+     grep -v "chkrootkit" | \
+     grep -v "maldet --update" | \
+     grep -v "maldet --scan-all" | \
+     grep -v "rkhunter --cronjob" | \
+     grep -v "debsums -s" | \
+     grep -v "aide --check" | \
+     crontab -) || true
 
-        # Create new cron jobs
-        (crontab -l 2>/dev/null || true) > mycron
-        cat >> mycron << 'EOFCRON'
+    # Create new cron jobs
+    (crontab -l 2>/dev/null || true) > mycron
+    cat >> mycron << 'EOFCRON'
 0 1 * * * lynis audit system --cronjob >> /var/log/lynis_cron.log 2>&1
+0 2 * * * rkhunter --cronjob --report-warnings-only >> /var/log/rkhunter_cron.log 2>&1
+0 2 * * * debsums -s >> /var/log/debsums_cron.log 2>&1
 0 3 * * * /opt/eset/esets/sbin/esets_update
 0 4 * * * chkrootkit
 0 5 * * * maldet --update
 0 6 * * * maldet --scan-all / >> /var/log/maldet_scan.log 2>&1
+0 7 * * * aide --check -c /etc/aide/aide.conf >> /var/log/aide_check.log 2>&1
 EOFCRON
     crontab mycron
     rm mycron
@@ -955,7 +1021,82 @@ finalize() { # EDIT THE WORDING
             --msgbox "This device is now HARDN-XDR and STIG Compliant\\n\\nPlease reboot to apply installation." 12 80
 }
 
-# Main function
+# Function to configure kernel hardening
+configure_kernel_hardening() {
+    printf "\033[1;31m[+] Configuring kernel hardening...\033[0m\n"
+    cat <<EOF > /etc/sysctl.d/hardening.conf
+# Disable IP forwarding
+net.ipv4.ip_forward = 0
+# Enable SYN cookies
+net.ipv4.tcp_syncookies = 1
+# Disable source routing
+net.ipv4.conf.all.accept_source_route = 0
+net.ipv4.conf.default.accept_source_route = 0
+# Log martian packets
+net.ipv4.conf.all.log_martians = 1
+net.ipv4.conf.default.log_martians = 1
+# Disable ICMP redirects
+net.ipv4.conf.all.accept_redirects = 0
+net.ipv4.conf.default.accept_redirects = 0
+EOF
+    sysctl --system
+}
+
+# Function to initialize and configure AIDE
+configure_aide() {
+    printf "\033[1;31m[+] Installing and configuring AIDE...\033[0m\n"
+    apt install -y aide aide-common
+    aideinit
+    mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db
+    echo "0 3 * * * root /usr/bin/aide --check" >> /etc/crontab
+}
+
+# Function to configure Fail2Ban
+enhance_fail2ban() {
+    printf "\033[1;31m[+] Enhancing Fail2Ban configuration...\033[0m\n"
+    cat <<EOF > /etc/fail2ban/jail.local
+[DEFAULT]
+bantime = 1h
+findtime = 10m
+maxretry = 5
+
+[sshd]
+enabled = true
+EOF
+    systemctl restart fail2ban
+}
+
+# Function to configure Docker hardening
+configure_docker() {
+    printf "\033[1;31m[+] Configuring Docker hardening...\033[0m\n"
+    mkdir -p /etc/docker
+    cat <<EOF > /etc/docker/daemon.json
+{
+  "icc": false,
+  "userns-remap": "default",
+  "no-new-privileges": true
+}
+EOF
+    systemctl restart docker
+}
+
+# Function to restrict compiler access
+restrict_compilers() {
+    printf "\033[1;31m[+] Restricting compiler access...\033[0m\n"
+    chmod o-rx /usr/bin/gcc /usr/bin/g++ /usr/bin/make
+}
+
+# Function to install and configure ClamAV
+setup_clamav() {
+    printf "\033[1;31m[+] Installing and configuring ClamAV...\033[0m\n"
+    apt install -y clamav clamav-daemon
+    systemctl stop clamav-freshclam
+    freshclam
+    systemctl start clamav-freshclam
+    echo "0 2 * * * root /usr/bin/clamscan -r / --exclude-dir=^/sys/ --exclude-dir=^/proc/ --exclude-dir=^/dev/" >> /etc/crontab
+}
+
+# Add calls to the new functions in the main script
 main() {
         welcomemsg || error "User exited."
         preinstallmsg || error "User exited."
@@ -967,6 +1108,7 @@ main() {
         installationloop
         configure_firejail
         config_selinux
+        enable_debsums
         enable_aide
         check_security_tools
         configure_ufw
@@ -976,7 +1118,12 @@ main() {
         reload_apparmor
         grub_security
         stig_harden_ssh
+        stig_file_permissions
         stig_login_banners
+        stig_enable_auditd
+        stig_disable_ipv6
+        stig_password_policy
+        stig_hardn_services
         stig_lock_inactive_accounts
         stig_kernel_setup
         stig_disable_core_dumps
@@ -985,6 +1132,13 @@ main() {
         disable_usb_storage
         update_sys_pkgs
         finalize
+
+        configure_kernel_hardening
+        configure_aide
+        enhance_fail2ban
+        configure_docker
+        restrict_compilers
+        setup_clamav
 }
 
 # Run the main function
