@@ -6,7 +6,8 @@ chmod +x /usr/bin/hardn-main.sh
 
 
 
-ln -sf /usr/bin/hardn-main.sh /usr/bin/hardn 
+ln -sf /usr/bin/hardn-main.sh /usr/bin/hardn
+chmod +x hardn-main.sh
 chmod +x /usr/bin/hardn
 
 
