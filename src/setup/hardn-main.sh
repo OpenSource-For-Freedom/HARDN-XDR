@@ -679,7 +679,7 @@ stig_password_policy() {
 
 enable_aide() {
     printf "\033[1;31m[+] Installing and configuring AIDE...\033[0m\n"
-
+# enable and config
     {
         echo 10
         sleep 0.2
