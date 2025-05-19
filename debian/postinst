@@ -3,32 +3,18 @@ set -e
 
 
 chmod +x /usr/bin/hardn-main.sh
-chmod +x /usr/bin/hardn-setup.sh
-chmod +x /usr/bin/hardn-packages.sh
 
-# Create symlinks:
 
-ln -sf /usr/bin/hardn-setup.sh /usr/bin/hardn
+
+ln -sf /usr/bin/hardn-main.sh /usr/bin/hardn 
 chmod +x /usr/bin/hardn
 
 
 mkdir -p /etc/hardn
 
 
-chown root:root /usr/bin/hardn-main.sh /usr/bin/hardn-setup.sh /usr/bin/hardn-packages.sh
-chmod 755 /usr/bin/hardn-main.sh /usr/bin/hardn-setup.sh /usr/bin/hardn-packages.sh
+chown root:root /usr/bin/hardn-main.sh 
+chmod 755 /usr/bin/hardn-main.sh 
 
-
-cat << EOF > /etc/hardn/README.txt
-HARDN - Security Hardening System
-
-Two entry points are available:
-- 'sudo hardn' - Command-line interface for managing security tools
-- 'sudo sh hardn-main.sh' - Full automated rice process
-
-For more information, run 'sudo hardn -h'
-EOF
-
-chmod 644 /etc/hardn/README.txt
 
 exit 0

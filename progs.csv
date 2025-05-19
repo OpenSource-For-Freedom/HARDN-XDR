@@ -17,11 +17,4 @@ a,docker.io,Containerization platform
 a,docker-compose,Tool for defining and running multi-container Docker applications
 a,openssh-server,SSH server
 a,chkrootkit,Rootkit scanner
-a,maldetect,Malware detection tool
 a,yara,Pattern matching tool 
-a,needrestart,Service restart tool
-a,debscan,Debian security scanner
-a,psad,Process status tool
-a,suricata,Network intrusion detection system
-a,tripwire,File integrity checker
-a,logwatch,Log analysis tool

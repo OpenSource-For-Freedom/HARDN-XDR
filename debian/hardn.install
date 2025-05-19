@@ -1,3 +1,2 @@
-src/setup/hardn-setup.sh usr/bin/
-src/setup/hardn-packages.sh usr/bin/
 src/setup/hardn-main.sh usr/bin/
+progs.csv etc/hardn/
