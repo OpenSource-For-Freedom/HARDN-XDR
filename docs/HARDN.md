@@ -68,5 +68,5 @@
 By leveraging **AIDE**, **Linux Malware Detect (LMD)**, and **YARA rules** together, the system provides comprehensive malware detection and response capabilities. This integrated approach enables both signature-based and heuristic detection, allowing for early identification of threats and rapid response. Regular scans and rule updates ensure that new and evolving malware patterns are recognized, supporting an effective extended detection and response (XDR) strategy.
 
 ## Monitoring & Reporting:
-- Alerts and validation logs written
+- Alerts and validation logs written to `/var/log/security/alerts.log` and `/var/log/security/validation.log`
 - Cron setup for periodic security checks and updates
