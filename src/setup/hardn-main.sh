@@ -591,7 +591,7 @@ stig_login_banners() {
     }
 
     # Common banner lines
-    local banner_lines=(
+    local banner_lines={
         "You are accessing a SECURITY INTERNATIONAL GROUP (SIG) Information System (IS) that is provided for SIG-authorized use only."
         "By using this IS (which includes any device attached to this IS), you consent to the following conditions:"
         "- The SIG routinely intercepts and monitors communications on this IS for purposes including, but not limited to,"
@@ -606,7 +606,7 @@ stig_login_banners() {
         "  the content of privileged communications, or work product, related to personal representation or services by attorneys,"
         "  psychotherapists, or clergy, and their assistants. Such communications and work product are private and confidential."
         "  See User Agreement for details."
-    )
+    }
 
     # /etc/issue (with color code)
     {
