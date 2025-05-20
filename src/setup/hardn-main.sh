@@ -635,7 +635,7 @@ stig_login_banners() {
     chmod 644 /etc/issue /etc/issue.net
 }
 
-
+## fixed }
 
 stig_harden_ssh() {
     {
@@ -716,6 +716,7 @@ stig_harden_ssh() {
 
     printf "\033[1;32m[+] SSH configuration hardened successfully.\033[0m\n"
 }
+
 
 stig_set_randomize_va_space() {
     {
