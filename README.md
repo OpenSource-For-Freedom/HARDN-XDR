@@ -76,25 +76,20 @@ The purpose of HARDN Endpoint is to empower IT administrators and users with the
 
 ### Quick Start: Install and Run HARDN with "rice" Larbs Feature on Debian/Ubuntu
 
-1. **Download and run the installer script:**
-  curl -LO https://raw.githubusercontent.com/OpenSource-For-Freedom/HARDN/main/hardn-main.sh 
-  ```
+## Installation
 
-2. **Launch the HARDN setup menu:**
-  ```bash
-  cd HARDN
-  sudo sh hardn-main.sh
-  ```
-  - This opens an interactive terminal where you’ll be walked through the setup. 
+1.  **Download the HARDN script:**
+    Open your terminal and run the following command to download the main script:
+    ```bash
+    curl -LO https://raw.githubusercontent.com/OpenSource-For-Freedom/HARDN/main/hardn-main.sh
+    ```
 
-> **Note:**  
-> For advanced features like the "rice" Larbs desktop, select the option from the interactive menu or run `hardn --help` for more details.
-
-After installation, you can always start the hardening setup by running `sudo hardn` from any directory.
-
-> **Note:**
-> - The package installs system-wide and is available as the `hardn` command.
-> - All dependencies are handled by the package.
+2.  **Run the HARDN setup:**
+    Launch the script with superuser privileges to begin the hardening process:
+    ```bash
+    sudo ./hardn-main.sh
+    ```
+    This will start the HARDN setup menu. Follow the on-screen prompts to configure and apply security hardening to your system. 
 
 
 ### Updates in Version 1.1.8
