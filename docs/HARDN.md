@@ -17,7 +17,7 @@
 - **chkrootkit**
 - **linux-malware-detect** (maldet)
 - **aide**, **aide-common**
-- **YARA**, 
+- **YARA**
 - **wget**, **curl**, **git**, **gawk**
 - **mariadb-common**, **mysql-common**
 - **policycoreutils**
