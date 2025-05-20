@@ -74,9 +74,9 @@ The purpose of HARDN Endpoint is to empower IT administrators and users with the
 </p>
 
 
-### Quick Start: Install and Run HARDN with "rice" Larbs Feature on Debian/Ubuntu
+## Quick Start: 
 
-## Installation
+### Installation
 
 1.  **Download the HARDN script:**
     Open your terminal and run the following command to download the main script:
