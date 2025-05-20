@@ -6,24 +6,21 @@
 #                                      #
 #       Author:  Chris Bingham         #
 #       Date:    4/5/2025              #
-#       Updated: 5/16/2025             #
+#       Updated: 5/19/2025             #
 #                                      #
 ########################################
 
 
 repo="https://github.com/OpenSource-For-Freedom/HARDN/"
-progsfile="https://raw.githubusercontent.com/LinuxUser255/HARDN/refs/heads/main-dev/progs.csv"
+progsfile="https://github.com/OpenSource-For-Freedom/HARDN/progs.csv"
 repobranch="main-patch"
 name=$(whoami)
 
 
 ############# ADD MENU HERE #############
-############# ADD LOGIN BANNER FIX ######
-############# IMPLIMENT MENU STATUS FOR LONG INSTALL AND SETUPS#####
-############# ADD rkhunter config back from setup########
 
 
-
+# Check for root privileges
 if [ "$(id -u)" -ne 0 ]; then
         echo ""
         echo "This script must be run as root."
@@ -34,26 +31,25 @@ installpkg() {
        dpkg -s "$1" >/dev/null 2>&1 || sudo apt install -y "$1" >/dev/null 2>&1
 }
 
-
 error() {
         printf "%s\n" "$1" >&2
         exit 1
 }
 
 welcomemsg() {
-        whiptail --title "Welcome!" --backtitle "HARDN OS Security" --fb \
-            --msgbox "\n\n\nWelcome to HARDN OS Security!\n\nThis script will automatically install everything you need to fully security harden your Linux machine.\n\n-Chris" 15 60
+        whiptail --title "HARDN-XDR" --backtitle "HARDN OS Security" --fb \
+            --msgbox "\n\n\Welcome to HARDN-XDR a Debian Security tool for System Hardening" 15 60
 
-        whiptail --title "Important Note!" --backtitle "HARDN OS Security" --fb \
-            --yes-button "All ready!" \
-            --no-button "Return..." \
+        whiptail --title "HARDN-XDR" --backtitle "HARDN OS Security" --fb \
+            --yes-button "HARDN" \
+            --no-button "RETURN..." \
             --yesno "\n\n\nThis installer will update your system first..\n\n" 12 70
 }
 
 preinstallmsg() {
-        whiptail --title "Welcome to HARDN. A Linux Security Hardening program." --yes-button "Let's go!" \
-            --no-button "No, nevermind!" \
-            --yesno "\n\n\nThe rest of the installation will now be totally automated, so you can sit back and relax.\n\nIt will take some time, but when done, you can enjoy your security hardened Linux OS.\n\nNow just press <Let's go!> and the system will begin installation!\n\n" 13 60 || {
+        whiptail --title "Welcome to HARDN. A Linux Security Hardening program." --yes-button "HARDN" \
+            --no-button "RETURN" \
+            --yesno "\n\n\nThe Building the Debian System to ensure STIG and Security compliance\n\n" 13 60 || {
             clear
             exit 1
     }
@@ -62,9 +58,9 @@ preinstallmsg() {
 update_system_packages() {
     printf "\033[1;31m[+] Updating system packages...\033[0m\n"
     apt update && apt upgrade -y
+    apt-get update -y
 }
 
-# Install package dependencies from progs.csv
 install_package_dependencies() {
         printf "\033[1;31[+] Installing package dependencies from progs.csv...\033[0m\n"
         progsfile="$1"
@@ -95,7 +91,7 @@ maininstall() {
        	installpkg "$1"
 }
 
-
+# Function to build and install from Git repo
 gitdpkgbuild() {
         repo_url="$1"
         description="$2"
@@ -244,6 +240,37 @@ enable_debsums() {
 
 }
 
+enable_rkhunter() {
+    {
+        echo 10
+        sleep 0.2
+        printf "\033[1;31m[+] Enabling rkhunter...\033[0m\n"
+        if ! dpkg -s rkhunter >/dev/null 2>&1; then
+            whiptail --infobox "Installing rkhunter..." 7 60
+            apt install -y rkhunter
+        else
+            whiptail --infobox "rkhunter is already installed." 7 60
+        fi
+        echo 40
+        sleep 0.2
+
+        
+        sed -i 's/^#\?ENABLE_TESTS=.*/ENABLE_TESTS=all/' /etc/rkhunter.conf
+        sed -i 's/^#\?MAIL-ON-WARNING=.*/MAIL-ON-WARNING="root"/' /etc/rkhunter.conf
+        sed -i 's/^#\?MAIL-ON-ERROR=.*/MAIL-ON-ERROR="root"/' /etc/rkhunter.conf
+        echo 60
+        sleep 0.2
+
+        
+        rkhunter --update --quiet
+        rkhunter --propupd --quiet
+        echo 100
+        sleep 0.2
+    } | whiptail --gauge "Installing and configuring rkhunter..." 8 60 0
+
+    printf "\033[1;32m[+] rkhunter installed and configured.\033[0m\n"
+}
+
 configure_firejail() {
     {
         echo 10
@@ -302,7 +329,7 @@ configure_firejail() {
 # UFW configuration
 configure_ufw() {
         printf "\033[1;31m[+] Configuring UFW...\033[0m\n"
-        ufw defualt deny incoming
+        ufw default deny incoming
         ufw default allow outgoing
         ufw allow ssh proto tcp
         ufw allow out 53,80,443/tcp
@@ -440,37 +467,49 @@ enable_yara() {
 }
 
 stig_kernel_setup() {
+     
     printf "\033[1;31m[+] Setting up STIG-compliant kernel parameters (login-safe)...\033[0m\n"
     tee /etc/sysctl.d/stig-kernel-safe.conf > /dev/null <<EOF
+
+# Address Space Layout Randomization (ASLR)
 kernel.randomize_va_space = 2
+
+# Restrict kernel pointers in /proc
 kernel.kptr_restrict = 2
+
+# Restrict dmesg to root
 kernel.dmesg_restrict = 1
+
+# Protect hardlinks and symlinks
 fs.protected_hardlinks = 1
 fs.protected_symlinks = 1
-net.ipv4.conf.all.rp_filter = 1
-net.ipv4.conf.default.rp_filter = 1
+
+# Disable core dumps for SUID programs
+fs.suid_dumpable = 0
+
+# Disable magic SysRq key
+kernel.sysrq = 0
+
+# Use PID in core dump filenames
+kernel.core_uses_pid = 1
+
+# Restrict ptrace
+kernel.yama.ptrace_scope = 1
+
+# IPv4 network hardening
+net.ipv4.ip_forward = 0
+net.ipv4.conf.all.send_redirects = 0
+net.ipv4.conf.default.send_redirects = 0
 net.ipv4.conf.all.accept_redirects = 0
 net.ipv4.conf.default.accept_redirects = 0
 net.ipv4.conf.all.secure_redirects = 0
 net.ipv4.conf.default.secure_redirects = 0
-net.ipv4.conf.all.send_redirects = 0
-net.ipv4.conf.default.send_redirects = 0
-net.ipv4.tcp_syncookies = 1
-net.ipv4.conf.all.log_martians = 1
-net.ipv4.conf.default.log_martians = 1
-net.ipv4.icmp_echo_ignore_broadcasts = 1
-net.ipv4.icmp_ignore_bogus_error_responses = 1
-net.ipv4.tcp_rfc1337 = 1
-net.ipv6.conf.lo.disable_ipv6 = 1
-net.ipv4.conf.all.forwarding = 0
-net.ipv4.conf.default.forwarding = 0
-net.ipv4.tcp_timestamps = 0
-net.ipv4.conf.all.accept_source_route = 0
-net.ipv4.conf.default.accept_source_route = 0
+net.ipv6.conf.all.disable_ipv6 = 1
+net.ipv6.conf.default.disable_ipv6 = 1
 EOF
 
     sysctl --system || printf "\033[1;31m[-] Failed to reload sysctl settings.\033[0m\n"
-    sysctl -w kernel.randomize_va_space=2 || printf "\033[1;31m[-] Failed to set kernel.randomize_va_space.\033[0m\n"
+    sysctl -w kernel.randomize_va_space=2 || printf "\033[1;31m[-] Failed to set kernel Security Parameters.\033[0m\n"
 }
 
 stig_login_banners() {
@@ -492,10 +531,10 @@ stig_login_banners() {
         center_issue_text "════════════════════════════"
         center_issue_text "   _____   _____    _____   "
         center_issue_text "  / ____| |_   _|  / ____|  "
-        center_issue_text " | (___     | |   | |       "
-        center_issue_text "  \___ \  | | | | | |  ___  "
+        center_issue_text " | (___     | |   | |  __   "
+        center_issue_text "  \___ \  | |   | |  | |  "
         center_issue_text "  ____) |  _| |_  | |__| |  "
-        center_issue_text " |_____/  |_____|  \____|   "
+        center_issue_text " |_____/  |_____|  \____|  "
         center_issue_text "                            "
         center_issue_text "════════════════════════════"
         echo -e "\033[0m"
@@ -565,10 +604,30 @@ stig_harden_ssh() {
 }
 
 stig_set_randomize_va_space() {
-    printf "\033[1;31m[+] Setting kernel.randomize_va_space...\033[0m\n"
-    echo "kernel.randomize_va_space = 2" > /etc/sysctl.d/hardn.conf
-    sysctl --system || { printf "\033[1;31m[-] Failed to reload sysctl settings.\033[0m\n"; exit 1; }
-    sysctl -w kernel.randomize_va_space=2 || { printf "\033[1;31m[-] Failed to set kernel.randomize_va_space.\033[0m\n"; exit 1; }
+    {
+        echo 10
+        sleep 0.2
+        printf "\033[1;31m[+] Setting kernel.randomize_va_space...\033[0m\n"
+        echo "kernel.randomize_va_space = 2" > /etc/sysctl.d/hardn.conf
+        echo 50
+        sleep 0.2
+        if ! sysctl --system; then
+            printf "\033[1;31m[-] Failed to reload sysctl settings.\033[0m\n"
+            echo 100
+            sleep 0.2
+            exit 1
+        fi
+        echo 80
+        sleep 0.2
+        if ! sysctl -w kernel.randomize_va_space=2; then
+            printf "\033[1;31m[-] Failed to set kernel.randomize_va_space.\033[0m\n"
+            echo 100
+            sleep 0.2
+            exit 1
+        fi
+        echo 100
+        sleep 0.2
+    } | whiptail --gauge "Setting kernel.randomize_va_space..." 8 60 0
 }
 
 # Enable and start Fail2Ban and AppArmor services
@@ -578,11 +637,10 @@ enable_services() {
        systemctl enable --now apparmor
 }
 
-# Install chkrootkit + MALDET
+# Install chkrootkit, LMD, and rkhunter
 install_additional_tools() {
           printf "\033[1;31m[+] Installing chkrootkit...\033[0m\n"
           apt install -y chkrootkit
-
 
           # Initialize the variable
           install_maldet_failed=false
@@ -656,6 +714,7 @@ install_additional_tools() {
     rm -rf "$temp_dir"
 }
 
+
 stig_password_policy() {
 
     sed -i 's/^#\? *minlen *=.*/minlen = 14/' /etc/security/pwquality.conf
@@ -681,7 +740,7 @@ stig_password_policy() {
 
 enable_aide() {
     printf "\033[1;31m[+] Installing and configuring AIDE...\033[0m\n"
-
+# enable and config
     {
         echo 10
         sleep 0.2
@@ -786,12 +845,10 @@ EOF
     printf "\033[1;32m[+] AIDE installed, enabled, and basic config applied.\033[0m\n"
 }
 
-# Reload AppArmor profiles
+
 reload_apparmor() {
   whiptail --infobox "Reloading AppArmor profiles..." 7 40
-        #printf "\033[1;31m[+] Reloading AppArmor profiles...\033[0m\n"
-
-        # Use systemd to reload AppArmor instead of manually parsing files
+   
         if systemctl is-active --quiet apparmor; then
             printf "\033[1;31m[+] Reloading AppArmor service...\033[0m\n"
             systemctl reload apparmor
@@ -936,7 +993,6 @@ stig_file_permissions() {
 }
 
 stig_hardn_services() {
-    whiptail --infobox "Disabling Vulnerable Services..." 7 50
     printf "\033[1;31m[+] Disabling unnecessary and potentially vulnerable services...\033[0m\n"
 
     systemctl disable --now avahi-daemon
@@ -956,17 +1012,15 @@ stig_hardn_services() {
 }
 
 stig_disable_core_dumps() {
-    whiptail --infobox "Disabling Core Dumps..." 7 50
     echo "* hard core 0" | tee -a /etc/security/limits.conf > /dev/null
     echo "fs.suid_dumpable = 0" | tee /etc/sysctl.d/99-coredump.conf > /dev/null
     sysctl -w fs.suid_dumpable=0
 }
 
-# Configure cron jobs
+
 configure_cron() {
     whiptail --infobox "Configuring cron jobs... \"$name\"..." 7 50
 
-    # Remove existing cron jobs for these tools
     (crontab -l 2>/dev/null | grep -v "lynis audit system --cronjob" | \
      grep -v "apt update && apt upgrade -y" | \
      grep -v "/opt/eset/esets/sbin/esets_update" | \
@@ -976,9 +1030,9 @@ configure_cron() {
      grep -v "rkhunter --cronjob" | \
      grep -v "debsums -s" | \
      grep -v "aide --check" | \
+     grep -v "/usr/bin/yara -r /etc/yara/rules/index.yar" | \
      crontab -) || true
 
-    # Create new cron jobs
     (crontab -l 2>/dev/null || true) > mycron
     cat >> mycron << 'EOFCRON'
 0 1 * * * lynis audit system --cronjob >> /var/log/lynis_cron.log 2>&1
@@ -989,6 +1043,12 @@ configure_cron() {
 0 5 * * * maldet --update
 0 6 * * * maldet --scan-all / >> /var/log/maldet_scan.log 2>&1
 0 7 * * * aide --check -c /etc/aide/aide.conf >> /var/log/aide_check.log 2>&1
+0 8 * * * /usr/bin/yara -r /etc/yara/rules/index.yar / >> /var/log/yara_scan.log 2>&1
+0 9 * * * rkhunter --cronjob --report-warnings-only >> /var/log/rkhunter_cron.log 2>&1
+0 10 * * * debsums -s >> /var/log/debsums_cron.log 2>&1
+
+
+
 EOFCRON
     crontab mycron
     rm mycron
@@ -1017,26 +1077,13 @@ update_sys_pkgs() {
         fi
 }
 
-
-stig_kernel_hardening() {
-    printf "\033[1;31m[+] Configuring kernel hardening...\033[0m\n"
-    cat <<EOF > /etc/sysctl.d/hardening.conf
-# Disable IP forwarding
-net.ipv4.ip_forward = 0
-# Enable SYN cookies
-net.ipv4.tcp_syncookies = 1
-# Disable source routing
-net.ipv4.conf.all.accept_source_route = 0
-net.ipv4.conf.default.accept_source_route = 0
-# Log martian packets
-net.ipv4.conf.all.log_martians = 1
-net.ipv4.conf.default.log_martians = 1
-# Disable ICMP redirects
-net.ipv4.conf.all.accept_redirects = 0
-net.ipv4.conf.default.accept_redirects = 0
-EOF
-    sysctl --system
+finalize() { 
+    sleep 5
+    whiptail --title "HARDN-XDR" \
+        --msgbox "HARDN-XDR Setup Complete\n\nPlease reboot to apply installation." 12 80
 }
+
+
 
 
 # Function to configure Fail2Ban
@@ -1044,29 +1091,46 @@ enhance_fail2ban() {
     printf "\033[1;31m[+] Enhancing Fail2Ban configuration...\033[0m\n"
     cat <<EOF > /etc/fail2ban/jail.local
 [DEFAULT]
-bantime = 1h
+bantime = 24h
 findtime = 10m
-maxretry = 5
+maxretry = 3
+ignoreip = 127.0.0.1/8 ::1
+backend = systemd
+destemail = root@localhost
+sender = fail2ban@localhost
+mta = sendmail
+banaction = iptables-multiport
+banaction_allports = iptables-allports
+action = %(action_mwl)s
 
 [sshd]
 enabled = true
+port = ssh
+filter = sshd
+logpath = /var/log/auth.log
+maxretry = 3
+bantime = 48h
+findtime = 10m
 EOF
+
+    chmod 600 /etc/fail2ban/jail.local
     systemctl restart fail2ban
 }
 
 
-
 restrict_compilers() {
     printf "\033[1;31m[+] Restricting compiler access...\033[0m\n"
-    chmod o-rx /usr/bin/gcc /usr/bin/g++ /usr/bin/make
+    
+    chmod go-rx /usr/bin/gcc /usr/bin/g++ /usr/bin/make 2>/dev/null || true
+ 
+    chown root:root /usr/bin/gcc /usr/bin/g++ /usr/bin/make 2>/dev/null || true
+
 }
 
 
-# Add calls to the new functions in the moain script
 main() {
         welcomemsg || error "User exited."
         preinstallmsg || error "User exited."
-       # BUILD
         update_system_packages
         aptinstall
         maininstall
@@ -1085,7 +1149,6 @@ main() {
         reload_apparmor
         grub_security
         stig_harden_ssh
-       # STIG
         stig_file_permissions
         stig_login_banners
         stig_enable_auditd
@@ -1094,16 +1157,11 @@ main() {
         stig_hardn_services
         stig_lock_inactive_accounts
         stig_kernel_setup
-        stig_disable_core_dumps
         stig_set_randomize_va_space
-        stig_kernel_hardening
-        stig_hardn_services
-       # FINISH
+        stig_disable_core_dumps
         configure_cron
         disable_usb_storage
         update_sys_pkgs
-        enhance_fail2ban
-        restrict_compilers
         finalize
 }
 

@@ -13,8 +13,6 @@ a,libpam-pwquality,Password quality control
 a,libvirt-daemon-system,Libvirt daemon for managing VMs
 a,libvirt-clients,Libvirt client utilities
 a,qemu-kvm,Virtualization software
-a,docker.io,Containerization platform
-a,docker-compose,Tool for defining and running multi-container Docker applications
 a,openssh-server,SSH server
 a,chkrootkit,Rootkit scanner
 a,yara,Pattern matching tool 

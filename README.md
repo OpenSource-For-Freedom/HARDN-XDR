@@ -43,7 +43,6 @@ HARDN/
 ├── README.md
 ├── changelog.md
 ├── docs/
-│   ├── deb_grub.md
 │   ├── deb_stig.md
 │   ├── HARDN.md
 │   ├── LICENSE
@@ -52,8 +51,7 @@ HARDN/
 │       └── cybersynapse.png
 ├── src/
 │   └── setup/
-│       ├── hardn-packages.sh
-│       └── hardn-setup.sh
+│       └── hardn-main.sh
 ├── debian/
 │   ├── changelog
 │   ├── control
@@ -76,62 +74,36 @@ The purpose of HARDN Endpoint is to empower IT administrators and users with the
 </p>
 
 
-### Quick Start: Install and Run HARDN on Debian/Ubuntu
+### Quick Start: Install and Run HARDN with "rice" Larbs Feature on Debian/Ubuntu
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/OpenSource-For-Freedom/HARDN.git
-   cd HARDN
-   ```
-2. **Build the Debian package:**
-   ```bash
-   sudo dpkg-buildpackage -us -uc
-   ```
-3. **Install the package:**
-   ```bash
-   sudo dpkg -i ../hardn_*.deb
-   ```
-4. **Run the setup:**
-   ```bash
-   sudo hardn
-   ```
+1. **Download and run the installer script:**
+  curl -LO https://raw.githubusercontent.com/OpenSource-For-Freedom/HARDN/main/hard-main.sh 
+  ```
+
+2. **Launch the HARDN setup menu:**
+  ```bash
+  cd HARDN
+  sudo sh hardn-main.sh
+  ```
+  - This opens an interactive terminal where youll be walked thorugh the setup. 
+
+> **Note:**  
+> For advanced features like the "rice" Larbs desktop, select the option from the interactive menu or run `hardn --help` for more details.
 
 After installation, you can always start the hardening setup by running `sudo hardn` from any directory.
 
 > **Note:**
 > - The package installs system-wide and is available as the `hardn` command.
 > - All dependencies are handled by the package.
-> - For help, run: `hardn --help`
 
-### Updates in Version 1.1.6
+
+### Updates in Version 1.1.8
 - Built and tested Debian packaging.
 - Enhanced GRUB security to respect GUI changes and user-defined settings in setup.
 - Improved error handling and script optimization.
+- Interactive Setup
 - Updated documentation and ensured cron jobs are non-intrusive.
 
-### New Features in HARDN v1.1.6
-
-
-<p align="center">
-  <img src="docs/assets/hardn_menu.png" alt="cybersynapse Logo" />
-</p>
-
-
-- **Menu in Setup Script**: The `hardn` setup script now supports various flags for enhanced flexibility:
-  - `--setup`: Start hardn setup.
-  - `--update`: Update system packages.
-  - `--install-security-tools`: Install security tools.
-  - `--disable-security-tools`: Disable all security tools.
-  - `--show-tools`: Display installed security tools.
-  - `--show-stig`: Show STIG hardening tasks.
-  - `--disable-apparmor`: Disable AppArmor.
-  - `--enable-fail2ban`: Enable Fail2Ban.
-  - `--disable-firejail`: Disable Firejail.
-  - `--disable-rkhunter`: Disable RKHunter.
-  - `--disable-aide`: Disable AIDE.
-  - `--disable-ufw`: Disable UFW.
-
-These flags allow users to customize the setup process according to their requirements.
 
 ### Installation Notes
 - Ensure you have the latest version of Debian 12 or Ubuntu 24.04.
@@ -146,6 +118,7 @@ These flags allow users to customize the setup process according to their requir
 <p align="center">
   <img src="docs/assets/cybersynapse.png" alt="cybersynapse Logo" />
 </p>
+
 
 
 <p align="center">
