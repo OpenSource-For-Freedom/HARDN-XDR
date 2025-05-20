@@ -85,7 +85,7 @@ The purpose of HARDN Endpoint is to empower IT administrators and users with the
   cd HARDN
   sudo sh hardn-main.sh
   ```
-  - This opens an interactive terminal where youll be walked thorugh the setup. 
+  - This opens an interactive terminal where you’ll be walked through the setup. 
 
 > **Note:**  
 > For advanced features like the "rice" Larbs desktop, select the option from the interactive menu or run `hardn --help` for more details.
