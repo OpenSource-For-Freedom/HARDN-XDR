@@ -15,4 +15,6 @@ a,libvirt-clients,Libvirt client utilities
 a,qemu-kvm,Virtualization software
 a,openssh-server,SSH server
 a,chkrootkit,Rootkit scanner
-a,yara,Pattern matching tool
+a,yara,Pattern matching tool 
+a,libpam-tmpdirs,Temporary directory for PAM
+a,apt-listbugs,Report bugs in Debian packages

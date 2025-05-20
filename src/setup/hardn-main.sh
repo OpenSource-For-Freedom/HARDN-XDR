@@ -1,15 +1,8 @@
 #!/bin/bash
 
-########################################
-#        HARDN - Auto Rice Script      #
-#            main branch               #
-#                                      #
-#       Author:  Chris Bingham         #
-#       Date:    4/5/2025              #
-#       Updated: 5/19/2025             #
-#                                      #
-########################################
-
+# HARDN-XDR - The Linux Security Hardening Sentinel
+# Developed and built by chris Bingham and Tim Burns
+# credit due: larbs.xyz
 
 repo="https://github.com/OpenSource-For-Freedom/HARDN/"
 progsfile="https://github.com/OpenSource-For-Freedom/HARDN/progs.csv"
@@ -18,6 +11,27 @@ name=$(whoami)
 
 
 ############# ADD MENU HERE #############
+
+
+
+print_ascii_banner() {
+    cat << "EOF"
+
+   ▄█    █▄            ▄████████         ▄████████      ████████▄       ███▄▄▄▄   
+  ███    ███          ███    ███        ███    ███      ███   ▀███      ███▀▀▀██▄ 
+  ███    ███          ███    ███        ███    ███      ███    ███      ███   ███ 
+ ▄███▄▄▄▄███▄▄        ███    ███       ▄███▄▄▄▄██▀      ███    ███      ███   ███ 
+▀▀███▀▀▀▀███▀       ▀███████████      ▀▀███▀▀▀▀▀        ███    ███      ███   ███ 
+  ███    ███          ███    ███      ▀███████████      ███    ███      ███   ███ 
+  ███    ███          ███    ███        ███    ███      ███   ▄███      ███   ███ 
+  ███    █▀           ███    █▀         ███    ███      ████████▀        ▀█   █▀  
+                                        ███    ███ 
+                           
+                            Extended Detection and Response
+                            by Security International Group
+                                   Version 1.1.8
+EOF
+}
 
 
 # Check for root privileges
@@ -38,7 +52,7 @@ error() {
 
 welcomemsg() {
         whiptail --title "HARDN-XDR" --backtitle "HARDN OS Security" --fb \
-            --msgbox "\n\n\Welcome to HARDN-XDR a Debian Security tool for System Hardening" 15 60
+            --msgbox "\n\n Welcome to HARDN-XDR a Debian Security tool for System Hardening" 15 60
 
         whiptail --title "HARDN-XDR" --backtitle "HARDN OS Security" --fb \
             --yes-button "HARDN" \
@@ -98,58 +112,74 @@ gitdpkgbuild() {
         dir="/tmp/$(basename "$repo_url" .git)"
 
         whiptail --infobox "Cloning $repo_url... ($description)" 7 70
-        git clone --depth=1 "$repo_url" "$dir" >/dev/null 2>&1
-        cd "$dir" || exit
+        git clone --depth=1 "$repo_url" "$dir" >/dev/null 2>&1 || {
+            whiptail --msgbox "Failed to clone $repo_url" 8 60
+            return 1
+        }
+        cd "$dir" || { whiptail --msgbox "Failed to enter $dir" 8 60; return 1; }
         whiptail --infobox "Building and installing $description..." 7 70
 
-        # Check and isntall build dependencies
+        # Check and install build dependencies
         whiptail --infobox "Checking build dependencies for $description..." 7 70
         build_deps=$(dpkg-checkbuilddeps 2>&1 | grep -oP 'Unmet build dependencies: \K.*')
-        if [ -n "$build_deps" ];  then
+        if [ -n "$build_deps" ]; then
           whiptail --infobox "Installing build dependencies: $build_deps" 7 70
-          apt install -y $build_deps >/dev/null 2>&1
+          apt-get install -y $build_deps >/dev/null 2>&1
         fi
 
-        # Run dpkg-source before building
-        dpkg-source --before-build . >/dev/null 2>&1
+        # Run dpkg-source before building (if debian/source/format exists)
+        if [ -f debian/source/format ]; then
+            dpkg-source --before-build . >/dev/null 2>&1
+        fi
 
         # Build and install the package
-        if sudo dpkg-buildpackage -u -uc 2>&1; then
-          sudo dpkg -i ../hardn.deb
+        if dpkg-buildpackage -us -uc >/dev/null 2>&1; then
+          debfile=$(ls ../*.deb | head -n1)
+          if [ -n "$debfile" ]; then
+            dpkg -i "$debfile"
+          else
+            whiptail --msgbox "No .deb file found after build." 8 60
+            return 1
+          fi
         else
-          whiptail --infobox "$description Failed to build package. Please check build dependencies." 10 60
-          # try to install common build dependencies
-          apt install -y debhelper-compat devscripts git-buildpackage
-          # Try building again
-          sudo dpkg-buildpackage -us -uc 2>&1 && sudo dpkg -i  ../hardn.deb
+          whiptail --infobox "$description failed to build. Installing common build dependencies and retrying..." 10 60
+          apt-get install -y build-essential debhelper libpam-tmpdir apt-listbugs devscripts git-buildpackage >/dev/null 2>&1
+          if dpkg-buildpackage -us -uc >/dev/null 2>&1; then
+            debfile=$(ls ../*.deb | head -n1)
+            if [ -n "$debfile" ]; then
+              dpkg -i "$debfile"
+            else
+              whiptail --msgbox "No .deb file found after retry." 8 60
+              return 1
+            fi
+          else
+            whiptail --msgbox "$description failed to build after retry. Please check build dependencies." 10 60
+            return 1
+          fi
         fi
 }
 
 build_hardn_package() {
+    set -e  
+
     whiptail --infobox "Building HARDN Debian package..." 7 60
 
-    # Create temporary directory
     temp_dir=$(mktemp -d)
-    cd "$temp_dir" || exit 1
+    cd "$temp_dir"
 
-    # Clone the repository
-    git clone --depth=1 -b main-patch https://github.com/OpenSource-For-Freedom/HARDN.git
-    cd HARDN || exit 1
+    git clone --depth=1 -b "$repobranch" "$repo"
+    cd HARDN
 
-    # Build the package
     whiptail --infobox "Running dpkg-buildpackage..." 7 60
     dpkg-buildpackage -us -uc
 
-    # Install the package
-    cd .. || exit 1
+    cd ..
     whiptail --infobox "Installing HARDN package..." 7 60
-    dpkg -i hardn_*.deb
+    dpkg -i hardn_*.deb || true  
 
-    # Handle dependencies if needed
     apt-get install -f -y
 
-    # Clean up
-    cd / || exit 1
+    cd /
     rm -rf "$temp_dir"
 
     whiptail --infobox "HARDN package installed successfully" 7 60
@@ -225,20 +255,29 @@ check_security_tools() {
         done
 }
 
-enable_debsums() {
-    printf "\033[1;31m[+] Enabling debsums...\033[0m\n"
-    if ! dpkg -s debsums >/dev/null 2>&1; then
-        whiptail --infobox "Installing debsums..." 7 60
-        apt install -y debsums
-    else
-        whiptail --infobox "debsums is already installed." 7 60
-    fi
-
-    # Enable debsums
-    sed -i 's/^#\?ENABLED=.*/ENABLED=1/' /etc/default/debsums
-    debsums --generate --all
-
+enable_suricata() {
+    {
+        echo 10
+        sleep 0.2
+        printf "\033[1;31m[+] Enabling Suricata...\033[0m\n" >&2
+        if ! dpkg -s suricata >/dev/null 2>&1; then
+            echo 30
+            sleep 0.2
+            printf "\033[1;31m[+] Installing Suricata...\033[0m\n" >&2
+            apt install -y suricata
+        else
+            echo 30
+            sleep 0.2
+            printf "\033[1;31m[+] Suricata is already installed.\033[0m\n" >&2
+        fi
+        echo 70
+        sleep 0.2
+        systemctl enable --now suricata
+        echo 100
+        sleep 0.2
+    } | whiptail --gauge "Installing and enabling Suricata..." 8 60 0
 }
+
 
 enable_rkhunter() {
     {
@@ -328,14 +367,40 @@ configure_firejail() {
 
 # UFW configuration
 configure_ufw() {
-        printf "\033[1;31m[+] Configuring UFW...\033[0m\n"
+        printf "\\033[1;31m[+] Configuring UFW...\\\\033[0m\\\\n"
+        
+      
+        if ! ufw status | grep -qw active; then
+            printf "\\033[1;33m[*] UFW is not active. Enabling...\\\\033[0m\\\\n"
+            yes | ufw enable 
+        fi
+
         ufw default deny incoming
         ufw default allow outgoing
-        ufw allow ssh proto tcp
-        ufw allow out 53,80,443/tcp
-        ufw allow out 53,123/udp
-        ufw allow out 67,68/udp
-        ufw reload
+        
+        
+        ufw allow ssh 
+        
+        
+        ufw allow out to any port 53 proto tcp
+        ufw allow out to any port 80 proto tcp
+        ufw allow out to any port 443 proto tcp
+        
+        
+        ufw allow out to any port 53 proto udp
+        ufw allow out to any port 123 proto udp
+        
+        
+        ufw allow out to any port 67 proto udp
+        ufw allow out to any port 68 proto udp
+
+       
+        if ufw status | grep -qw active; then
+            printf "\\033[1;31m[+] Reloading UFW rules...\\\\033[0m\\\\n"
+            ufw reload
+        else
+            printf "\\033[1;31m[-] UFW is not active, cannot reload. Please check UFW status manually.\\\\033[0m\\\\n"
+        fi
 }
 
 enable_yara() {
@@ -513,7 +578,6 @@ EOF
 }
 
 stig_login_banners() {
-   
     center_issue_text() {
         local text="$1"
         local width=80
@@ -526,36 +590,52 @@ stig_login_banners() {
         fi
     }
 
+    # Common banner lines
+    local banner_lines=(
+        "You are accessing a SECURITY INTERNATIONAL GROUP (SIG) Information System (IS) that is provided for SIG-authorized use only."
+        "By using this IS (which includes any device attached to this IS), you consent to the following conditions:"
+        "- The SIG routinely intercepts and monitors communications on this IS for purposes including, but not limited to,"
+        "  penetration testing, COMSEC monitoring, network operations and defense, personnel misconduct (PM), law enforcement (LE),"
+        "  and counterintelligence (CI) investigations."
+        "- At any time, the USG may inspect and seize data stored on this IS."
+        "- Communications using, or data stored on, this IS are not private, are subject to routine monitoring, interception, and search,"
+        "  and may be disclosed or used for any USG-authorized purpose."
+        "- This IS includes security measures (e.g., authentication and access controls) to protect SIG interests--not for your personal"
+        "  benefit or privacy."
+        "- Notwithstanding the above, using this IS does not constitute consent to PM, LE or CI investigative searching or monitoring of"
+        "  the content of privileged communications, or work product, related to personal representation or services by attorneys,"
+        "  psychotherapists, or clergy, and their assistants. Such communications and work product are private and confidential."
+        "  See User Agreement for details."
+    )
+
+    # /etc/issue (with color code)
     {
-        echo -e "\033[1;32m"
+        echo -e "\033[0m"
+        for line in "${banner_lines[@]}"; do
+            center_issue_text "$line"
+        done
+    } > /etc/issue
+
+    # /etc/issue.net (ASCII art + banner, no color)
+    {
         center_issue_text "════════════════════════════"
         center_issue_text "   _____   _____    _____   "
         center_issue_text "  / ____| |_   _|  / ____|  "
         center_issue_text " | (___     | |   | |  __   "
-        center_issue_text "  \___ \  | |   | |  | |  "
+        center_issue_text "  \\___ \\  | |   | |  | |  "
         center_issue_text "  ____) |  _| |_  | |__| |  "
-        center_issue_text " |_____/  |_____|  \____|  "
+        center_issue_text " |_____/  |_____|  \\____|  "
         center_issue_text "                            "
         center_issue_text "════════════════════════════"
-        echo -e "\033[0m"
-        center_issue_text "You are accessing a SECURITY INTERNATIONAL GROUP (SIG) Information System (IS) that is provided for SIG-authorized use only."
-        center_issue_text "By using this IS (which includes any device attached to this IS), you consent to the following conditions:"
-        center_issue_text "- The SIG routinely intercepts and monitors communications on this IS for purposes including, but not limited to,"
-        center_issue_text "  penetration testing, COMSEC monitoring, network operations and defense, personnel misconduct (PM), law enforcement (LE),"
-        center_issue_text "  and counterintelligence (CI) investigations."
-        center_issue_text "- At any time, the USG may inspect and seize data stored on this IS."
-        center_issue_text "- Communications using, or data stored on, this IS are not private, are subject to routine monitoring, interception, and search,"
-        center_issue_text "  and may be disclosed or used for any USG-authorized purpose."
-        center_issue_text "- This IS includes security measures (e.g., authentication and access controls) to protect SIG interests--not for your personal"
-        center_issue_text "  benefit or privacy."
-        center_issue_text "- Notwithstanding the above, using this IS does not constitute consent to PM, LE or CI investigative searching or monitoring of"
-        center_issue_text "  the content of privileged communications, or work product, related to personal representation or services by attorneys,"
-        center_issue_text "  psychotherapists, or clergy, and their assistants. Such communications and work product are private and confidential."
-        center_issue_text "  See User Agreement for details."
-    } > /etc/issue
+        for line in "${banner_lines[@]}"; do
+            center_issue_text "$line"
+        done
+    } > /etc/issue.net
 
     chmod 644 /etc/issue /etc/issue.net
 }
+
+
 
 stig_harden_ssh() {
     {
@@ -564,22 +644,56 @@ stig_harden_ssh() {
         printf "\033[1;31m[+] Hardening SSH configuration...\033[0m\n"
 
         sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
-        echo 30
+        echo 15
         sleep 0.2
 
         sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
-        echo 45
+        echo 20
         sleep 0.2
 
         sed -i 's/^#\?ChallengeResponseAuthentication.*/ChallengeResponseAuthentication no/' /etc/ssh/sshd_config
-        echo 60
+        echo 25
         sleep 0.2
 
         sed -i 's/^#\?UsePAM.*/UsePAM yes/' /etc/ssh/sshd_config
-        echo 70
+        echo 30
         sleep 0.2
 
-    
+        # Harden SSH options as per SSH-7408
+        sed -i '/^AllowTcpForwarding /d' /etc/ssh/sshd_config
+        echo "AllowTcpForwarding no" >> /etc/ssh/sshd_config
+
+        sed -i '/^ClientAliveCountMax /d' /etc/ssh/sshd_config
+        echo "ClientAliveCountMax 2" >> /etc/ssh/sshd_config
+
+        sed -i '/^Compression /d' /etc/ssh/sshd_config
+        echo "Compression no" >> /etc/ssh/sshd_config
+
+        sed -i '/^LogLevel /d' /etc/ssh/sshd_config
+        echo "LogLevel VERBOSE" >> /etc/ssh/sshd_config
+
+        sed -i '/^MaxAuthTries /d' /etc/ssh/sshd_config
+        echo "MaxAuthTries 3" >> /etc/ssh/sshd_config
+
+        sed -i '/^MaxSessions /d' /etc/ssh/sshd_config
+        echo "MaxSessions 2" >> /etc/ssh/sshd_config
+
+        sed -i '/^Port /d' /etc/ssh/sshd_config
+        # Uncomment and set your custom port below (replace 22 with your port)
+        # echo "Port 22" >> /etc/ssh/sshd_config
+
+        sed -i '/^TCPKeepAlive /d' /etc/ssh/sshd_config
+        echo "TCPKeepAlive no" >> /etc/ssh/sshd_config
+
+        sed -i '/^X11Forwarding /d' /etc/ssh/sshd_config
+        echo "X11Forwarding no" >> /etc/ssh/sshd_config
+
+        sed -i '/^AllowAgentForwarding /d' /etc/ssh/sshd_config
+        echo "AllowAgentForwarding no" >> /etc/ssh/sshd_config
+
+        echo 60
+        sleep 0.2
+
         sed -i '/^AllowUsers /d' /etc/ssh/sshd_config
         sed -i '/^Ciphers /d' /etc/ssh/sshd_config
         sed -i '/^MACs /d' /etc/ssh/sshd_config
@@ -630,14 +744,14 @@ stig_set_randomize_va_space() {
     } | whiptail --gauge "Setting kernel.randomize_va_space..." 8 60 0
 }
 
-# Enable and start Fail2Ban and AppArmor services
+
 enable_services() {
        printf "\033[1;31m[+] Enabling and starting Fail2Ban and AppArmor services...\033[0m\n"
        systemctl enable --now fail2ban
        systemctl enable --now apparmor
 }
 
-# Install chkrootkit, LMD, and rkhunter
+
 install_additional_tools() {
           printf "\033[1;31m[+] Installing chkrootkit...\033[0m\n"
           apt install -y chkrootkit
@@ -670,11 +784,36 @@ install_additional_tools() {
                 printf "\033[1;31m[+] Running maldetect installer...\033[0m\n"
                 chmod +x install.sh
                 if ./install.sh; then
-                    whiptail --infobox "Linux Malware Detect installed successfully from GitHub."
-                    printf "\033[1;31m[+] Linux Malware Detect installed successfully from GitHub\033[0m\n"
-                    install_maldet_failed=false
+                    # Add a small delay and ensure we are on a clean line
+                    sleep 0.2
+                    echo "" 
+
+                    local msg_title="Maldet GitHub Install"
+                    local msg_text="Linux Malware Detect installed successfully via GitHub."
+                    local msg_height=8
+                    local msg_width=70
+                    
+                    printf "\\033[1;34mHARDN_SCRIPT: Attempting to display maldet success message via whiptail.\\033[0m\\n"
+
+                    if [ -z "$TERM" ] || [ "$TERM" == "dumb" ]; then
+                        printf "\\033[1;33mHARDN_SCRIPT_WARNING: TERM variable is '$TERM'. Whiptail might not display. Using echo.\\033[0m\\n"
+                        echo "$msg_title: $msg_text"
+                    elif ! command -v whiptail > /dev/null; then
+                        printf "\\033[1;31mHARDN_SCRIPT_ERROR: whiptail command not found! Cannot display message.\\033[0m\\n"
+                    else
+                        whiptail --title "$msg_title" --infobox "$msg_text" "$msg_height" "$msg_width"
+                        local whiptail_status=$?
+                        if [ $whiptail_status -ne 0 ]; then
+                            printf "\\033[1;31mHARDN_SCRIPT_ERROR: Whiptail for maldet success message exited with status %s.\\033[0m\\n" "$whiptail_status"
+                        else
+                            printf "\\033[1;34mHARDN_SCRIPT: Whiptail maldet success message displayed.\\033[0m\\n"
+                        fi
+                    fi
+                    
+                    printf "\\033[1;32m[+] Linux Malware Detect installed successfully from GitHub\\033[0m\\n" # Original success message
+                    install_maldet_failed=false # Ensure this is correctly set
                 else
-                    printf "\033[1;31m[-] Maldetect installer failed\033[0m\n"
+                    printf "\\033[1;31m[-] Maldetect installer script (./install.sh) failed.\\033[0m\\n"
                     install_maldet_failed=true
                 fi
             fi
@@ -717,6 +856,7 @@ install_additional_tools() {
 
 stig_password_policy() {
 
+    # Set password quality requirements
     sed -i 's/^#\? *minlen *=.*/minlen = 14/' /etc/security/pwquality.conf
     sed -i 's/^#\? *dcredit *=.*/dcredit = -1/' /etc/security/pwquality.conf
     sed -i 's/^#\? *ucredit *=.*/ucredit = -1/' /etc/security/pwquality.conf
@@ -724,12 +864,28 @@ stig_password_policy() {
     sed -i 's/^#\? *lcredit *=.*/lcredit = -1/' /etc/security/pwquality.conf
     sed -i 's/^#\? *enforcing *=.*/enforcing = 1/' /etc/security/pwquality.conf
 
-   
+    # Set password aging policy
+    sed -i '/^PASS_MIN_DAYS/d' /etc/login.defs
+    sed -i '/^PASS_MAX_DAYS/d' /etc/login.defs
+    sed -i '/^PASS_WARN_AGE/d' /etc/login.defs
     echo "PASS_MIN_DAYS 1" >> /etc/login.defs
     echo "PASS_MAX_DAYS 90" >> /etc/login.defs
     echo "PASS_WARN_AGE 7" >> /etc/login.defs
 
-  
+    # Set password hashing rounds (AUTH-9230)
+    sed -i '/^ENCRYPT_METHOD/d' /etc/login.defs
+    sed -i '/^SHA_CRYPT_MIN_ROUNDS/d' /etc/login.defs
+    sed -i '/^SHA_CRYPT_MAX_ROUNDS/d' /etc/login.defs
+    echo "ENCRYPT_METHOD SHA512" >> /etc/login.defs
+    echo "SHA_CRYPT_MIN_ROUNDS 5000" >> /etc/login.defs
+    echo "SHA_CRYPT_MAX_ROUNDS 10000" >> /etc/login.defs
+
+    # Set expire dates for all password protected accounts (AUTH-9282)
+    awk -F: '($2 ~ /^\$/ && $1 != "root" && $1 != "nobody" && $3 >= 1000) {print $1}' /etc/shadow | while read -r user; do
+        chage -M 90 -m 1 -W 7 "$user"
+    done
+
+    # Activate pam_pwquality profile
     if command -v pam-auth-update > /dev/null; then
         pam-auth-update --package
         echo "[+] pam_pwquality profile activated via pam-auth-update"
@@ -740,7 +896,6 @@ stig_password_policy() {
 
 enable_aide() {
     printf "\033[1;31m[+] Installing and configuring AIDE...\033[0m\n"
-# enable and config
     {
         echo 10
         sleep 0.2
@@ -761,12 +916,17 @@ enable_aide() {
         chmod 750 /etc/aide
         chown root:root /etc/aide
 
+        # Use SHA512 for checksums, and ensure config is valid
         cat > /etc/aide/aide.conf << 'EOF'
 database=file:/var/lib/aide/aide.db
 database_out=file:/var/lib/aide/aide.db.new
 
+# Use SHA512 for checksums (FINT-4402)
+Checksums = sha512
+
 # Basic rules
-NORMAL = p+i+n+u+g+s+b+m+c+md5+sha1
+NORMAL = p+i+n+u+g+s+b+m+c+sha512
+HARD = p+i+n+u+g+s+b+m+c+sha512
 
 # Monitor only important system dirs, skip volatile/user data
 /etc    HARD
@@ -795,18 +955,34 @@ EOF
         chmod 640 /etc/aide/aide.conf
         chown root:root /etc/aide/aide.conf
 
+        # Validate AIDE config (FINT-4315)
+        if ! aide --config-check --config=/etc/aide/aide.conf >/dev/null 2>&1; then
+            printf "\033[1;31m[-] AIDE configuration file contains errors. Please review /etc/aide/aide.conf\033[0m\n"
+            echo 100
+            sleep 0.2
+            return 1
+        fi
+
         echo 50
         sleep 0.2
 
         if [ ! -f /var/lib/aide/aide.db ]; then
             aide --init --config=/etc/aide/aide.conf || {
-            printf "\033[1;31m[-] Failed to initialize AIDE database.\033[0m\n"
-            echo 100
-            sleep 0.2
-            return 1
+                printf "\033[1;31m[-] Failed to initialize AIDE database.\033[0m\n"
+                echo 100
+                sleep 0.2
+                return 1
             }
             mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db
             chmod 600 /var/lib/aide/aide.db
+        fi
+
+        # Validate AIDE database (FINT-4316)
+        if ! aide --check --config=/etc/aide/aide.conf >/dev/null 2>&1; then
+            printf "\033[1;31m[-] AIDE database check failed. Please review the database and configuration.\033[0m\n"
+            echo 100
+            sleep 0.2
+            return 1
         fi
 
         echo 70
@@ -993,22 +1169,43 @@ stig_file_permissions() {
 }
 
 stig_hardn_services() {
-    printf "\033[1;31m[+] Disabling unnecessary and potentially vulnerable services...\033[0m\n"
+    printf "\\033[1;31m[+] Disabling unnecessary and potentially vulnerable services...\\033[0m\\n"
 
-    systemctl disable --now avahi-daemon
-    systemctl disable --now cups
-    systemctl disable --now rpcbind
-    systemctl disable --now nfs-server
-    systemctl disable --now smbd
-    systemctl disable --now snmpd
-    systemctl disable --now apache2
-    systemctl disable --now mysql
-    systemctl disable --now bind9
+    disable_service_if_active() {
+        local service_name="$1"
+        if systemctl is-active --quiet "$service_name"; then
+            printf "\033[1;31m[+] Disabling active service: %s...\033[0m\n" "$service_name"
+            systemctl disable --now "$service_name" || printf "\033[1;33m[!] Failed to disable service: %s (may not be installed or already disabled).\033[0m\n" "$service_name"
+        elif systemctl list-unit-files --type=service | grep -qw "^$service_name.service"; then
+            printf "\033[1;31m[+] Service %s is not active, ensuring it is disabled...\033[0m\n" "$service_name"
+            systemctl disable "$service_name" || printf "\033[1;33m[!] Failed to disable service: %s (may not be installed or already disabled).\033[0m\n" "$service_name"
+        else
+            printf "\033[1;34m[*] Service %s not found or not installed. Skipping.\033[0m\n" "$service_name"
+        fi
+    }
 
-    
-    apt remove -y telnet vsftpd proftpd tftpd postfix exim4
+    disable_service_if_active avahi-daemon
+    disable_service_if_active cups
+    disable_service_if_active rpcbind
+    disable_service_if_active nfs-server
+    disable_service_if_active smbd
+    disable_service_if_active snmpd
+    disable_service_if_active apache2
+    disable_service_if_active mysql
+    disable_service_if_active bind9
 
-    printf "\033[1;32m[+] All unnecessary services have been disabled or removed.\033[0m\n"
+    # Remove packages if they exist
+    packages_to_remove="telnet vsftpd proftpd tftpd postfix exim4"
+    for pkg in $packages_to_remove; do
+        if dpkg -s "$pkg" >/dev/null 2>&1; then
+            printf "\033[1;31m[+] Removing package: %s...\033[0m\n" "$pkg"
+            apt remove -y "$pkg"
+        else
+            printf "\033[1;34m[*] Package %s not installed. Skipping removal.\033[0m\n" "$pkg"
+        fi
+    done
+
+    printf "\033[1;32m[+] Unnecessary services checked and disabled/removed where applicable.\033[0m\n"
 }
 
 stig_disable_core_dumps() {
@@ -1057,7 +1254,7 @@ EOFCRON
 # Disable USB storage
 disable_usb_storage() {
      whiptail --infobox "Disabling USB storage..." 7 50
-         #printf "\033[1;31m[+] Disabling USB storage...\033[0m\n"
+         
          echo 'blacklist usb-storage' > /etc/modprobe.d/usb-storage.conf
          if modprobe -r usb-storage 2>/dev/null; then
              printf "\033[1;31m[+] USB storage successfully disabled.\033[0m\n"
@@ -1069,13 +1266,23 @@ disable_usb_storage() {
 # Update system packages again
 update_sys_pkgs() {
      whiptail --infobox "Updating system packages..." 7 50
-            #printf "\033[1;31m[-] System update.\033[0m\n"
-        if ! update_system_packages; then
-             printf "\033[1;31m[-] System update failed.\033[0m\n"
-            whiptail --title "System update failed"
-            exit 1
-        fi
+     printf "\\033[1;31m[+] System update (final pass)...\\033[0m\\n" 
+     if ! (apt update && apt upgrade -y && apt-get update -y); then 
+          echo "\\033[1;31m[-] System update failed.\\033[0m" 
+          whiptail --title "System update failed" --msgbox "Final system update failed. Please check logs." 8 60
+          
+     fi
 }
+
+
+ update_system_packages() {
+  printf "\\033[1;31m[+] Updating system packages...\\033[0m\\n"
+  apt update && apt upgrade -y
+  apt-get update -y
+}
+
+
+
 
 finalize() { 
     sleep 5
@@ -1119,27 +1326,338 @@ EOF
 
 
 restrict_compilers() {
-    printf "\033[1;31m[+] Restricting compiler access...\033[0m\n"
-    
-    chmod go-rx /usr/bin/gcc /usr/bin/g++ /usr/bin/make 2>/dev/null || true
- 
-    chown root:root /usr/bin/gcc /usr/bin/g++ /usr/bin/make 2>/dev/null || true
+    printf "\033[1;31m[+] Restricting compiler access to root only (HRDN-7222)...\033[0m\n"
 
+    local compilers="/usr/bin/gcc /usr/bin/g++ /usr/bin/make /usr/bin/cc /usr/bin/c++ /usr/bin/as /usr/bin/ld"
+    for bin in $compilers; do
+        if [ -f "$bin" ]; then
+            chmod 700 "$bin"
+            chown root:root "$bin"
+            printf "\033[1;32m[+] Restricted $bin to root only.\033[0m\n"
+        fi
+    done
 }
+
+disable_binfmt_misc() {
+    printf "\\033[1;31m[+] Checking/Disabling non-native binary format support (binfmt_misc)...\\033[0m\\n"
+    if mount | grep -q 'binfmt_misc'; then
+        printf "\\033[1;33m[*] binfmt_misc is mounted. Attempting to unmount...\033[0m\\n"
+        if umount /proc/sys/fs/binfmt_misc; then
+            printf "\\033[1;32m[+] binfmt_misc unmounted successfully.\033[0m\\n"
+        else
+            printf "\\033[1;31m[-] Failed to unmount binfmt_misc. It might be busy or not a separate mount.\033[0m\\n"
+        fi
+    fi
+
+    if lsmod | grep -q "^binfmt_misc"; then
+        printf "\\033[1;33m[*] binfmt_misc module is loaded. Attempting to unload...\033[0m\\n"
+        if rmmod binfmt_misc; then
+            printf "\\033[1;32m[+] binfmt_misc module unloaded successfully.\033[0m\\n"
+        else
+            printf "\\033[1;31m[-] Failed to unload binfmt_misc module. It might be in use or built-in.\033[0m\\n"
+        fi
+    else
+        printf "\\033[1;32m[+] binfmt_misc module is not currently loaded.\033[0m\\n"
+    fi
+
+    # Prevent module from loading on boot
+    local modprobe_conf="/etc/modprobe.d/disable-binfmt_misc.conf"
+    if [ ! -f "$modprobe_conf" ]; then
+        echo "install binfmt_misc /bin/true" > "$modprobe_conf"
+        printf "\\033[1;32m[+] Added modprobe rule to prevent binfmt_misc from loading on boot: %s\033[0m\\n" "$modprobe_conf"
+    else
+        if ! grep -q "install binfmt_misc /bin/true" "$modprobe_conf"; then
+            echo "install binfmt_misc /bin/true" >> "$modprobe_conf"
+            printf "\\033[1;32m[+] Appended modprobe rule to prevent binfmt_misc from loading to %s\033[0m\\n" "$modprobe_conf"
+        else
+            printf "\\033[1;34m[*] Modprobe rule to disable binfmt_misc already exists in %s.\033[0m\\n" "$modprobe_conf"
+        fi
+    fi
+    whiptail --infobox "Non-native binary format support (binfmt_misc) checked/disabled." 7 70
+}
+
+disable_firewire_drivers() {
+    printf "\\033[1;31m[+] Checking/Disabling FireWire (IEEE 1394) drivers...\033[0m\\n"
+    local firewire_modules="firewire_core firewire_ohci firewire_sbp2"
+    local changed=0
+
+    for module_name in $firewire_modules; do
+        if lsmod | grep -q "^${module_name}"; then
+            printf "\\033[1;33m[*] FireWire module %s is loaded. Attempting to unload...\033[0m\\n" "$module_name"
+            if rmmod "$module_name"; then
+                printf "\\033[1;32m[+] FireWire module %s unloaded successfully.\033[0m\\n" "$module_name"
+                changed=1
+            else
+                printf "\\033[1;31m[-] Failed to unload FireWire module %s. It might be in use or built-in.\033[0m\\n" "$module_name"
+            fi
+        else
+            printf "\\033[1;34m[*] FireWire module %s is not currently loaded.\033[0m\\n" "$module_name"
+        fi
+    done
+
+    local blacklist_file="/etc/modprobe.d/blacklist-firewire.conf"
+    if [ ! -f "$blacklist_file" ]; then
+        touch "$blacklist_file"
+        printf "\\033[1;32m[+] Created FireWire blacklist file: %s\033[0m\\n" "$blacklist_file"
+    fi
+
+    for module_name in $firewire_modules; do
+        if ! grep -q "blacklist $module_name" "$blacklist_file"; then
+            echo "blacklist $module_name" >> "$blacklist_file"
+            printf "\\033[1;32m[+] Blacklisted FireWire module %s in %s\033[0m\\n" "$module_name" "$blacklist_file"
+            changed=1
+        else
+            printf "\\033[1;34m[*] FireWire module %s already blacklisted in %s.\033[0m\\n" "$module_name" "$blacklist_file"
+        fi
+    done
+
+    if [ "$changed" -eq 1 ]; then
+        whiptail --infobox "FireWire drivers checked. Unloaded and/or blacklisted where applicable." 7 70
+    else
+        whiptail --infobox "FireWire drivers checked. No changes made (likely already disabled/not present)." 8 70
+    fi
+}
+
+purge_old_packages() {
+    printf "\\033[1;31m[+] Purging configuration files of old/removed packages...\033[0m\\n"
+    local packages_to_purge
+    packages_to_purge=$(dpkg -l | grep '^rc' | awk '{print $2}')
+
+    if [ -n "$packages_to_purge" ]; then
+        printf "\\033[1;33m[*] Found the following packages with leftover configuration files to purge:\033[0m\\n"
+        echo "$packages_to_purge"
+       
+        if command -v whiptail >/dev/null; then
+            whiptail --title "Packages to Purge" --msgbox "The following packages have leftover configuration files that will be purged:\n\n$packages_to_purge" 15 70
+        fi
+
+        for pkg in $packages_to_purge; do
+            printf "\\033[1;31m[+] Purging $pkg...\033[0m\\n"
+            if apt-get purge -y "$pkg"; then
+                printf "\\033[1;32m[+] Successfully purged $pkg.\033[0m\\n"
+            else
+                printf "\\033[1;31m[-] Failed to purge $pkg. Trying dpkg --purge...\033[0m\\n"
+                if dpkg --purge "$pkg"; then
+                     printf "\\033[1;32m[+] Successfully purged $pkg with dpkg.\033[0m\\n"
+                else
+                     printf "\\033[1;31m[-] Failed to purge $pkg with dpkg as well.\033[0m\\n"
+                fi
+            fi
+        done
+        whiptail --infobox "Purged configuration files for removed packages." 7 70
+    else
+        printf "\\033[1;32m[+] No old/removed packages with leftover configuration files found to purge.\033[0m\\n"
+        whiptail --infobox "No leftover package configurations to purge." 7 70
+    fi
+   
+    printf "\\033[1;31m[+] Running apt-get autoremove and clean to free up space...\033[0m\\n"
+    apt-get autoremove -y
+    apt-get clean
+    whiptail --infobox "Apt cache cleaned." 7 70
+}
+
+enable_nameservers() {
+    printf "\\033[1;31m[+] Checking and configuring DNS nameservers (Quad9 primary, Google secondary)...\033[0m\\n"
+    local resolv_conf="/etc/resolv.conf"
+    local quad9_ns="9.9.9.9"
+    local google_ns="8.8.8.8"
+    local nameserver_count=0
+    local configured_persistently=false
+    local changes_made=false
+
+    if [ -f "$resolv_conf" ]; then
+        nameserver_count=$(grep -E "^\s*nameserver\s+" "$resolv_conf" | grep -Ev "127\.0\.0\.1|::1" | awk '{print $2}' | sort -u | wc -l)
+    fi
+
+    printf "\\033[1;34m[*] Found %s non-localhost nameserver(s) in %s.\033[0m\\n" "$nameserver_count" "$resolv_conf"
+
+    # Always attempt to set Quad9 as primary and Google as secondary
+    # Check for systemd-resolved
+    if systemctl is-active --quiet systemd-resolved && \
+       [ -L "$resolv_conf" ] && \
+       (readlink "$resolv_conf" | grep -qE "systemd/resolve/(stub-resolv.conf|resolv.conf)"); then
+        
+        printf "\\033[1;34m[*] systemd-resolved is active and manages %s.\033[0m\\n" "$resolv_conf"
+        local resolved_conf_systemd="/etc/systemd/resolved.conf"
+        local temp_resolved_conf
+        temp_resolved_conf=$(mktemp)
+
+        if [ ! -f "$resolved_conf_systemd" ]; then
+            printf "\\033[1;33m[*] Creating %s as it does not exist.\033[0m\\n" "$resolved_conf_systemd"
+            echo "[Resolve]" > "$resolved_conf_systemd"
+            chmod 644 "$resolved_conf_systemd"
+        fi
+        
+        cp "$resolved_conf_systemd" "$temp_resolved_conf"
+
+        # Set DNS= and FallbackDNS= explicitly
+        if grep -qE "^\s*DNS=" "$temp_resolved_conf"; then
+            sed -i -E "s/^\s*DNS=.*/DNS=$quad9_ns $google_ns/" "$temp_resolved_conf"
+        else
+            if grep -q "\[Resolve\]" "$temp_resolved_conf"; then
+                sed -i "/\[Resolve\]/a DNS=$quad9_ns $google_ns" "$temp_resolved_conf"
+            else
+                echo -e "\n[Resolve]\nDNS=$quad9_ns $google_ns" >> "$temp_resolved_conf"
+            fi
+        fi
+
+        # Set FallbackDNS as well (optional, for redundancy)
+        if grep -qE "^\s*FallbackDNS=" "$temp_resolved_conf"; then
+            sed -i -E "s/^\s*FallbackDNS=.*/FallbackDNS=$google_ns $quad9_ns/" "$temp_resolved_conf"
+        else
+            if grep -q "\[Resolve\]" "$temp_resolved_conf"; then
+                sed -i "/\[Resolve\]/a FallbackDNS=$google_ns $quad9_ns" "$temp_resolved_conf"
+            else
+                echo -e "\n[Resolve]\nFallbackDNS=$google_ns $quad9_ns" >> "$temp_resolved_conf"
+            fi
+        fi
+
+        if ! cmp -s "$temp_resolved_conf" "$resolved_conf_systemd"; then
+            cp "$temp_resolved_conf" "$resolved_conf_systemd"
+            printf "\\033[1;32m[+] Updated %s. Restarting systemd-resolved...\033[0m\\n" "$resolved_conf_systemd"
+            if systemctl restart systemd-resolved; then
+                printf "\\033[1;32m[+] systemd-resolved restarted successfully.\033[0m\\n"
+                configured_persistently=true
+                changes_made=true
+            else
+                printf "\\033[1;31m[-] Failed to restart systemd-resolved. Manual check required.\033[0m\\n"
+            fi
+        else
+            printf "\\033[1;34m[*] No effective changes to %s were needed.\033[0m\\n" "$resolved_conf_systemd"
+        fi
+        rm -f "$temp_resolved_conf"
+    fi
+
+    # If not using systemd-resolved, try to set directly in /etc/resolv.conf
+    if [ "$configured_persistently" = false ]; then
+        printf "\\033[1;34m[*] Attempting direct modification of %s.\033[0m\\n" "$resolv_conf"
+        if [ -f "$resolv_conf" ] && [ -w "$resolv_conf" ]; then
+            # Remove existing Quad9/Google entries and add them at the top
+            grep -vE "^\s*nameserver\s+($quad9_ns|$google_ns)" "$resolv_conf" > "${resolv_conf}.tmp"
+            {
+                echo "nameserver $quad9_ns"
+                echo "nameserver $google_ns"
+                cat "${resolv_conf}.tmp"
+            } > "$resolv_conf"
+            rm -f "${resolv_conf}.tmp"
+            printf "\\033[1;32m[+] Set Quad9 as primary and Google as secondary in %s.\033[0m\\n" "$resolv_conf"
+            printf "\\033[1;33m[!] Warning: Direct changes to %s might be overwritten by network management tools.\033[0m\\n" "$resolv_conf"
+            changes_made=true
+        else
+            printf "\\033[1;31m[-] Could not modify %s (file not found or not writable).\033[0m\\n" "$resolv_conf"
+        fi
+    fi
+
+    if [ "$changes_made" = true ]; then
+         whiptail --infobox "DNS configured: Quad9 primary, Google secondary." 7 70
+    else
+         whiptail --infobox "DNS configuration checked. No changes made or needed." 8 70
+    fi
+}
+
+
+enable_process_accounting_and_sysstat() {
+    printf "\\033[1;31m[+] Enabling process accounting (acct) and system statistics (sysstat)...\033[0m\\n"
+    local changed_acct=false
+    local changed_sysstat=false
+
+    # Enable Process Accounting (acct/psacct)
+    printf "\\033[1;34m[*] Checking and installing acct (process accounting)...\033[0m\\n"
+    if ! dpkg -s acct >/dev/null 2>&1 && ! dpkg -s psacct >/dev/null 2>&1; then
+        whiptail --infobox "Installing acct (process accounting)..." 7 60
+        if apt-get install -y acct; then
+            printf "\\033[1;32m[+] acct installed successfully.\033[0m\\n"
+            changed_acct=true
+        else
+            printf "\\033[1;31m[-] Failed to install acct. Please check manually.\033[0m\\n"
+        fi
+    else
+        printf "\\033[1;34m[*] acct/psacct is already installed.\033[0m\\n"
+    fi
+
+    if dpkg -s acct >/dev/null 2>&1 || dpkg -s psacct >/dev/null 2>&1; then
+        if ! systemctl is-active --quiet acct && ! systemctl is-active --quiet psacct; then
+            printf "\\033[1;33m[*] Attempting to enable and start acct/psacct service...\033[0m\\n"
+            if systemctl enable --now acct 2>/dev/null || systemctl enable --now psacct 2>/dev/null; then
+                printf "\\033[1;32m[+] acct/psacct service enabled and started.\033[0m\\n"
+                changed_acct=true
+            else
+                printf "\\033[1;31m[-] Failed to enable/start acct/psacct service. It might need manual configuration or a reboot.\033[0m\\n"
+            fi
+        else
+            printf "\\033[1;32m[+] acct/psacct service is already active.\033[0m\\n"
+        fi
+    fi
+
+    # Enable Sysstat
+    printf "\\033[1;34m[*] Checking and installing sysstat...\033[0m\\n"
+    if ! dpkg -s sysstat >/dev/null 2>&1; then
+        whiptail --infobox "Installing sysstat..." 7 60
+        if apt-get install -y sysstat; then
+            printf "\\033[1;32m[+] sysstat installed successfully.\033[0m\\n"
+            changed_sysstat=true
+        else
+            printf "\\033[1;31m[-] Failed to install sysstat. Please check manually.\033[0m\\n"
+        fi
+    else
+        printf "\\033[1;34m[*] sysstat is already installed.\033[0m\\n"
+    fi
+
+    if dpkg -s sysstat >/dev/null 2>&1; then
+        local sysstat_conf="/etc/default/sysstat"
+        if [ -f "$sysstat_conf" ]; then
+            if ! grep -qE '^\s*ENABLED="true"' "$sysstat_conf"; then
+                printf "\\033[1;33m[*] Enabling sysstat data collection in %s...\033[0m\\n" "$sysstat_conf"
+                sed -i 's/^\s*ENABLED="false"/ENABLED="true"/' "$sysstat_conf"
+          
+                if ! grep -qE '^\s*ENABLED=' "$sysstat_conf"; then
+                    echo 'ENABLED="true"' >> "$sysstat_conf"
+                fi
+                changed_sysstat=true
+                printf "\\033[1;32m[+] sysstat data collection enabled.\033[0m\\n"
+            else
+                printf "\\033[1;32m[+] sysstat data collection is already enabled in %s.\033[0m\\n" "$sysstat_conf"
+            fi
+        else
+            # Fallback for systems where config might be /etc/sysstat/sysstat (e.g. RHEL based, but this is Debian focused)
+            # For Debian, /etc/default/sysstat is standard.
+            printf "\\033[1;33m[!] sysstat configuration file %s not found. Manual check might be needed.\033[0m\\n" "$sysstat_conf"
+        fi
+
+        if ! systemctl is-active --quiet sysstat; then
+            printf "\\033[1;33m[*] Attempting to enable and start sysstat service...\033[0m\\n"
+            if systemctl enable --now sysstat; then
+                printf "\\033[1;32m[+] sysstat service enabled and started.\033[0m\\n"
+                changed_sysstat=true
+            else
+                printf "\\033[1;31m[-] Failed to enable/start sysstat service.\033[0m\\n"
+            fi
+        else
+            printf "\\033[1;32m[+] sysstat service is already active.\033[0m\\n"
+        fi
+    fi
+
+    if [ "$changed_acct" = true ] || [ "$changed_sysstat" = true ]; then
+        whiptail --infobox "Process accounting (acct) and sysstat configured." 7 70
+    else
+        whiptail --infobox "Process accounting (acct) and sysstat checked. No changes made or needed." 8 70
+    fi
+}
+
+
 
 
 main() {
         welcomemsg || error "User exited."
         preinstallmsg || error "User exited."
+        print_ascii_banner
         update_system_packages
-        aptinstall
-        maininstall
-        gitdpkgbuild
         build_hardn_package
         installationloop
         configure_firejail
         config_selinux
-        enable_debsums
+        enhance_fail2ban
+        restrict_compilers
         enable_aide
         check_security_tools
         configure_ufw
@@ -1147,6 +1665,7 @@ main() {
         install_additional_tools
         enable_yara
         reload_apparmor
+        enable_suricata
         grub_security
         stig_harden_ssh
         stig_file_permissions
@@ -1161,9 +1680,15 @@ main() {
         stig_disable_core_dumps
         configure_cron
         disable_usb_storage
+        disable_binfmt_misc
+        disable_firewire_drivers
         update_sys_pkgs
+        enable_nameservers
+        enable_process_accounting_and_sysstat
+        purge_old_packages
         finalize
 }
 
 
 main
+
