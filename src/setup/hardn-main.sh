@@ -577,65 +577,7 @@ EOF
     sysctl -w kernel.randomize_va_space=2 || printf "\033[1;31m[-] Failed to set kernel Security Parameters.\033[0m\n"
 }
 
-stig_login_banners() {
-    center_issue_text() {
-        local text="$1"
-        local width=80
-        local text_len=${#text}
-        if [ "$text_len" -ge "$width" ]; then
-            echo "$text"
-        else
-            local pad=$(( (width - text_len) / 2 ))
-            printf "%*s%s\n" "$pad" "" "$text"
-        fi
-    }
-
-    # Common banner lines
-    local banner_lines={
-        "You are accessing a SECURITY INTERNATIONAL GROUP (SIG) Information System (IS) that is provided for SIG-authorized use only."
-        "By using this IS (which includes any device attached to this IS), you consent to the following conditions:"
-        "- The SIG routinely intercepts and monitors communications on this IS for purposes including, but not limited to,"
-        "  penetration testing, COMSEC monitoring, network operations and defense, personnel misconduct (PM), law enforcement (LE),"
-        "  and counterintelligence (CI) investigations."
-        "- At any time, the USG may inspect and seize data stored on this IS."
-        "- Communications using, or data stored on, this IS are not private, are subject to routine monitoring, interception, and search,"
-        "  and may be disclosed or used for any USG-authorized purpose."
-        "- This IS includes security measures (e.g., authentication and access controls) to protect SIG interests--not for your personal"
-        "  benefit or privacy."
-        "- Notwithstanding the above, using this IS does not constitute consent to PM, LE or CI investigative searching or monitoring of"
-        "  the content of privileged communications, or work product, related to personal representation or services by attorneys,"
-        "  psychotherapists, or clergy, and their assistants. Such communications and work product are private and confidential."
-        "  See User Agreement for details."
-    }
-
-    # /etc/issue (with color code)
-    {
-        echo -e "\033[0m"
-        for line in "${banner_lines[@]}"; do
-            center_issue_text "$line"
-        done
-    } > /etc/issue
-
-    # /etc/issue.net (ASCII art + banner, no color)
-    {
-        center_issue_text "════════════════════════════"
-        center_issue_text "   _____   _____    _____   "
-        center_issue_text "  / ____| |_   _|  / ____|  "
-        center_issue_text " | (___     | |   | |  __   "
-        center_issue_text "  \\___ \\  | |   | |  | |  "
-        center_issue_text "  ____) |  _| |_  | |__| |  "
-        center_issue_text " |_____/  |_____|  \\____|  "
-        center_issue_text "                            "
-        center_issue_text "════════════════════════════"
-        for line in "${banner_lines[@]}"; do
-            center_issue_text "$line"
-        done
-    } > /etc/issue.net
-
-    chmod 644 /etc/issue /etc/issue.net
-}
-
-## fixed }
+#### banner removed 
 
 stig_harden_ssh() {
     {
@@ -1670,7 +1612,6 @@ main() {
         grub_security
         stig_harden_ssh
         stig_file_permissions
-        stig_login_banners
         stig_enable_auditd
         stig_disable_ipv6
         stig_password_policy
