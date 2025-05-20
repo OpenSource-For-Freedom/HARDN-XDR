@@ -1,5 +1,17 @@
 # Changelog
 
+## Version 1.1.8
+
+### Added
+- **New Feature**: Introduced a new feature for enhanced system monitoring.
+
+### Improved
+- **Performance**: Optimized system performance for faster execution of tasks.
+
+### Fixed
+- **Bug Fixes**: Resolved minor bugs reported in version `1.1.6`.
+
+---
 ## Version 1.1.6
 
 ### Added
