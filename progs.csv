@@ -1,21 +1,21 @@
 # tag,program,comment
 a,ufw,Firewall configuration tool
-a,fail2ban,Intrusion prevention software
-a,apparmor,Mandatory access control framework
-a,apparmor-profiles,Additional AppArmor profiles
-a,apparmor-utils,AppArmor utilities
-a,firejail,Sandboxing tool
-a,tcpd,Access control for internet services
-a,lynis,Security auditing tool
-a,debsums,Verify installed package files against MD5 checksums
-a,rkhunter,Rootkit scanner
-a,libpam-pwquality,Password quality control
-a,libvirt-daemon-system,Libvirt daemon for managing VMs
-a,libvirt-clients,Libvirt client utilities
-a,qemu-kvm,Virtualization software
-a,openssh-server,SSH server
-a,chkrootkit,Rootkit scanner
-a,yara,Pattern matching tool 
-a,libpam-tmpdirs,Temporary directory for PAM
-a,apt-listbugs,Report bugs in Debian packages
-a,libgtk-4-dev, desktop app
+a,fail2ban,Intrusion prevention and log-based banning tool
+a,apparmor,Mandatory access control framework for Linux
+a,apparmor-profiles,Additional default AppArmor profiles
+a,apparmor-utils,CLI utilities to manage AppArmor
+a,firejail,Application sandboxing tool using seccomp and namespaces
+a,tcpd,Access control for network services via /etc/hosts.allow and deny
+a,lynis,Advanced security auditing and compliance tool
+a,debsums,Verifies package file integrity against MD5 checksums
+a,rkhunter,Rootkit, backdoor, and local exploit scanner
+a,libpam-pwquality,Enforces strong password policies
+a,libvirt-daemon-system,System-wide libvirt service for managing VMs
+a,libvirt-clients,Client utilities to interact with libvirt
+a,qemu-kvm,KVM-based virtualization backend
+a,openssh-server,OpenSSH secure shell server
+a,chkrootkit,Rootkit detection tool for local systems
+a,yara,Pattern-matching tool for malware and signature detection
+a,libpam-tmpdirs,Creates temporary directories via PAM during user login
+a,apt-listbugs,Warns about critical bugs before package upgrades
+a,libgtk-4-dev,Development files for GTK4 (required for desktop app)
