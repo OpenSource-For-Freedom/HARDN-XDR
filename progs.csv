@@ -18,3 +18,4 @@ a,chkrootkit,Rootkit scanner
 a,yara,Pattern matching tool 
 a,libpam-tmpdirs,Temporary directory for PAM
 a,apt-listbugs,Report bugs in Debian packages
+a,libgtk-4-dev, desktop app
