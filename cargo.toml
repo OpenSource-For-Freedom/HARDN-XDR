@@ -20,7 +20,7 @@ section = "admin"
 priority = "optional"
 assets = [
     ["target/release/hardn_gui", "usr/bin/", "755"],
-    ["assets/icon.png", "usr/share/icons/hardn.png", "644"],
+    ["docs/assets/HARDN(1).png", "usr/share/icons/hardn.png", "644"],
     ["assets/hardn.desktop", "usr/share/applications/hardn.desktop", "644"]
 ]
 conf-files = []
