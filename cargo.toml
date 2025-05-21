@@ -18,7 +18,6 @@ maintainer = "Tim Burns"
 depends = "libgtk-4-1, bash, coreutils, sudo"
 section = "admin"
 priority = "optional"
-[package.metadata.deb]
 assets = [
     ["target/release/hardn_gui", "usr/bin/", "755"],
     ["src/setup/hardn-main.sh", "usr/bin/", "755"],
