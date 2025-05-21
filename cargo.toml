@@ -24,8 +24,3 @@ assets = [
     ["progs.csv", "etc/hardn/", "644"]
 ]
 conf-files = []
-
-[profile.release]
-strip = true
-opt-level = "z"
-lto = true
