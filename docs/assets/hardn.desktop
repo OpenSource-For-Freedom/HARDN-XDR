@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=HARDN-XDR
+Comment=Linux Security Hardening Toolkit
+Exec=/usr/bin/hardn_gui
+Icon=hardn
+Terminal=false
+Categories=Security;System;Utility;
+StartupNotify=true
