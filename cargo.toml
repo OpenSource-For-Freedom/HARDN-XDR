@@ -1,0 +1,31 @@
+[package]
+name = "hardn_gui"
+version = "1.0.0"
+edition = "2021"
+description = "GTK-based GUI for HARDN-XDR Linux security hardening"
+license = "MIT"
+authors = ["Tim Burns"]
+
+[dependencies]
+gtk = { version = "0.8", package = "gtk4" }
+glib = "0.18"
+
+[build-dependencies]
+glib-build-tools = "0.18"
+
+[package.metadata.deb]
+maintainer = "Tim Burns"
+depends = "libgtk-4-1, bash, coreutils, sudo"
+section = "admin"
+priority = "optional"
+assets = [
+    ["target/release/hardn_gui", "usr/bin/", "755"],
+    ["assets/icon.png", "usr/share/icons/hardn.png", "644"],
+    ["assets/hardn.desktop", "usr/share/applications/hardn.desktop", "644"]
+]
+conf-files = []
+
+[profile.release]
+strip = true
+opt-level = "z"
+lto = true
