@@ -159,6 +159,26 @@ gitdpkgbuild() {
         fi
 }
 
+install_rust() {
+  echo "[+] Installing Rust toolchain with rustup..."
+  sudo apt update
+  sudo apt install -y curl build-essential pkg-config libssl-dev || {
+    echo "[-] Failed to install system dependencies."
+    return 1
+  }
+
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y || {
+    echo "[-] Rust installation failed."
+    return 1
+  }
+
+  source "$HOME/.cargo/env"
+  echo "[+] Rust installed successfully!"
+  echo "    Rust version: $(rustc --version)"
+  echo "    Cargo version: $(cargo --version)"
+}
+
+
 build_hardn_package() {
     set -e  
 
@@ -1596,6 +1616,7 @@ main() {
         print_ascii_banner
         update_system_packages
         build_hardn_package
+        install_rust
         installationloop
         configure_firejail
         config_selinux
