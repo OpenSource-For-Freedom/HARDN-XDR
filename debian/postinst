@@ -1,11 +1,34 @@
 #!/bin/sh
 set -eu
-install -m 755 -o root -g root /usr/bin/hardn-main.sh /usr/bin/hardn-main.sh
 
-
+# Create required directories
+mkdir -p /usr/share/icons
+mkdir -p /usr/share/applications
 mkdir -p /etc/hardn
 
+# Symlink launcher
+ln -sf /usr/bin/hardn_gui /usr/bin/hardn
 
-ln -sf /usr/bin/hardn-main.sh /usr/bin/hardn
+# Download icon from GitHub
+ICON_URL="https://raw.githubusercontent.com/OpenSource-For-Freedom/HARDN/main/docs/assets/HARDN(1).png"
+ICON_PATH="/usr/share/icons/hardn.png"
+
+if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "$ICON_URL" -o "$ICON_PATH"
+elif command -v wget >/dev/null 2>&1; then
+    wget -q "$ICON_URL" -O "$ICON_PATH"
+else
+    echo "Neither curl nor wget is available to fetch icon." >&2
+fi
+
+# Update icon cache
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+    gtk-update-icon-cache /usr/share/icons || true
+fi
+
+# Update desktop entry database (optional)
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database /usr/share/applications || true
+fi
 
 exit 0
