@@ -1,0 +1,24 @@
+tag,program,comment,status
+a,git,Git version control,success
+a,dpkg-dev,Packaging tools,success
+a,ufw,Firewall configuration tool,success
+a,fail2ban,Intrusion prevention software,success
+a,apparmor,Mandatory access control framework,success
+a,apparmor-profiles,Additional AppArmor profiles,success
+a,apparmor-utils,AppArmor utilities,success
+a,firejail,Sandboxing tool,success
+a,tcpd,Access control for internet services,success
+a,lynis,Security auditing tool,success
+a,debsums,Verify installed package files against MD5 checksums,success
+a,rkhunter,Rootkit scanner,success
+a,libpam-pwquality,Password quality control,success
+a,libvirt-daemon-system,Libvirt daemon for managing VMs,fail
+a,libvirt-clients,Libvirt client utilities,fail
+a,qemu-kvm,Virtualization software,fail
+a,openssh-server,SSH server,success
+a,chkrootkit,Rootkit scanner,success
+a,yara,Pattern matching tool ,success
+a,libpam-tmpdirs,Temporary directory for PAM,fail
+a,apt-listbugs,Report bugs in Debian packages,fail
+a,git-buildpackage,Debian packaging helper tools,fail
+a,debhelper,Debian package helper,success
