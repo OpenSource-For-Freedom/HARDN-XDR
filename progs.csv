@@ -1,25 +1,25 @@
-# tag,program,comment
-a,git,Git version control
-a,dpkg-dev,Packaging tools
-a,ufw,Firewall configuration tool
-a,fail2ban,Intrusion prevention software
-a,apparmor,Mandatory access control framework
-a,apparmor-profiles,Additional AppArmor profiles
-a,apparmor-utils,AppArmor utilities
-a,firejail,Sandboxing tool
-a,tcpd,Access control for internet services
-a,lynis,Security auditing tool
-a,debsums,Verify installed package files against MD5 checksums
-a,rkhunter,Rootkit scanner
-a,libpam-pwquality,Password quality control
-a,libvirt-daemon-system,Libvirt daemon for managing VMs
-a,libvirt-clients,Libvirt client utilities
-a,qemu-kvm,Virtualization software
-a,openssh-server,SSH server
-a,chkrootkit,Rootkit scanner
-a,yara,Pattern matching tool 
-a,libpam-tmpdirs,Temporary directory for PAM
-a,apt-listbugs,Report bugs in Debian packages
-a,git-buildpackage,Debian packaging helper tools
-a,debhelper,Debian package helper
-a,devscripts,Scripts to assist Debian packaging
+name,version
+git,1:2.49.0-0ubuntu1~ubuntu24.04.1
+dpkg-dev,1.22.6ubuntu6.1
+ufw,0.36.2-6
+fail2ban,1.0.2-3ubuntu0.1
+apparmor,4.0.1really4.0.1-0ubuntu0.24.04.4
+apparmor-profiles,4.0.1really4.0.1-0ubuntu0.24.04.4
+apparmor-utils,4.0.1really4.0.1-0ubuntu0.24.04.4
+firejail,0.9.72-2ubuntu3
+tcpd,7.6.q-33
+lynis,3.0.9-1
+debsums,3.0.2.1
+rkhunter,1.4.6-12
+libpam-pwquality,1.4.5-3build1
+libvirt-daemon-system,
+libvirt-clients,
+qemu-kvm,
+openssh-server,1:9.6p1-3ubuntu13.11
+chkrootkit,0.58b-1
+yara,4.5.0-1build2
+libpam-tmpdirs,
+apt-listbugs,
+git-buildpackage,
+debhelper,13.14.1ubuntu5
+devscripts,
