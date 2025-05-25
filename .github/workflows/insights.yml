@@ -1,0 +1,43 @@
+name: Fetch GitHub Traffic Insights
+
+on:
+  schedule:
+    - cron: '0 4 * * *'  # Daily at 04:00 UTC
+  workflow_dispatch:
+
+jobs:
+  fetch-traffic:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Fetch traffic insights
+        run: |
+          mkdir -p traffic
+
+          echo "Fetching clone stats..."
+          curl -s -H "Authorization: token ${{ secrets.ACTION_TOKEN }}" \
+            https://api.github.com/repos/${{ github.repository }}/traffic/clones \
+            > traffic/clones.json
+
+          echo "Fetching view stats..."
+          curl -s -H "Authorization: token ${{ secrets.ACTION_TOKEN }}" \
+            https://api.github.com/repos/${{ github.repository }}/traffic/views \
+            > traffic/views.json
+
+      - name: Commit traffic data
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add traffic/*.json
+          git commit -m "chore: update traffic insights [skip ci]" || echo "No changes to commit"
+          git push origin HEAD
+
+      - name: Upload traffic artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: traffic-insights
+          path: traffic/*.json
