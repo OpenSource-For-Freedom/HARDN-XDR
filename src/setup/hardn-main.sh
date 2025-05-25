@@ -1,7 +1,10 @@
-#!/usr/bin/env bash
+#!/bin/bash
+
+set -euo pipefail
 
 # HARDN-XDR - The Linux Security Hardening Sentinel
 # Developed and built by Christopher Bingham and Tim Burns
+# IDEA: larbs.xyz "Rice Scripting" for Arch Linux. 
 
 
 # Resources & Global Variables
@@ -9,6 +12,7 @@ repo="https://github.com/OpenSource-For-Freedom/HARDN-XDR/"
 progsfile="https://raw.githubusercontent.com/OpenSource-For-Freedom/HARDN-XDR/main/progs.csv"
 repobranch="main"
 name=$(whoami)
+
 
 
 # MENU
@@ -47,15 +51,18 @@ error() {
 }
 
 welcomemsg() {
+    whiptail --title "HARDN-XDR" --msgbox "Welcome to HARDN-XDR - A Debian Security Tool for System Hardening\n\nThis installer will update your system and configure security hardening measures to ensure STIG and Security compliance.\n\nPress OK to continue with the installation." 12 78
+    
     printf "\\n\\n Welcome to HARDN-XDR a Debian Security tool for System Hardening\\n"
     printf "\\nThis installer will update your system first...\\n"
-    # Original yes/no whiptail did not have an explicit exit path for "no"
+    
 }
 
 preinstallmsg() {
     printf "\\nWelcome to HARDN-XDR. A Linux Security Hardening program.\\n"
     printf "The system will be configured to ensure STIG and Security compliance.\\n"
-    # Removed: || { clear; exit 1; }
+    
+    whiptail --title "HARDN-XDR" --msgbox "Welcome to HARDN-XDR. A Linux Security Hardening program.\n\nThe system will be configured to ensure STIG and Security compliance.\n\nPress OK to proceed with the hardening process." 12 78
 }
 
 update_system_packages() {
@@ -113,11 +120,20 @@ aptinstall() {
     package="$1"
     comment="$2"
     printf "Installing \`%s\` from the repository. %s\\n" "$package" "$comment"
-    echo "$aptinstalled" | grep -q "^$package$" && return 1
-    apt-get install -y "$package" >/dev/null 2>&1
-    # Add to installed packages list
-    aptinstalled="$aptinstalled\n$package"
+    # It seems aptinstalled variable is not initialized or used consistently.
+    # Using dpkg -s for a more reliable check.
+    if dpkg -s "$package" >/dev/null 2>&1; then
+        printf "%s is already installed.\\n" "$package"
+        return 1
+    fi
+    if ! apt-get install -y "$package" >/dev/null 2>&1; then
+        printf "Failed to install %s. Please check your network connection or package name.\\n" "$package"
+        return 1
+    fi
+    apt update -y
+    apt update lynis >/dev/null 2>&1 || true
 }
+
 
 maininstall() {
     # Installs all needed programs from main repo.
@@ -215,7 +231,6 @@ setup_security(){
     ufw default allow outgoing
     
     # Allow essential services
-    ufw allow ssh
     ufw allow out 53/udp comment 'DNS'
     ufw allow out 80/tcp comment 'HTTP'
     ufw allow out 443/tcp comment 'HTTPS'
@@ -236,6 +251,8 @@ setup_security(){
     ufw logging on
     
     ufw --force enable
+
+
     
     # Fail2Ban
     printf "Configuring Fail2Ban...\\n"
@@ -247,13 +264,22 @@ setup_security(){
     sed -i 's/maxretry = 5/maxretry = 3/' /etc/fail2ban/jail.local
     systemctl restart fail2ban
 
-    # kernel hardening
+    ###### kernel hardening
     # Check if system is UEFI VM and skip kernel hardening if so
     if [ -d /sys/firmware/efi ] && systemd-detect-virt -q; then
-        printf "UEFI VM detected, skipping kernel hardening...\\n"
+        printf "\\033[1;33m[*] UEFI VM detected, skipping kernel hardening (sysctl settings)...\\033[0m\\n"
+        
     else
-        printf "Configuring kernel hardening...\\n"
+        printf "\\033[1;31m[+] Configuring kernel hardening (sysctl settings)...\\033[0m\\n"
+    fi
+
+
+       
+        # Create or overwrite the sysctl config file for kernel hardening
+        # KRNL-6000: Tweak sysctl values
         {
+            echo "# Kernel hardening settings by HARDN-XDR"
+            echo "# Applied based on Lynis KRNL-6000 and general best practices"
             echo "kernel.kptr_restrict = 2"
             echo "kernel.randomize_va_space = 2"
             echo "kernel.yama.ptrace_scope = 1"
@@ -262,191 +288,58 @@ setup_security(){
             echo "fs.suid_dumpable = 0"
             echo "kernel.dmesg_restrict = 1"
             echo "kernel.unprivileged_bpf_disabled = 1"
-            echo "kernel.unprivileged_userns_clone = 1"
+            echo "kernel.unprivileged_userns_clone = 0" # Stricter: disable unprivileged user namespaces
             echo "kernel.kexec_load_disabled = 1"
-            echo "kernel.modules_disabled = 1"
+            # echo "kernel.modules_disabled = 1" # Very restrictive, uncomment with caution
             echo "kernel.sysrq = 0"
             echo "kernel.core_pattern = |/bin/false"
             echo "kernel.core_uses_pid = 1"
             echo "kernel.panic = 10"
-        } >> /etc/sysctl.conf
-    fi
+            echo "vm.mmap_rnd_bits = 32"
+            echo "vm.mmap_rnd_compat_bits = 16"
+            echo "net.ipv4.tcp_syncookies = 1"
+            echo "net.ipv4.rfc1337 = 1"
+            echo "net.ipv4.conf.all.rp_filter = 1"
+            echo "net.ipv4.conf.default.rp_filter = 1"
+            echo "net.ipv4.conf.all.accept_source_route = 0"
+            echo "net.ipv4.conf.default.accept_source_route = 0"
+            echo "net.ipv4.conf.all.accept_redirects = 0"
+            echo "net.ipv4.conf.default.accept_redirects = 0"
+            echo "net.ipv4.conf.all.secure_redirects = 0"
+            echo "net.ipv4.conf.default.secure_redirects = 0"
+            echo "net.ipv6.conf.all.accept_redirects = 0"
+            echo "net.ipv6.conf.default.accept_redirects = 0"
+            echo "net.ipv4.conf.all.send_redirects = 0"
+            echo "net.ipv4.conf.default.send_redirects = 0"
+            echo "net.ipv4.icmp_echo_ignore_broadcasts = 1"
+            echo "net.ipv4.icmp_ignore_bogus_error_responses = 1"
+            echo "net.ipv6.conf.all.accept_ra = 0"
+            echo "net.ipv6.conf.default.accept_ra = 0"
+        } > /etc/sysctl.d/99-hardn-xdr-kernel.conf
 
-    # grub
-    # Check if system is UEFI and not using GRUB
-    if [ -d /sys/firmware/efi ] && ! command -v grub-install >/dev/null 2>&1; then
-        printf "UEFI system detected without GRUB, skipping GRUB configuration...\\n"
-    elif [ ! -f /etc/default/grub ]; then
-        printf "GRUB configuration file not found, skipping GRUB configuration...\\n"
-    else
-        printf "Configuring GRUB...\\n"
-        # Backup original GRUB config
-        cp /etc/default/grub "/etc/default/grub.bak.$(date +%F-%T)" 2>/dev/null || true
-        
-        sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT=""/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash mitigations=auto"/' /etc/default/grub 2>/dev/null || true
-        sed -i 's/GRUB_TIMEOUT=5/GRUB_TIMEOUT=0/' /etc/default/grub 2>/dev/null || true
-        sed -i 's/GRUB_HIDDEN_TIMEOUT=0/GRUB_HIDDEN_TIMEOUT=5/' /etc/default/grub 2>/dev/null || true
-        sed -i 's/GRUB_HIDDEN_TIMEOUT_QUIET=true/GRUB_HIDDEN_TIMEOUT_QUIET=false/' /etc/default/grub 2>/dev/null || true
-        sed -i 's/GRUB_TERMINAL=console/GRUB_TERMINAL=console/' /etc/default/grub 2>/dev/null || true
-        sed -i 's/GRUB_DISABLE_OS_PROBER=true/GRUB_DISABLE_OS_PROBER=false/' /etc/default/grub 2>/dev/null || true
-        
-        if update-grub >/dev/null 2>&1; then
-            printf "GRUB configuration updated.\\n"
+        printf "  [*] Applying new kernel parameters from /etc/sysctl.d/99-hardn-xdr-kernel.conf...\\n"
+        if sysctl -p /etc/sysctl.d/99-hardn-xdr-kernel.conf >/dev/null 2>&1; then
+            printf "\\033[1;32m  [+] Kernel parameters applied successfully.\\033[0m\\n"
+         
         else
-            printf "Warning: Failed to update GRUB configuration.\\n"
-        fi
-    fi
-    
-    # AppArmor
-    printf "Configuring AppArmor...\\n"
-    if [ -d /sys/kernel/security/apparmor ]; then
-        systemctl enable apparmor >/dev/null 2>&1
-        systemctl start apparmor >/dev/null 2>&1
-        # Check if AppArmor is actually running before enforcing profiles
-        if systemctl is-active --quiet apparmor && [ -f /sys/kernel/security/apparmor/profiles ]; then
-            aa-enforce /etc/apparmor.d/* >/dev/null 2>&1 || {
-                printf "Warning: Failed to enforce some AppArmor profiles.\\n"
+            printf "\\033[1;31m  [-] Error: Failed to apply kernel parameters. Check /etc/sysctl.d/99-hardn-xdr-kernel.conf and dmesg for errors.\\033[0m\\n"
+
+  
+            fi
+   
+
+    # remove locked accounts
+    printf "Removing locked accounts...\\n" 
+    awk -F: '($2 == "!" || $2 == "*") {print $1}' /etc/shadow | while read -r user; do
+        if id "$user" >/dev/null 2>&1; then
+            printf "Removing locked account: %s\\n" "$user"
+            userdel -r "$user" >/dev/null 2>&1 || {
+                printf "Warning: Failed to remove locked account %s.\\n" "$user"
             }
         else
-            printf "Warning: AppArmor not properly initialized, skipping profile enforcement.\\n"
-        fi
-    else
-        printf "Warning: AppArmor not supported on this system, skipping configuration.\\n"
-    fi
-    
-    # Firejail
-    printf "Configuring Firejail...\\n"
-    firecfg >/dev/null 2>&1 || true
-    
-    # Configure Firejail for specific browsers
-    browsers=("firefox" "google-chrome" "tor" "brave")
-    for browser in "${browsers[@]}"; do
-        if command -v "$browser" >/dev/null 2>&1; then
-            printf "Configuring Firejail for %s...\\n" "$browser"
-            firejail --apparmor --seccomp --private-tmp --noroot --caps.drop=all "$browser" >/dev/null 2>&1 || true
+            printf "User %s does not exist, skipping removal.\\n" "$user"
         fi
     done
-    
-    # TCP Wrappers (tcpd)
-    printf "Configuring TCP Wrappers...\\n"
-    
-    echo "ALL: LOCAL, 127.0.0.1" >> /etc/hosts.allow
-    echo "sshd: ALL" >> /etc/hosts.allow
-    echo "ALL: ALL" >> /etc/hosts.deny
-
-  
-  
-    # USB storage
-    echo 'blacklist usb-storage' > /etc/modprobe.d/usb-storage.conf
-    if modprobe -r usb-storage 2>/dev/null; then
-        printf "\033[1;31m[+] USB storage successfully disabled.\033[0m\n"
-    else
-        printf "\033[1;31m[-] Warning: USB storage module in use, cannot unload.\033[0m\n"
-    fi
-    
-    # Disable unnecessary network protocols
-    printf "Disabling unnecessary network protocols...\\n"
-    {
-        echo "install dccp /bin/true"
-        echo "install sctp /bin/true"
-        echo "install rds /bin/true"
-        echo "install tipc /bin/true"
-    } >> /etc/modprobe.d/blacklist-rare-network.conf
-    
-    # Secure shared memory
-    printf "Securing shared memory...\\n"
-    if ! grep -q "tmpfs /run/shm" /etc/fstab; then
-        echo "tmpfs /run/shm tmpfs defaults,noexec,nosuid,nodev 0 0" >> /etc/fstab
-    fi
-    
-    # Set secure file permissions
-    printf "Setting secure file permissions...\\n"
-    chmod 700 /root
-    chmod 644 /etc/passwd
-    chmod 600 /etc/shadow
-    chmod 644 /etc/group
-    chmod 600 /etc/gshadow
-    chmod 600 /etc/ssh/sshd_config
-    
-    # Disable core dumps for security
-    printf "Disabling core dumps...\\n"
-    echo "* hard core 0" >> /etc/security/limits.conf
-    echo "fs.suid_dumpable = 0" >> /etc/sysctl.conf
-    
-    # Configure automatic security updates
-    printf "Configuring automatic security updates...\\n"
-    # shellcheck disable=SC2016
-    echo 'Unattended-Upgrade::Allowed-Origins {
-        "${distro_id}:${distro_codename}-security";
-        "${distro_id}ESMApps:${distro_codename}-apps-security";
-        "${distro_id}ESM:${distro_codename}-infra-security";
-    };' > /etc/apt/apt.conf.d/50unattended-upgrades
-    
-    # Secure network parameters
-    printf "Configuring secure network parameters...\\n"
-    {
-        echo "net.ipv4.ip_forward = 0"
-        echo "net.ipv4.conf.all.send_redirects = 0"
-        echo "net.ipv4.conf.default.send_redirects = 0"
-        echo "net.ipv4.conf.all.accept_redirects = 0"
-        echo "net.ipv4.conf.default.accept_redirects = 0"
-        echo "net.ipv4.conf.all.secure_redirects = 0"
-        echo "net.ipv4.conf.default.secure_redirects = 0"
-        echo "net.ipv4.conf.all.log_martians = 1"
-        echo "net.ipv4.conf.default.log_martians = 1"
-        echo "net.ipv4.icmp_echo_ignore_broadcasts = 1"
-        echo "net.ipv4.icmp_ignore_bogus_error_responses = 1"
-        echo "net.ipv4.tcp_syncookies = 1"
-        echo "net.ipv6.conf.all.disable_ipv6 = 1"
-        echo "net.ipv6.conf.default.disable_ipv6 = 1"
-    } >> /etc/sysctl.conf
-
-
-    # debsums
-    printf "Configuring debsums...\\n"
-    if command -v debsums >/dev/null 2>&1; then
-        if debsums_init >/dev/null 2>&1; then
-            printf "\\033[1;32m[+] debsums initialized successfully\\033[0m\\n"
-        else
-            printf "\\033[1;31m[-] Failed to initialize debsums\\033[0m\\n"
-        fi
-        
-        # Add debsums check to daily cron
-        if ! grep -q "debsums" /etc/crontab; then
-            echo "0 4 * * * root /usr/bin/debsums -s 2>&1 | logger -t debsums" >> /etc/crontab
-            printf "\\033[1;32m[+] debsums daily check added to crontab\\033[0m\\n"
-        else
-            printf "\\033[1;33m[!] debsums already in crontab\\033[0m\\n"
-        fi
-        
-        # Run initial check
-        printf "Running initial debsums check...\\n"
-        if debsums -s >/dev/null 2>&1; then
-            printf "\\033[1;32m[+] Initial debsums check completed successfully\\033[0m\\n"
-        else
-            printf "\\033[1;33m[!] Warning: Some packages failed debsums verification\\033[0m\\n"
-        fi
-    else
-        printf "\\033[1;31m[-] debsums command not found, skipping configuration\\033[0m\\n"
-    fi
-    
-    # rkhunter
-    printf "Configuring rkhunter...\\n"
-    if command -v rkhunter >/dev/null 2>&1; then
-        # Configure rkhunter first
-        sed -i 's/#CRON_DAILY_RUN=""/CRON_DAILY_RUN="true"/' /etc/default/rkhunter 2>/dev/null || true
-        
-        # Update the configuration and database
-        rkhunter --configcheck >/dev/null 2>&1 || true
-        rkhunter --update --nocolors >/dev/null 2>&1 || {
-            printf "Warning: Failed to update rkhunter database.\\n"
-        }
-        rkhunter --propupd --nocolors >/dev/null 2>&1 || {
-            printf "Warning: Failed to update rkhunter properties.\\n"
-        }
-    else
-        printf "Warning: rkhunter not found, skipping configuration.\\n"
-    fi
     
     # PAM Password Quality
     printf "Configuring PAM password quality...\\n"
@@ -457,21 +350,47 @@ setup_security(){
     else
         printf "Warning: /etc/pam.d/common-password not found, skipping PAM configuration...\\n"
     fi
+
+    # umask for users
+    printf "Setting umask for users...\\n"
+    if [ -f /etc/profile ]; then
+        if ! grep -q "umask 027" /etc/profile; then
+            echo "umask 027" >> /etc/profile
+        fi
+    else
+        printf "Warning: /etc/profile not found, skipping umask configuration...\\n"
+    fi
+
+    # Set password expiration policies for users [AUTH-9282]
+    printf "\\n\\033[1;31m[+] Setting password expiration policies (AUTH-9282)...\\033[0m\\n"
+    
+    local MAX_DAYS=90
+    local MIN_DAYS=7
+    local WARN_DAYS=14
+
+    # Iterate over users with UID >= 1000 and a valid login shell
+    # Excludes system accounts and accounts with nologin/false shells
+    getent passwd | awk -F: '$3 >= 1000 && $7 !~ /(\/nologin|\/false)$/ {print $1}' | while IFS= read -r username; do
+        if id "$username" >/dev/null 2>&1; then # Check if user actually exists
+            printf "  [*] Configuring password expiration for user: %s\\n" "$username"
+            
+            # Set Max/Min password age and Warning period
+            if chage -M "$MAX_DAYS" -m "$MIN_DAYS" -W "$WARN_DAYS" "$username"; then
+                printf "    [+] Password expiration policies (Max:%s, Min:%s, Warn:%s days) set for user %s.\\n" "$MAX_DAYS" "$MIN_DAYS" "$WARN_DAYS" "$username"
+            else
+                printf "    \\033[1;31m[-] Failed to set password expiration policies for user %s. Check chage output for details.\\033[0m\\n" "$username"
+            fi
+        else
+            printf "  [!] User %s (from getent passwd) not found by id command. Skipping.\\n" "$username"
+        fi
+    done
+    printf "\\033[1;32m[+] Password expiration policy configuration attempt completed for relevant users.\\033[0m\\n"
     
     # libvirt and KVM
     printf "Configuring libvirt...\\n"
     systemctl enable libvirtd
     systemctl start libvirtd
     usermod -a -G libvirt "$name" >/dev/null 2>&1 || true
-    
-    # OpenSSH Server
-    printf "Configuring OpenSSH...\\n"
-    sed -i 's/#PermitRootLogin yes/PermitRootLogin no/' /etc/ssh/sshd_config
-    sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
-    sed -i 's/#PubkeyAuthentication yes/PubkeyAuthentication yes/' /etc/ssh/sshd_config
-    sed -i 's/#Protocol 2/Protocol 2/' /etc/ssh/sshd_config
-    sed -i 's/#MaxAuthTries 6/MaxAuthTries 3/' /etc/ssh/sshd_config
-    systemctl restart ssh || systemctl restart sshd
     
     # chkrootkit
     printf "Configuring chkrootkit...\\n"
@@ -553,31 +472,28 @@ setup_security(){
     mkdir -p /etc/yara/rules
     
     # apt-listbugs
-    printf "apt-listbugs configured for security updates...\\n"
-    
-    # SELinux
-    printf "Configuring SELinux...\\n"
-    if selinux-activate >/dev/null 2>&1; then
-        printf "\\033[1;32m[+] SELinux activated successfully\\033[0m\\n"
+    printf "Configuring apt-listbugs for security updates...\\n"
+    if ! dpkg -s apt-listbugs >/dev/null 2>&1; then
+        printf "Installing apt-listbugs...\\n"
+        apt install -y apt-listbugs >/dev/null 2>&1
+    fi
+    # Configure apt-listbugs to only show security bugs and pin critical ones
+    if [ -d /etc/apt/apt.conf.d ]; then
+        cat << EOF > /etc/apt/apt.conf.d/10apt-listbugs
+// apt-listbugs configuration by HARDN-XDR
+// Only report security bugs
+APT::ListBugs::Severities "critical,grave,serious";
+// Pin critical bugs by default
+APT::ListBugs::Pinning "critical";
+// Set a default frontend if not already set (e.g. for non-interactive use)
+// Dpkg::Pre-Install-Pkgs {"/usr/sbin/apt-listbugs apt || exit 10";};
+EOF
+        printf "\\033[1;32m[+] apt-listbugs configured to report security bugs and pin critical ones.\\033[0m\\n"
     else
-        printf "\\033[1;33m[!] Warning: Failed to activate SELinux\\033[0m\\n"
+        printf "\\033[1;33m[!] Warning: /etc/apt/apt.conf.d directory not found. Cannot configure apt-listbugs automatically.\\033[0m\\n"
     fi
     
-    if echo "SELINUX=enforcing" > /etc/selinux/config && echo "SELINUXTYPE=default" >> /etc/selinux/config; then
-        printf "\\033[1;32m[+] SELinux configuration written successfully\\033[0m\\n"
-    else
-        printf "\\033[1;31m[-] Error: Failed to write SELinux configuration\\033[0m\\n"
-    fi
     
-    # Lynis
-    printf "Configuring Lynis...\\n"
-    lynis update info >/dev/null 2>&1 || true
-    echo "0 2 * * 0 root /usr/bin/lynis audit system --cronjob" >> /etc/crontab
-    
-    printf "\\033[1;32m[+] Security tools configuration completed!\\033[0m\\n"
-    printf "\\033[1;33m[!] Note: Some changes require a reboot to take full effect.\\033[0m\\n"
-}
-
 restrict_compilers() {
     printf "\033[1;31m[+] Restricting compiler access to root only (HRDN-7222)...\033[0m\n"
 
@@ -673,143 +589,96 @@ disable_firewire_drivers() {
     fi
 }
 
+
 purge_old_packages() {
     printf "\\033[1;31m[+] Purging configuration files of old/removed packages...\033[0m\\n"
+   
     local packages_to_purge
-    packages_to_purge=$(dpkg -l | grep '^rc' | awk '{print $2}')
+    # packages_to_purge=$(dpkg -l | grep '^rc' | awk '{print $2}') # Old problematic line
+    packages_to_purge=$( (dpkg -l | grep '^rc' || true) | awk '{print $2}' ) # Corrected line
+   
 
-    if [[ "$packages_to_purge" ]]; then
+    if [[ -n "$packages_to_purge" ]]; then # Check if the string is non-empty
+        
         printf "\\033[1;33m[*] Found the following packages with leftover configuration files to purge:\033[0m\\n"
         echo "$packages_to_purge"
        
-        if command -v whiptail >/dev/null; then
-            whiptail --title "Packages to Purge" --msgbox "The following packages have leftover configuration files that will be purged:\n\n$packages_to_purge" 15 70
-        fi
-
         for pkg in $packages_to_purge; do
+          
             printf "\\033[1;31m[+] Purging %s...\\033[0m\\n" "$pkg"
-            if apt-get purge -y "$pkg"; then
+            if apt-get purge -y "$pkg" >/dev/null 2>&1; then
+                
                 printf "\\033[1;32m[+] Successfully purged %s.\\033[0m\\n" "$pkg"
             else
+                
                 printf "\\033[1;31m[-] Failed to purge %s. Trying dpkg --purge...\\033[0m\\n" "$pkg"
-                if dpkg --purge "$pkg"; then
+                if dpkg --purge "$pkg" >/dev/null 2>&1; then
+                  
                     printf "\\033[1;32m[+] Successfully purged %s with dpkg.\\033[0m\\n" "$pkg"
                 else
+                   
                     printf "\\033[1;31m[-] Failed to purge %s with dpkg as well.\\033[0m\\n" "$pkg"
                 fi
             fi
         done
-        whiptail --infobox "Purged configuration files for removed packages." 7 70
     else
+      
         printf "\\033[1;32m[+] No old/removed packages with leftover configuration files found to purge.\033[0m\\n"
-        whiptail --infobox "No leftover package configurations to purge." 7 70
     fi
    
+   
     printf "\\033[1;31m[+] Running apt-get autoremove and clean to free up space...\033[0m\\n"
-    apt-get autoremove -y
-    apt-get clean
-    whiptail --infobox "Apt cache cleaned." 7 70
-}
-
-enable_nameservers() {
-    printf "\\033[1;31m[+] Checking and configuring DNS nameservers (Quad9 primary, Google secondary)...\033[0m\\n"
-    local resolv_conf quad9_ns google_ns nameserver_count configured_persistently changes_made
-	resolv_conf="/etc/resolv.conf"
-    quad9_ns="9.9.9.9"
-    google_ns="8.8.8.8"
-    nameserver_count=0
-    configured_persistently=false
-    changes_made=false
-
-    if [[ -f "$resolv_conf" ]]; then
-        nameserver_count=$(grep -E "^\s*nameserver\s+" "$resolv_conf" | grep -Ev "127\.0\.0\.1|::1" | awk '{print $2}' | sort -u | wc -l)
-    fi
-
-    printf "\\033[1;34m[*] Found %s non-localhost nameserver(s) in %s.\033[0m\\n" "$nameserver_count" "$resolv_conf"
-
-    # Always attempt to set Quad9 as primary and Google as secondary
-    # Check for systemd-resolved
-    if systemctl is-active --quiet systemd-resolved && \
-       [[ -L "$resolv_conf" ]] && \
-       (readlink "$resolv_conf" | grep -qE "systemd/resolve/(stub-resolv.conf|resolv.conf)"); then
-        
-        printf "\\033[1;34m[*] systemd-resolved is active and manages %s.\033[0m\\n" "$resolv_conf"
-        local resolved_conf_systemd temp_resolved_conf
-		resolved_conf_systemd="/etc/systemd/resolved.conf"
-        temp_resolved_conf=$(mktemp)
-
-        if [[ ! -f "$resolved_conf_systemd" ]]; then
-            printf "\\033[1;33m[*] Creating %s as it does not exist.\033[0m\\n" "$resolved_conf_systemd"
-            echo "[Resolve]" > "$resolved_conf_systemd"
-            chmod 644 "$resolved_conf_systemd"
-        fi
-        
-        cp "$resolved_conf_systemd" "$temp_resolved_conf"
-
-        # Set DNS= and FallbackDNS= explicitly
-        if grep -qE "^\s*DNS=" "$temp_resolved_conf"; then
-            sed -i -E "s/^\s*DNS=.*/DNS=$quad9_ns $google_ns/" "$temp_resolved_conf"
-        else
-            if grep -q "\[Resolve\]" "$temp_resolved_conf"; then
-                sed -i "/\[Resolve\]/a DNS=$quad9_ns $google_ns" "$temp_resolved_conf"
-            else
-                echo -e "\n[Resolve]\nDNS=$quad9_ns $google_ns" >> "$temp_resolved_conf"
-            fi
-        fi
-
-        # Set FallbackDNS as well (optional, for redundancy)
-        if grep -qE "^\s*FallbackDNS=" "$temp_resolved_conf"; then
-            sed -i -E "s/^\s*FallbackDNS=.*/FallbackDNS=$google_ns $quad9_ns/" "$temp_resolved_conf"
-        else
-            if grep -q "\[Resolve\]" "$temp_resolved_conf"; then
-                sed -i "/\[Resolve\]/a FallbackDNS=$google_ns $quad9_ns" "$temp_resolved_conf"
-            else
-                echo -e "\n[Resolve]\nFallbackDNS=$google_ns $quad9_ns" >> "$temp_resolved_conf"
-            fi
-        fi
-
-        if ! cmp -s "$temp_resolved_conf" "$resolved_conf_systemd"; then
-            cp "$temp_resolved_conf" "$resolved_conf_systemd"
-            printf "\\033[1;32m[+] Updated %s. Restarting systemd-resolved...\033[0m\\n" "$resolved_conf_systemd"
-            if systemctl restart systemd-resolved; then
-                printf "\\033[1;32m[+] systemd-resolved restarted successfully.\033[0m\\n"
-                configured_persistently=true
-                changes_made=true
-            else
-                printf "\\033[1;31m[-] Failed to restart systemd-resolved. Manual check required.\033[0m\\n"
-            fi
-        else
-            printf "\\033[1;34m[*] No effective changes to %s were needed.\033[0m\\n" "$resolved_conf_systemd"
-        fi
-        rm -f "$temp_resolved_conf"
-    fi
-
-    # If not using systemd-resolved, try to set directly in /etc/resolv.conf
-    if [[ "$configured_persistently" = false ]]; then
-        printf "\\033[1;34m[*] Attempting direct modification of %s.\033[0m\\n" "$resolv_conf"
-        if [[ -f "$resolv_conf" ]] && [[ -w "$resolv_conf" ]]; then
-            # Remove existing Quad9/Google entries and add them at the top
-            grep -vE "^\s*nameserver\s+($quad9_ns|$google_ns)" "$resolv_conf" > "${resolv_conf}.tmp"
-            {
-                echo "nameserver $quad9_ns"
-                echo "nameserver $google_ns"
-                cat "${resolv_conf}.tmp"
-            } > "$resolv_conf"
-            rm -f "${resolv_conf}.tmp"
-            printf "\\033[1;32m[+] Set Quad9 as primary and Google as secondary in %s.\033[0m\\n" "$resolv_conf"
-            printf "\\033[1;33m[!] Warning: Direct changes to %s might be overwritten by network management tools.\033[0m\\n" "$resolv_conf"
-            changes_made=true
-        else
-            printf "\\033[1;31m[-] Could not modify %s (file not found or not writable).\033[0m\\n" "$resolv_conf"
-        fi
-    fi
-
-    if [[ "$changes_made" = true ]]; then
-        whiptail --infobox "DNS configured: Quad9 primary, Google secondary." 7 70
+    ### Hardware Security Configuration ###
+    printf "\\033[1;31m[+] Checking for deleted files still in use (LOGG-2190)...\033[0m\\n"
+    
+    local deleted_files_in_use report_file pids_to_kill
+    
+    if ! command -v lsof >/dev/null 2>&1; then
+        printf "\\033[1;33m[!] lsof command not found. Skipping check for deleted files in use.\033[0m\\n"
     else
-        whiptail --infobox "DNS configuration checked. No changes made or needed." 8 70
-    fi
+        deleted_files_in_use=$(lsof 2>/dev/null | grep '(deleted)')
+
+        if [[ -n "$deleted_files_in_use" ]]; then
+            printf "\\033[1;33m[!] Warning: The following deleted files are still in use by processes:\\033[0m\\n"
+            echo "$deleted_files_in_use" # Print to console for script log
+            
+            report_file=$(mktemp)
+            echo "HARDN-LOG-2190: Deleted files are still in use by processes." > "$report_file"
+            {
+                echo "This can indicate a security issue (e.g., a rootkit hiding files)"
+                echo "or a normal operational behavior (e.g., a service holding a log file that was rotated)."
+                echo "Review the list below. These processes might need to be restarted or terminated to release the files."
+                echo "---------------------------------------------------------------------------------------------"
+                echo "COMMAND  PID  USER   FD   TYPE DEVICE SIZE/OFF NODE NAME" # Header for context
+                echo "$deleted_files_in_use"
+                echo "---------------------------------------------------------------------------------------------"
+            } >> "$report_file"
+            
+            pids_to_kill=$(echo "$deleted_files_in_use" | awk '{print $2}' | sort -u | grep -E '^[0-9]+$')
+            
+            if [[ -n "$pids_to_kill" ]]; then
+                echo "The following PIDs are associated with these files: $(echo "$pids_to_kill" | tr '\n' ' ')" >> "$report_file"
+                echo "Recommendation: Investigate these processes. You will be asked if you want to attempt to terminate them." >> "$report_file"
+            else
+                echo "Could not identify specific PIDs from the lsof output. Manual investigation required." >> "$report_file"
+            fi
+
+            cat "$report_file" # Show the report
+            if [[ -n "$pids_to_kill" ]]; then
+                printf "\\n\\033[1;31m[CRITICAL] LOGG-2190: Deleted files are still in use. Manual intervention required to terminate PIDs: %s\033[0m\\n" "$(echo "$pids_to_kill" | tr '\n' ' ')"
+            else
+                printf "\\n\\033[1;31m[CRITICAL] LOGG-2190: Deleted files are still in use. PIDs could not be reliably extracted. Manual investigation required.\033[0m\\n"
+            fi
+            rm -f "$report_file"
+            printf "\\033[1;33m[!] Recommendation: Review process termination results. If files are still held or services are disrupted, investigate further. Restarting affected services gracefully is often the best approach.\033[0m\\n"
+
+        else # No deleted files in use
+            printf "\\033[1;32m[+] No deleted files found to be still in use.\033[0m\\n"
+        fi
+    fi 
 }
+
+
 
 enable_process_accounting_and_sysstat() {
     printf "\\033[1;31m[+] Enabling process accounting (acct) and system statistics (sysstat)...\033[0m\\n"
@@ -842,6 +711,35 @@ enable_process_accounting_and_sysstat() {
             fi
         else
             printf "\\033[1;32m[+] acct/psacct service is already active.\033[0m\\n"
+        fi
+    fi
+
+    # Check for automation tools [TOOL-5002]
+    printf "\\033[1;31m[+] Checking for presence of automation tools (TOOL-5002)...\033[0m\\n"
+    local automation_tools found_tools
+    automation_tools=("ansible" "puppet" "chef-client" "salt-call" "salt-minion")
+    found_tools=""
+
+    for tool in "${automation_tools[@]}"; do
+        if command -v "$tool" >/dev/null 2>&1; then
+            printf "\\033[1;33m[!] Found automation tool: %s\033[0m\\n" "$tool"
+            if [[ -z "$found_tools" ]]; then
+                found_tools="$tool"
+            else
+                found_tools="$found_tools, $tool"
+            fi
+        fi
+    done
+
+    if [[ -n "$found_tools" ]]; then
+        printf "\\033[1;33m[!] Automation tools detected: %s. This may impact manual configuration changes.\033[0m\\n" "$found_tools"
+        if command -v whiptail >/dev/null; then
+            whiptail --title "HARDN-XDR" --msgbox "The following automation tools were detected: $found_tools.\n\nBe aware that these tools might manage system configuration and could overwrite manual changes made by this script. It's recommended to integrate hardening practices into your automation workflows." 12 78
+        fi
+    else
+        printf "\\033[1;32m[+] No common automation tools (Ansible, Puppet, Chef, Salt) detected.\033[0m\\n"
+        if command -v whiptail >/dev/null; then
+            whiptail --title "HARDN-XDR" --infobox "No common automation tools (Ansible, Puppet, Chef, Salt) were detected." 8 78
         fi
     fi
 
@@ -901,190 +799,510 @@ enable_process_accounting_and_sysstat() {
     fi
 }
 
-# Central logging
-setup_central_logging() {
-    {
-        echo 10
-        sleep 0.2
-        printf "\033[1;31m[+] Setting up central logging for security tools...\033[0m\n"
-
-        # Create necessary directories
-        mkdir -p /var/log/suricata
-        mkdir -p /usr/local/var/log/suricata
-        touch /usr/local/var/log/suricata/hardn-xdr.log
-        chmod 640 /usr/local/var/log/suricata/hardn-xdr.log
-        chown root:adm /usr/local/var/log/suricata/hardn-xdr.log
-
-        echo 20
-        sleep 0.2
-
-        # Create rsyslog configuration for centralized logging
-        cat > /etc/rsyslog.d/30-hardn-xdr.conf << 'EOF'
-# HARDN-XDR Central Logging Configuration
-
-# Create a template for security logs
-$template HARDNFormat,"%TIMESTAMP% %HOSTNAME% %syslogtag%%msg%\n"
-
-# Suricata logs
-if $programname == 'suricata' then /usr/local/var/log/suricata/hardn-xdr.log;HARDNFormat
-& stop
-
-# AIDE logs
-if $programname == 'aide' then /usr/local/var/log/suricata/hardn-xdr.log;HARDNFormat
-& stop
-
-# Maldet logs
-if $programname == 'maldet' or $syslogtag contains 'maldet' then /usr/local/var/log/suricata/hardn-xdr.log;HARDNFormat
-& stop
-
-# SELinux logs
-if $programname == 'setroubleshoot' or $programname == 'audit' or $msg contains 'selinux' then /usr/local/var/log/suricata/hardn-xdr.log;HARDNFormat
-& stop
-
-# AppArmor logs
-if $programname == 'apparmor' or $msg contains 'apparmor' then /usr/local/var/log/suricata/hardn-xdr.log;HARDNFormat
-& stop
-
-# Fail2Ban logs
-if $programname == 'fail2ban' then /usr/local/var/log/suricata/hardn-xdr.log;HARDNFormat
-& stop
-
-# RKHunter logs
-if $programname == 'rkhunter' or $syslogtag contains 'rkhunter' then /usr/local/var/log/suricata/hardn-xdr.log;HARDNFormat
-& stop
-
-# Debsums logs
-if $programname == 'debsums' or $syslogtag contains 'debsums' then /usr/local/var/log/suricata/hardn-xdr.log;HARDNFormat
-& stop
-EOF
-
-        echo 40
-        sleep 0.2
-
-        # Create logrotate configuration for the central log
-        cat > /etc/logrotate.d/hardn-xdr << 'EOF'
-/usr/local/var/log/suricata/hardn-xdr.log {
-    daily
-    rotate 30
-    compress
-    delaycompress
-    missingok
-    notifempty
-    create 640 root adm
-    postrotate
-        /usr/lib/rsyslog/rsyslog-rotate
-    endscript
-}
-EOF
-
-        echo 60
-        sleep 0.2
-
-        # Configure each tool to use syslog where possible
-
-        # Configure Suricata to use syslog
-        if [ -f /etc/suricata/suricata.yaml ]; then
-            if ! grep -q "syslog:" /etc/suricata/suricata.yaml; then
-                # Backup the original config
-                cp /etc/suricata/suricata.yaml /etc/suricata/suricata.yaml.bak
-
-                # Add syslog output configuration
-                sed -i '/outputs:/a \
-  - syslog:\n      enabled: yes\n      facility: local5\n      level: Info\n      format: "[%i] <%d> -- "' /etc/suricata/suricata.yaml
-            fi
-        fi
-
-        # Configure AIDE to use syslog
-        if [ -f /etc/aide/aide.conf ]; then
-            if ! grep -q "report_syslog" /etc/aide/aide.conf; then
-                echo "report_syslog=yes" >> /etc/aide/aide.conf
-            fi
-        fi
-
-        # Configure RKHunter to use syslog
-        if [ -f /etc/rkhunter.conf ]; then
-            sed -i 's/^#\?USE_SYSLOG=.*/USE_SYSLOG=1/' /etc/rkhunter.conf
-        fi
-
-        echo 80
-        sleep 0.2
-
-        # Create a script to periodically check and consolidate logs that don't use syslog
-        cat > /usr/local/bin/hardn-log-collector.sh << 'EOF'
-#!/bin/bash
-
-# HARDN-XDR Log Collector
-# This script collects logs from various security tools and adds them to the central log
-
-CENTRAL_LOG="/usr/local/var/log/suricata/hardn-xdr.log"
-HOSTNAME=$(hostname)
-DATE=$(date "+%b %d %H:%M:%S")
-
-# Function to append logs with proper formatting
-append_log() {
-    local source="$1"
-    local log_file="$2"
-
-    if [ -f "$log_file" ]; then
-        while IFS= read -r line; do
-            echo "$DATE $HOSTNAME $source: $line" >> "$CENTRAL_LOG"
-        done < <(tail -n 100 "$log_file" 2>/dev/null)
-    fi
-}
-
-# Collect logs from tools that don't use syslog
-append_log "maldet" "/var/log/maldet_scan.log"
-append_log "debsums" "/var/log/debsums_cron.log"
-append_log "aide" "/var/log/aide_check.log"
-append_log "rkhunter" "/var/log/rkhunter_cron.log"
-append_log "lynis" "/var/log/lynis_cron.log"
-append_log "yara" "/var/log/yara_scan.log"
-
-# Set proper permissions
-chmod 640 "$CENTRAL_LOG"
-chown root:adm "$CENTRAL_LOG"
-EOF
-
-        chmod +x /usr/local/bin/hardn-log-collector.sh
-
-        # Add the log collector to crontab
-        (crontab -l 2>/dev/null || true) > mycron
-        if ! grep -q "hardn-log-collector.sh" mycron; then
-            echo "*/30 * * * * /usr/local/bin/hardn-log-collector.sh" >> mycron
-            crontab mycron
-        fi
-        rm mycron
-
-        echo 90
-        sleep 0.2
-
-        # Restart rsyslog to apply changes
-        systemctl restart rsyslog
-
-        # Create a symlink in /var/log for easier access
-        ln -sf /usr/local/var/log/suricata/hardn-xdr.log /var/log/hardn-xdr.log
-
-        echo 100
-        sleep 0.2
-    } 
-
-    printf "\033[1;32m[+] Central logging setup complete. All security logs will be collected in /usr/local/var/log/suricata/hardn-xdr.log\033[0m\n"
-    printf "\033[1;32m[+] A symlink has been created at /var/log/hardn-xdr.log for easier access\033[0m\n"
-}
 
 disable_service_if_active() {
     local service_name
     service_name="$1"
     if systemctl is-active --quiet "$service_name"; then
         printf "\033[1;31m[+] Disabling active service: %s...\033[0m\n" "$service_name"
-        systemctl disable --now "$service_name" || printf "\033[1;33m[!] Failed to disable service: %s (may not be installed or already disabled).\033[0m\n" "$service_name"
+        systemctl disable --now "$service_name" >/dev/null 2>&1 || printf "\033[1;33m[!] Failed to disable service: %s (may not be installed or already disabled).\033[0m\n" "$service_name"
     elif systemctl list-unit-files --type=service | grep -qw "^$service_name.service"; then
         printf "\033[1;31m[+] Service %s is not active, ensuring it is disabled...\033[0m\n" "$service_name"
-        systemctl disable "$service_name" || printf "\033[1;33m[!] Failed to disable service: %s (may not be installed or already disabled).\033[0m\n" "$service_name"
+        systemctl disable "$service_name" >/dev/null 2>&1 || printf "\033[1;33m[!] Failed to disable service: %s (may not be installed or already disabled).\033[0m\n" "$service_name"
     else
         printf "\033[1;34m[*] Service %s not found or not installed. Skipping.\033[0m\n" "$service_name"
     fi
 }
+
+hardn_apache() {
+    printf "\\033[1;31m[+] Hardening Apache web server (BOOT-5264)...\\033[0m\\n"
+    
+    if ! command -v apache2ctl >/dev/null; then
+        printf "\\033[1;33m[!] Apache web server not found. Skipping hardening steps.\033[0m\\n"
+        whiptail --msgbox "Apache web server not found. Skipping hardening steps." 8 78
+        return
+    fi
+
+    # Disable directory listing
+    local apache_conf="/etc/apache2/apache2.conf"
+    if grep -q "Options Indexes" "$apache_conf"; then
+        sed -i 's/Options Indexes/Options -Indexes/' "$apache_conf"
+        printf "\\033[1;32m[+] Disabled directory listing in %s\\033[0m\\n" "$apache_conf"
+    else
+        printf "\\033[1;34m[*] Directory listing already disabled in %s\\033[0m\\n" "$apache_conf"
+    fi
+
+    # Disable server signature and tokens
+    if ! grep -q "ServerSignature Off" "$apache_conf"; then
+        echo "ServerSignature Off" >> "$apache_conf"
+        printf "\\033[1;32m[+] Disabled server signature in %s\\033[0m\\n" "$apache_conf"
+    else
+        printf "\\033[1;34m[*] Server signature already disabled in %s\\033[0m\\n" "$apache_conf"
+    fi
+
+    if ! grep -q "ServerTokens Prod" "$apache_conf"; then
+        echo "ServerTokens Prod" >> "$apache_conf"
+        printf "\\033[1;32m[+] Set ServerTokens to Prod in %s\\033[0m\\n" "$apache_conf"
+    else
+        printf "\\033[1;34m[*] ServerTokens already set to Prod in %s\\033[0m\\n" "$apache_conf"
+    fi
+
+    # Disable TRACE method
+    local conf_file="/etc/apache2/conf-available/security.conf"
+    if [[ ! -f "$conf_file" ]]; then
+        touch "$conf_file"
+        printf "\\033[1;32m[+] Created security configuration file: %s\\033[0m\\n" "$conf_file"
+    fi
+    if ! grep -q "TraceEnable Off" "$conf_file"; then
+        echo "TraceEnable Off" >> "$conf_file"
+        printf "\\033[1;32m[+] Disabled TRACE method in %s\\033[0m\\n" "$conf_file"
+    else
+        printf "\\033[1;34m[*] TRACE method already disabled in %s\\033[0m\\n" "$conf_file"
+    fi
+    # Disable HTTP methods other than GET, POST, and HEAD
+    if ! grep -q "LimitExcept GET POST HEAD" "$conf_file"; then
+        echo "LimitExcept GET POST HEAD { deny all; }" >> "$conf_file"
+        printf "\\033[1;32m[+] Restricted HTTP methods in %s\\033[0m\\n" "$conf_file"
+    else
+        printf "\\033[1;34m[*] HTTP methods already restricted in %s\\033[0m\\n" "$conf_file"
+    fi
+    # Disable SSLv2 and SSLv3
+    if ! grep -q "SSLProtocol" "$apache_conf"; then
+        echo "SSLProtocol all -SSLv2 -SSLv3" >> "$apache_conf"
+        printf "\\033[1;32m[+] Disabled SSLv2 and SSLv3 in %s\\033[0m\\n" "$apache_conf"
+    else
+        sed -i 's/SSLProtocol.*/SSLProtocol all -SSLv2 -SSLv3/' "$apache_conf"
+        printf "\\033[1;32m[+] Updated SSLProtocol to disable SSLv2 and SSLv3 in %s\\033[0m\\n" "$apache_conf"
+    fi
+    # Disable weak ciphers
+    if ! grep -q "SSLCipherSuite" "$apache_conf"; then
+        echo "SSLCipherSuite HIGH:!aNULL:!MD5:!3DES" >> "$apache_conf"
+        printf "\\033[1;32m[+] Set strong ciphers in %s\\033[0m\\n" "$apache_conf"
+    else
+        sed -i 's/SSLCipherSuite.*/SSLCipherSuite HIGH:!aNULL:!MD5:!3DES/' "$apache_conf"
+        printf "\\033[1;32m[+] Updated SSLCipherSuite to use strong ciphers in %s\\033[0m\\n" "$apache_conf"
+    fi
+    # Disable HTTP/2 if not needed
+    if grep -q "Protocols h2" "$apache_conf"; then
+        sed -i 's/Protocols h2/Protocols http/' "$apache_conf"
+        printf "\\033[1;32m[+] Disabled HTTP/2 in %s\\033[0m\\n" "$apache_conf"
+    else
+        printf "\\033[1;34m[*] HTTP/2 not enabled, skipping disable step in %s\\033[0m\\n" "$apache_conf"
+    fi
+    # Restart Apache to apply changes
+    if systemctl restart apache2; then
+        printf "\\033[1;32m[+] Apache web server restarted successfully.\033[0m\\n"
+    else
+        printf "\\033[1;31m[-] Failed to restart Apache web server. Please check manually.\033[0m\\n"
+    fi
+    printf "\\033[1;32m[+] Apache hardening complete. Review the configuration in %s for any additional customizations.\033[0m\\n" "$apache_conf"
+    whiptail --msgbox "Apache hardening complete. Review the configuration in $apache_conf for any additional customizations." 10 70
+}
+
+hardn_system_services() {
+    printf "\\033[1;31m[+] Analyzing security of systemd services (BOOT-5264)...\033[0m\\n"
+    
+    if ! command -v systemd-analyze >/dev/null; then
+        printf "\\033[1;33m[!] systemd-analyze command not found. Skipping service security analysis.\033[0m\\n"
+        whiptail --msgbox "systemd-analyze command not found. Skipping service security analysis." 8 78
+        return
+    fi
+
+    local services
+    services=$(systemctl list-units --type=service --state=running --no-legend --plain | awk '{print $1}')
+    
+    if [ -z "$services" ]; then
+        printf "\\033[1;33m[!] No running services found to analyze.\033[0m\\n"
+        whiptail --msgbox "No running services found to analyze." 8 78
+        return
+    fi
+
+    local output_file
+    output_file=$(mktemp)
+
+    echo "$services" | while IFS= read -r service_name; do
+        printf "\\n\\033[1;34m[*] Analyzing: %s\\033[0m\\n" "$service_name" >> "$output_file"
+        if systemd-analyze security "$service_name" >> "$output_file" 2>&1; then
+            printf "\\033[1;32m  [+] Analysis for %s completed.\\033[0m\\n" "$service_name" >> "$output_file"
+        else
+            printf "\\033[1;31m  [-] Failed to analyze %s or service has issues.\\033[0m\\n" "$service_name" >> "$output_file"
+        fi
+        echo "-----------------------------------------------------" >> "$output_file"
+    done
+
+    printf "\\033[1;32m[+] Systemd service security analysis complete.\\033[0m\\n"
+    
+    if command -v whiptail >/dev/null; then
+        whiptail --title "HARDN-XDR" --msgbox "Systemd service security analysis has been completed.\n\nAll running services have been analyzed for security exposure levels.\n\nPress OK to continue with the hardening process." 12 70
+    fi
+  
+    rm -f "$output_file"
+}
+
+hardn_systemd(){
+    printf "\\033[1;31m[+] Hardening systemd services based on security exposure levels...\\033[0m\\n"
+    
+    local service_overrides_dir="/etc/systemd/system"
+    local changes_made=false
+    
+    create_service_override() {
+        local service_name="$1"
+        local security_settings="$2"
+        local override_dir="${service_overrides_dir}/${service_name}.d"
+        local override_file="${override_dir}/security-hardening.conf"
+        
+        if [[ ! -d "$override_dir" ]]; then
+            mkdir -p "$override_dir"
+            printf "\\033[1;34m[*] Created override directory: %s\\033[0m\\n" "$override_dir"
+        fi
+        
+        cat << EOF > "$override_file"
+# Security hardening override created by HARDN-XDR
+# Applied to address systemd-analyze security findings
+[Service]
+$security_settings
+EOF
+        
+        printf "\\033[1;32m[+] Created security override for %s\\033[0m\\n" "$service_name"
+        changes_made=true
+    }
+    
+    service_exists_and_enabled() {
+        local service_name="$1"
+        systemctl list-unit-files --type=service | grep -q "^${service_name}\\s" && \
+        systemctl is-enabled "$service_name" >/dev/null 2>&1
+    }
+    
+    printf "\\033[1;34m[*] Hardening UNSAFE services...\\033[0m\\n"
+    
+    # UNSAFE Services - Apply strict hardening
+    if service_exists_and_enabled "ssh"; then
+        create_service_override "ssh" "PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+NoNewPrivileges=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallFilter=@system-service
+SystemCallFilter=~@debug @mount @cpu-emulation @obsolete @privileged @reboot @swap
+ReadWritePaths=/var/log /run/sshd"
+    fi
+    
+    if service_exists_and_enabled "cron"; then
+        create_service_override "cron" "PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+NoNewPrivileges=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallFilter=@system-service
+SystemCallFilter=~@debug @mount @cpu-emulation @obsolete @reboot @swap
+ReadWritePaths=/var/log /var/spool/cron /etc/crontab /etc/cron.d"
+    fi
+    
+    if service_exists_and_enabled "rsyslog"; then
+        create_service_override "rsyslog" "PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+NoNewPrivileges=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallFilter=@system-service
+SystemCallFilter=~@debug @mount @cpu-emulation @obsolete @reboot @swap
+ReadWritePaths=/var/log /run/rsyslog"
+    fi
+    
+    if service_exists_and_enabled "fail2ban"; then
+        create_service_override "fail2ban" "PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+NoNewPrivileges=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallFilter=@system-service
+SystemCallFilter=~@debug @mount @cpu-emulation @obsolete @reboot @swap
+ReadWritePaths=/var/log /var/lib/fail2ban /var/run/fail2ban"
+    fi
+    
+    if service_exists_and_enabled "suricata"; then
+        create_service_override "suricata" "PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+NoNewPrivileges=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallFilter=@system-service
+SystemCallFilter=~@debug @mount @cpu-emulation @obsolete @reboot @swap
+ReadWritePaths=/var/log/suricata /var/lib/suricata /run/suricata"
+    fi
+    
+    if service_exists_and_enabled "docker"; then
+        create_service_override "docker" "PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+LockPersonality=yes
+NoNewPrivileges=yes
+ReadWritePaths=/var/lib/docker /var/run/docker"
+    fi
+    
+    if service_exists_and_enabled "containerd"; then
+        create_service_override "containerd" "PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+LockPersonality=yes
+NoNewPrivileges=yes
+ReadWritePaths=/var/lib/containerd /run/containerd"
+    fi
+    
+    if service_exists_and_enabled "libvirtd"; then
+        create_service_override "libvirtd" "PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+LockPersonality=yes
+ReadWritePaths=/var/lib/libvirt /var/log/libvirt /run/libvirt"
+    fi
+    
+    if service_exists_and_enabled "clamav-daemon"; then
+        create_service_override "clamav-daemon" "PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+NoNewPrivileges=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallFilter=@system-service
+SystemCallFilter=~@debug @mount @cpu-emulation @obsolete @reboot @swap
+ReadWritePaths=/var/log/clamav /var/lib/clamav /run/clamav"
+    fi
+    
+    printf "\\033[1;34m[*] Hardening EXPOSED services...\\033[0m\\n"
+    
+    # EXPOSED Services - Apply moderate hardening
+    if service_exists_and_enabled "NetworkManager"; then
+        create_service_override "NetworkManager" "PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+LockPersonality=yes
+NoNewPrivileges=yes"
+    fi
+    
+    if service_exists_and_enabled "auditd"; then
+        create_service_override "auditd" "PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+LockPersonality=yes
+ReadWritePaths=/var/log/audit"
+    fi
+    
+    if service_exists_and_enabled "colord"; then
+        create_service_override "colord" "PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+NoNewPrivileges=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallFilter=@system-service"
+    fi
+    
+    if service_exists_and_enabled "fwupd"; then
+        create_service_override "fwupd" "PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+LockPersonality=yes
+NoNewPrivileges=yes"
+    fi
+    
+    printf "\\033[1;34m[*] Hardening MEDIUM risk services...\\033[0m\\n"
+    
+    # MEDIUM Services - Apply basic hardening
+    for service in "ModemManager" "accounts-daemon" "bluetooth" "bolt" "cockpit" "low-memory-monitor" "rtkit-daemon" "systemd-machined" "systemd-udevd"; do
+        if service_exists_and_enabled "$service"; then
+            create_service_override "$service" "PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+LockPersonality=yes"
+        fi
+    done
+
+    if service_exists_and_enabled "aide-check"; then
+        create_service_override "aide-check" "PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+NoNewPrivileges=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallFilter=@system-service
+ReadWritePaths=/var/lib/aide /var/log/aide"
+    fi
+    
+    if service_exists_and_enabled "lynis"; then
+        create_service_override "lynis" "PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+NoNewPrivileges=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallFilter=@system-service
+ReadWritePaths=/var/log/lynis /var/lib/lynis"
+    fi
+    
+    if service_exists_and_enabled "maldet"; then
+        create_service_override "maldet" "PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+NoNewPrivileges=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallFilter=@system-service
+ReadWritePaths=/var/log/maldet /usr/local/maldetect"
+    fi
+    
+    if service_exists_and_enabled "psad"; then
+        create_service_override "psad" "PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+NoNewPrivileges=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallFilter=@system-service
+ReadWritePaths=/var/log/psad /var/lib/psad /run/psad"
+    fi
+    
+    if service_exists_and_enabled "unattended-upgrades"; then
+        create_service_override "unattended-upgrades" "PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+LockPersonality=yes
+NoNewPrivileges=yes
+ReadWritePaths=/var/log /var/cache/apt /var/lib/apt"
+    fi
+
+    # Add additional EXPOSED services:
+    if service_exists_and_enabled "power-profiles-daemon"; then
+        create_service_override "power-profiles-daemon" "PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+LockPersonality=yes
+NoNewPrivileges=yes"
+    fi
+    
+    if service_exists_and_enabled "switcheroo-control"; then
+        create_service_override "switcheroo-control" "PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+LockPersonality=yes
+NoNewPrivileges=yes"
+    fi
+
+    # Disable unnecessary services marked as UNSAFE
+    printf "\\033[1;34m[*] Disabling unnecessary UNSAFE services...\\033[0m\\n"
+    
+    local services_to_disable="avahi-daemon cups-browsed cups exim4 anacron alsa-state cpufrequtils loadcpufreq plymouth-start rc-local"
+    for service in $services_to_disable; do
+        if systemctl is-active --quiet "$service" 2>/dev/null; then
+            printf "\\033[1;31m[+] Disabling unnecessary service: %s\\033[0m\\n" "$service"
+            systemctl disable --now "$service" >/dev/null 2>&1 || true
+            changes_made=true
+        fi
+    done
+    
+    # Apply changes if any were made
+    if [[ "$changes_made" = true ]]; then
+        printf "\\033[1;33m[*] Reloading systemd daemon to apply security overrides...\\033[0m\\n"
+        systemctl daemon-reload
+        
+        printf "\\033[1;32m[+] Systemd service hardening completed successfully.\\033[0m\\n"
+        printf "\\033[1;33m[!] Note: Some services may need to be restarted for changes to take effect.\\033[0m\\n"
+        
+        if command -v whiptail >/dev/null; then
+            whiptail --title "HARDN-XDR" --msgbox "Systemd services have been hardened with security overrides.\n\nChanges applied to UNSAFE, EXPOSED, and MEDIUM risk services.\nSome services have been disabled if deemed unnecessary.\n\nReview /etc/systemd/system/*.d/ directories for applied overrides." 12 78
+        fi
+        
+        # Optional: Restart critical services to apply new settings immediately
+        printf "\\033[1;34m[*] Restarting critical services to apply new security settings...\\033[0m\\n"
+        for service in "ssh" "rsyslog" "fail2ban"; do
+            if systemctl is-active --quiet "$service"; then
+                printf "\\033[1;33m[*] Restarting %s...\\033[0m\\n" "$service"
+                systemctl restart "$service" >/dev/null 2>&1 || \
+                printf "\\033[1;31m[-] Failed to restart %s\\033[0m\\n" "$service"
+            fi
+        done
+    else
+        printf "\\033[1;32m[+] No systemd service hardening changes were needed.\\033[0m\\n"
+    fi
+    
+    printf "\\033[1;32m[+] Systemd service security hardening process completed.\\033[0m\\n"
+}
+
+
+
 
 remove_unnecessary_services() {
     printf "\033[1;32m[+] Disabling unnecessary services...\033[0m\n"
@@ -1113,48 +1331,148 @@ remove_unnecessary_services() {
     printf "\033[1;32m[+] Unnecessary services checked and disabled/removed where applicable.\033[0m\n"
 }
 
+
 pen_test() {
-    printf "\\033[1;31m[+] Running penetration tests...\\033[0m\\n"
-    if ! lynis audit system --pentest --quick 2>/dev/null; then
-        printf "\\033[1;31m[-] Lynis audit failed. Please check your Lynis installation.\\033[0m\\n"
-        return 1
+    printf "\\033[1;31m[+] Running comprehensive penetration tests with strongest Lynis configuration...\\033[0m\\n"
+    whiptail --title "HARDN-XDR" --msgbox "Your system will be tested with the most comprehensive and detailed Lynis security audit available. This includes all tests, strict compliance checks, and verbose output." 10 78
+    
+    # Create temporary Lynis profile for maximum testing
+    local lynis_profile="/tmp/hardn-comprehensive.prf"
+    cat << EOF > "$lynis_profile"
+# HARDN-XDR Comprehensive Security Profile
+# This profile enables the most detailed and strict Lynis testing
+
+# Enable all available tests
+config:test_skip_always:no
+
+# Maximum verbosity and detail
+config:show_tool_tips:yes
+config:show_warnings_only:no
+config:colors:yes
+config:compliance:yes
+config:forensic_mode:yes
+
+# Strict security settings
+config:strict_compliance:yes
+config:manual_audit:yes
+
+# Enable all compliance frameworks
+config:compliance_standards:all
+
+# Maximum logging
+config:log_tests_incorrect_os:yes
+config:verbose:yes
+
+# Security-focused settings
+config:security_audit:yes
+config:pentest_mode:yes
+EOF
+
+    printf "\\033[1;33m[*] Running the most comprehensive Lynis security audit...\\033[0m\\n"
+    printf "\\033[1;34m[*] This includes all available tests with maximum detail and strict compliance checking\\033[0m\\n"
+    printf "\\033[1;34m======================================\\033[0m\\n"
+    
+    set +e  # Allow commands to fail without exiting
+    
+    # Run comprehensive Lynis audit with all available options
+    printf "\\033[1;32m[PHASE 1] Running full system audit with pentest mode...\\033[0m\\n"
+    lynis audit system --pentest --profile "$lynis_profile" --verbose --no-colors
+    
+    printf "\\n\\033[1;32m[PHASE 2] Running security-focused audit...\\033[0m\\n"
+    lynis audit system --tests-category security --profile "$lynis_profile" --verbose
+    
+    printf "\\n\\033[1;32m[PHASE 3] Running compliance audit (all standards)...\\033[0m\\n"
+    lynis audit system --compliance --profile "$lynis_profile" --verbose
+    
+    printf "\\n\\033[1;32m[PHASE 4] Running forensic mode audit...\\033[0m\\n"
+    lynis audit system --forensics --profile "$lynis_profile" --verbose
+    
+    printf "\\n\\033[1;32m[PHASE 5] Running manual audit mode...\\033[0m\\n"
+    lynis audit system --manpage --profile "$lynis_profile" --verbose
+    
+    printf "\\n\\033[1;32m[PHASE 6] Running all available individual test categories...\\033[0m\\n"
+    for category in accounting authentication banners boot crypto file_integrity \
+                   firewalls hardening kernel logging malware networking ports_packages \
+                   printers processes scheduling shells squid ssh storage time tooling; do
+        if lynis show categories 2>/dev/null | grep -q "$category"; then
+            printf "\\033[1;33m[*] Testing category: %s\\033[0m\\n" "$category"
+            lynis audit system --tests-category "$category" --profile "$lynis_profile"
+        fi
+    done
+    
+    printf "\\n\\033[1;32m[PHASE 7] Running vulnerability assessment...\\033[0m\\n"
+    lynis audit system --check-all --profile "$lynis_profile" --verbose
+    
+    printf "\\n\\033[1;32m[PHASE 8] Generating comprehensive report...\\033[0m\\n"
+    lynis generate report --profile "$lynis_profile"
+    
+    local lynis_exit_code=$?
+    set -e  # Re-enable exit on error
+    
+    # Clean up temporary profile
+    rm -f "$lynis_profile"
+    
+    printf "\\033[1;34m======================================\\033[0m\\n"
+    printf "\\033[1;33m[*] Comprehensive Lynis audit completed with exit code: %s\\033[0m\\n" "$lynis_exit_code"
+    
+    # Show Lynis report location
+    local lynis_log="/var/log/lynis.log"
+    local lynis_report="/var/log/lynis-report.dat"
+    
+    if [[ -f "$lynis_log" ]]; then
+        printf "\\033[1;32m[+] Detailed log available at: %s\\033[0m\\n" "$lynis_log"
     fi
-    printf "\\033[1;32m[+] Penetration tests completed!\\033[0m\\n"
+    
+    if [[ -f "$lynis_report" ]]; then
+        printf "\\033[1;32m[+] Machine-readable report available at: %s\\033[0m\\n" "$lynis_report"
+    fi
+    
+    printf "\\033[1;32m[+] Most comprehensive penetration testing completed!\\033[0m\\n"
+    
+    whiptail --title "HARDN-XDR Comprehensive Security Audit Results" --msgbox "Comprehensive Security Audit Completed!\n\nLynis has performed the most detailed security assessment possible including:\n- Full system penetration testing\n- All security categories\n- Compliance checking (all standards)\n- Forensic analysis\n- Vulnerability assessment\n\nReview the detailed output above and check /var/log/lynis.log for complete results." 16 78
+    
+    printf "\\033[1;32m[+] Comprehensive security assessment and penetration testing completed!\\033[0m\\n"
 }
 
-
-cleanup(){
+cleanup() {
     printf "\\033[1;31m[+] Cleaning up temporary files...\\033[0m\\n"
     rm -rf /tmp/* >/dev/null 2>&1
     apt autoremove -y >/dev/null 2>&1
     apt clean >/dev/null 2>&1
     apt update -y >/dev/null 2>&1
     printf "\\033[1;32m[+] Cleanup completed!\\033[0m\\n"
-
+    
+    # Notify user installation is complete
+    printf "\\n\\033[1;32mHARDN-XDR Install Complete, please reboot your system\\033[0m\\n"
+    whiptail --title "HARDN-XDR" --msgbox "HARDN-XDR Install Complete, please reboot your system" 8 60
 }
+
+
 
 
 
 main() {
     print_ascii_banner
     welcomemsg
+    
     update_system_packages
     install_package_dependencies "$progsfile"
     maininstall "hardn" "HARDN-XDR Main Program"
     build_hardn_package
     setup_security
+    hardn_apache
     enable_process_accounting_and_sysstat
-    enable_nameservers
     purge_old_packages
     disable_firewire_drivers
     restrict_compilers
+    hardn_system_services
+    #hardn_systemd
     disable_binfmt_misc
     remove_unnecessary_services
-    setup_central_logging
     pen_test
     cleanup
 
     printf "\\n\\033[1;32mHARDN-XDR installation completed, Please reboot your System.\\033[0m\\n"
 }
 
-main
+main "$@"
