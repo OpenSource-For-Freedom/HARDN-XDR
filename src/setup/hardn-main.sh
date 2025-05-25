@@ -1,12 +1,5 @@
 #!/bin/bash
 
-set -euo pipefail
-
-# HARDN-XDR - The Linux Security Hardening Sentinel
-# Developed and built by Christopher Bingham and Tim Burns
-# IDEA: larbs.xyz "Rice Scripting" for Arch Linux. 
-
-
 # Resources & Global Variables
 repo="https://github.com/OpenSource-For-Freedom/HARDN-XDR/"
 progsfile="https://raw.githubusercontent.com/OpenSource-For-Freedom/HARDN-XDR/main/progs.csv"
@@ -92,12 +85,20 @@ install_package_dependencies() {
     fi
     
     # Read and install packages from CSV
-    while IFS=, read -r tag name desc || [[ -n "$tag" ]]; do
+    while IFS= read -r line || [[ -n "$line" ]]; do
         # Skip empty lines and comments
-        [[ -z "$tag" || "$tag" =~ ^[[:space:]]*# ]] && continue
+        [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
         
-        # Remove any quotes and whitespace from name
-        name=$(echo "$name" | tr -d '"' | xargs)
+        # Handle both formats: CSV (tag,name,desc) or simple list (name)
+        if [[ "$line" == *","* ]]; then
+            # CSV format: extract name from second column
+            name=$(echo "$line" | cut -d',' -f2 | tr -d '"' | xargs)
+            desc=$(echo "$line" | cut -d',' -f3 | tr -d '"' | xargs)
+        else
+            # Simple format: line is the package name
+            name=$(echo "$line" | xargs)
+            desc="$name"
+        fi
         
         if [[ -n "$name" ]]; then
             if ! dpkg -s "$name" >/dev/null 2>&1; then
@@ -262,19 +263,13 @@ setup_security(){
     sed -i 's/bantime  = 10m/bantime  = 1h/' /etc/fail2ban/jail.local
     sed -i 's/findtime  = 10m/findtime  = 10m/' /etc/fail2ban/jail.local
     sed -i 's/maxretry = 5/maxretry = 3/' /etc/fail2ban/jail.local
-    systemctl restart fail2ban
-
-    ###### kernel hardening
+    systemctl restart fail2ban    ###### kernel hardening
     # Check if system is UEFI VM and skip kernel hardening if so
     if [ -d /sys/firmware/efi ] && systemd-detect-virt -q; then
         printf "\\033[1;33m[*] UEFI VM detected, skipping kernel hardening (sysctl settings)...\\033[0m\\n"
-        
     else
         printf "\\033[1;31m[+] Configuring kernel hardening (sysctl settings)...\\033[0m\\n"
-    fi
-
-
-       
+        
         # Create or overwrite the sysctl config file for kernel hardening
         # KRNL-6000: Tweak sysctl values
         {
@@ -311,21 +306,16 @@ setup_security(){
             echo "net.ipv6.conf.default.accept_redirects = 0"
             echo "net.ipv4.conf.all.send_redirects = 0"
             echo "net.ipv4.conf.default.send_redirects = 0"
-            echo "net.ipv4.icmp_echo_ignore_broadcasts = 1"
-            echo "net.ipv4.icmp_ignore_bogus_error_responses = 1"
-            echo "net.ipv6.conf.all.accept_ra = 0"
-            echo "net.ipv6.conf.default.accept_ra = 0"
+            echo "net.ipv4.ip_forward = 0"
         } > /etc/sysctl.d/99-hardn-xdr-kernel.conf
 
         printf "  [*] Applying new kernel parameters from /etc/sysctl.d/99-hardn-xdr-kernel.conf...\\n"
         if sysctl -p /etc/sysctl.d/99-hardn-xdr-kernel.conf >/dev/null 2>&1; then
             printf "\\033[1;32m  [+] Kernel parameters applied successfully.\\033[0m\\n"
-         
         else
             printf "\\033[1;31m  [-] Error: Failed to apply kernel parameters. Check /etc/sysctl.d/99-hardn-xdr-kernel.conf and dmesg for errors.\\033[0m\\n"
-
-  
-            fi
+        fi
+    fi
    
 
     # remove locked accounts
@@ -471,29 +461,8 @@ setup_security(){
     printf "YARA installed and ready for custom rules...\\n"
     mkdir -p /etc/yara/rules
     
-    # apt-listbugs
-    printf "Configuring apt-listbugs for security updates...\\n"
-    if ! dpkg -s apt-listbugs >/dev/null 2>&1; then
-        printf "Installing apt-listbugs...\\n"
-        apt install -y apt-listbugs >/dev/null 2>&1
-    fi
-    # Configure apt-listbugs to only show security bugs and pin critical ones
-    if [ -d /etc/apt/apt.conf.d ]; then
-        cat << EOF > /etc/apt/apt.conf.d/10apt-listbugs
-// apt-listbugs configuration by HARDN-XDR
-// Only report security bugs
-APT::ListBugs::Severities "critical,grave,serious";
-// Pin critical bugs by default
-APT::ListBugs::Pinning "critical";
-// Set a default frontend if not already set (e.g. for non-interactive use)
-// Dpkg::Pre-Install-Pkgs {"/usr/sbin/apt-listbugs apt || exit 10";};
-EOF
-        printf "\\033[1;32m[+] apt-listbugs configured to report security bugs and pin critical ones.\\033[0m\\n"
-    else
-        printf "\\033[1;33m[!] Warning: /etc/apt/apt.conf.d directory not found. Cannot configure apt-listbugs automatically.\\033[0m\\n"
-    fi
-    
-    
+}
+
 restrict_compilers() {
     printf "\033[1;31m[+] Restricting compiler access to root only (HRDN-7222)...\033[0m\n"
 
@@ -628,6 +597,10 @@ purge_old_packages() {
    
    
     printf "\\033[1;31m[+] Running apt-get autoremove and clean to free up space...\033[0m\\n"
+    apt-get autoremove -y >/dev/null 2>&1
+    apt-get clean >/dev/null 2>&1
+    printf "\\033[1;32m[+] Package cleanup completed.\033[0m\\n"
+    
     ### Hardware Security Configuration ###
     printf "\\033[1;31m[+] Checking for deleted files still in use (LOGG-2190)...\033[0m\\n"
     
@@ -636,9 +609,13 @@ purge_old_packages() {
     if ! command -v lsof >/dev/null 2>&1; then
         printf "\\033[1;33m[!] lsof command not found. Skipping check for deleted files in use.\033[0m\\n"
     else
-        deleted_files_in_use=$(lsof 2>/dev/null | grep '(deleted)')
+        printf "\\033[1;33m[*] Running lsof scan (this may take a moment)...\\033[0m\\n"
+        deleted_files_in_use=$(timeout 30 lsof +c 15 2>/dev/null | grep '(deleted)' || true)
+        lsof_exit_code=$?
 
-        if [[ -n "$deleted_files_in_use" ]]; then
+        if [[ $lsof_exit_code -eq 124 ]]; then
+            printf "\\033[1;33m[!] Warning: lsof command timed out after 30 seconds. Skipping deleted files check.\033[0m\\n"
+        elif [[ -n "$deleted_files_in_use" ]]; then
             printf "\\033[1;33m[!] Warning: The following deleted files are still in use by processes:\\033[0m\\n"
             echo "$deleted_files_in_use" # Print to console for script log
             
@@ -939,369 +916,6 @@ hardn_system_services() {
     rm -f "$output_file"
 }
 
-hardn_systemd(){
-    printf "\\033[1;31m[+] Hardening systemd services based on security exposure levels...\\033[0m\\n"
-    
-    local service_overrides_dir="/etc/systemd/system"
-    local changes_made=false
-    
-    create_service_override() {
-        local service_name="$1"
-        local security_settings="$2"
-        local override_dir="${service_overrides_dir}/${service_name}.d"
-        local override_file="${override_dir}/security-hardening.conf"
-        
-        if [[ ! -d "$override_dir" ]]; then
-            mkdir -p "$override_dir"
-            printf "\\033[1;34m[*] Created override directory: %s\\033[0m\\n" "$override_dir"
-        fi
-        
-        cat << EOF > "$override_file"
-# Security hardening override created by HARDN-XDR
-# Applied to address systemd-analyze security findings
-[Service]
-$security_settings
-EOF
-        
-        printf "\\033[1;32m[+] Created security override for %s\\033[0m\\n" "$service_name"
-        changes_made=true
-    }
-    
-    service_exists_and_enabled() {
-        local service_name="$1"
-        systemctl list-unit-files --type=service | grep -q "^${service_name}\\s" && \
-        systemctl is-enabled "$service_name" >/dev/null 2>&1
-    }
-    
-    printf "\\033[1;34m[*] Hardening UNSAFE services...\\033[0m\\n"
-    
-    # UNSAFE Services - Apply strict hardening
-    if service_exists_and_enabled "ssh"; then
-        create_service_override "ssh" "PrivateTmp=yes
-ProtectSystem=strict
-ProtectHome=yes
-NoNewPrivileges=yes
-PrivateDevices=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
-RestrictRealtime=yes
-RestrictNamespaces=yes
-LockPersonality=yes
-MemoryDenyWriteExecute=yes
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
-SystemCallFilter=@system-service
-SystemCallFilter=~@debug @mount @cpu-emulation @obsolete @privileged @reboot @swap
-ReadWritePaths=/var/log /run/sshd"
-    fi
-    
-    if service_exists_and_enabled "cron"; then
-        create_service_override "cron" "PrivateTmp=yes
-ProtectSystem=strict
-ProtectHome=read-only
-NoNewPrivileges=yes
-PrivateDevices=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
-RestrictRealtime=yes
-LockPersonality=yes
-SystemCallFilter=@system-service
-SystemCallFilter=~@debug @mount @cpu-emulation @obsolete @reboot @swap
-ReadWritePaths=/var/log /var/spool/cron /etc/crontab /etc/cron.d"
-    fi
-    
-    if service_exists_and_enabled "rsyslog"; then
-        create_service_override "rsyslog" "PrivateTmp=yes
-ProtectSystem=strict
-ProtectHome=yes
-NoNewPrivileges=yes
-PrivateDevices=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
-RestrictRealtime=yes
-LockPersonality=yes
-SystemCallFilter=@system-service
-SystemCallFilter=~@debug @mount @cpu-emulation @obsolete @reboot @swap
-ReadWritePaths=/var/log /run/rsyslog"
-    fi
-    
-    if service_exists_and_enabled "fail2ban"; then
-        create_service_override "fail2ban" "PrivateTmp=yes
-ProtectSystem=strict
-ProtectHome=yes
-NoNewPrivileges=yes
-PrivateDevices=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
-RestrictRealtime=yes
-LockPersonality=yes
-SystemCallFilter=@system-service
-SystemCallFilter=~@debug @mount @cpu-emulation @obsolete @reboot @swap
-ReadWritePaths=/var/log /var/lib/fail2ban /var/run/fail2ban"
-    fi
-    
-    if service_exists_and_enabled "suricata"; then
-        create_service_override "suricata" "PrivateTmp=yes
-ProtectSystem=strict
-ProtectHome=yes
-NoNewPrivileges=yes
-PrivateDevices=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
-RestrictRealtime=yes
-LockPersonality=yes
-SystemCallFilter=@system-service
-SystemCallFilter=~@debug @mount @cpu-emulation @obsolete @reboot @swap
-ReadWritePaths=/var/log/suricata /var/lib/suricata /run/suricata"
-    fi
-    
-    if service_exists_and_enabled "docker"; then
-        create_service_override "docker" "PrivateTmp=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
-RestrictRealtime=yes
-LockPersonality=yes
-NoNewPrivileges=yes
-ReadWritePaths=/var/lib/docker /var/run/docker"
-    fi
-    
-    if service_exists_and_enabled "containerd"; then
-        create_service_override "containerd" "PrivateTmp=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
-RestrictRealtime=yes
-LockPersonality=yes
-NoNewPrivileges=yes
-ReadWritePaths=/var/lib/containerd /run/containerd"
-    fi
-    
-    if service_exists_and_enabled "libvirtd"; then
-        create_service_override "libvirtd" "PrivateTmp=yes
-ProtectKernelTunables=yes
-ProtectControlGroups=yes
-RestrictRealtime=yes
-LockPersonality=yes
-ReadWritePaths=/var/lib/libvirt /var/log/libvirt /run/libvirt"
-    fi
-    
-    if service_exists_and_enabled "clamav-daemon"; then
-        create_service_override "clamav-daemon" "PrivateTmp=yes
-ProtectSystem=strict
-ProtectHome=read-only
-NoNewPrivileges=yes
-PrivateDevices=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
-RestrictRealtime=yes
-LockPersonality=yes
-SystemCallFilter=@system-service
-SystemCallFilter=~@debug @mount @cpu-emulation @obsolete @reboot @swap
-ReadWritePaths=/var/log/clamav /var/lib/clamav /run/clamav"
-    fi
-    
-    printf "\\033[1;34m[*] Hardening EXPOSED services...\\033[0m\\n"
-    
-    # EXPOSED Services - Apply moderate hardening
-    if service_exists_and_enabled "NetworkManager"; then
-        create_service_override "NetworkManager" "PrivateTmp=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
-RestrictRealtime=yes
-LockPersonality=yes
-NoNewPrivileges=yes"
-    fi
-    
-    if service_exists_and_enabled "auditd"; then
-        create_service_override "auditd" "PrivateTmp=yes
-ProtectSystem=strict
-ProtectHome=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
-RestrictRealtime=yes
-LockPersonality=yes
-ReadWritePaths=/var/log/audit"
-    fi
-    
-    if service_exists_and_enabled "colord"; then
-        create_service_override "colord" "PrivateTmp=yes
-ProtectSystem=strict
-ProtectHome=yes
-NoNewPrivileges=yes
-PrivateDevices=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
-RestrictRealtime=yes
-LockPersonality=yes
-SystemCallFilter=@system-service"
-    fi
-    
-    if service_exists_and_enabled "fwupd"; then
-        create_service_override "fwupd" "PrivateTmp=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
-RestrictRealtime=yes
-LockPersonality=yes
-NoNewPrivileges=yes"
-    fi
-    
-    printf "\\033[1;34m[*] Hardening MEDIUM risk services...\\033[0m\\n"
-    
-    # MEDIUM Services - Apply basic hardening
-    for service in "ModemManager" "accounts-daemon" "bluetooth" "bolt" "cockpit" "low-memory-monitor" "rtkit-daemon" "systemd-machined" "systemd-udevd"; do
-        if service_exists_and_enabled "$service"; then
-            create_service_override "$service" "PrivateTmp=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
-RestrictRealtime=yes
-LockPersonality=yes"
-        fi
-    done
-
-    if service_exists_and_enabled "aide-check"; then
-        create_service_override "aide-check" "PrivateTmp=yes
-ProtectSystem=strict
-ProtectHome=yes
-NoNewPrivileges=yes
-PrivateDevices=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
-RestrictRealtime=yes
-LockPersonality=yes
-SystemCallFilter=@system-service
-ReadWritePaths=/var/lib/aide /var/log/aide"
-    fi
-    
-    if service_exists_and_enabled "lynis"; then
-        create_service_override "lynis" "PrivateTmp=yes
-ProtectSystem=strict
-ProtectHome=read-only
-NoNewPrivileges=yes
-PrivateDevices=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
-RestrictRealtime=yes
-LockPersonality=yes
-SystemCallFilter=@system-service
-ReadWritePaths=/var/log/lynis /var/lib/lynis"
-    fi
-    
-    if service_exists_and_enabled "maldet"; then
-        create_service_override "maldet" "PrivateTmp=yes
-ProtectSystem=strict
-ProtectHome=read-only
-NoNewPrivileges=yes
-PrivateDevices=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
-RestrictRealtime=yes
-LockPersonality=yes
-SystemCallFilter=@system-service
-ReadWritePaths=/var/log/maldet /usr/local/maldetect"
-    fi
-    
-    if service_exists_and_enabled "psad"; then
-        create_service_override "psad" "PrivateTmp=yes
-ProtectSystem=strict
-ProtectHome=yes
-NoNewPrivileges=yes
-PrivateDevices=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
-RestrictRealtime=yes
-LockPersonality=yes
-SystemCallFilter=@system-service
-ReadWritePaths=/var/log/psad /var/lib/psad /run/psad"
-    fi
-    
-    if service_exists_and_enabled "unattended-upgrades"; then
-        create_service_override "unattended-upgrades" "PrivateTmp=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
-RestrictRealtime=yes
-LockPersonality=yes
-NoNewPrivileges=yes
-ReadWritePaths=/var/log /var/cache/apt /var/lib/apt"
-    fi
-
-    # Add additional EXPOSED services:
-    if service_exists_and_enabled "power-profiles-daemon"; then
-        create_service_override "power-profiles-daemon" "PrivateTmp=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
-RestrictRealtime=yes
-LockPersonality=yes
-NoNewPrivileges=yes"
-    fi
-    
-    if service_exists_and_enabled "switcheroo-control"; then
-        create_service_override "switcheroo-control" "PrivateTmp=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
-RestrictRealtime=yes
-LockPersonality=yes
-NoNewPrivileges=yes"
-    fi
-
-    # Disable unnecessary services marked as UNSAFE
-    printf "\\033[1;34m[*] Disabling unnecessary UNSAFE services...\\033[0m\\n"
-    
-    local services_to_disable="avahi-daemon cups-browsed cups exim4 anacron alsa-state cpufrequtils loadcpufreq plymouth-start rc-local"
-    for service in $services_to_disable; do
-        if systemctl is-active --quiet "$service" 2>/dev/null; then
-            printf "\\033[1;31m[+] Disabling unnecessary service: %s\\033[0m\\n" "$service"
-            systemctl disable --now "$service" >/dev/null 2>&1 || true
-            changes_made=true
-        fi
-    done
-    
-    # Apply changes if any were made
-    if [[ "$changes_made" = true ]]; then
-        printf "\\033[1;33m[*] Reloading systemd daemon to apply security overrides...\\033[0m\\n"
-        systemctl daemon-reload
-        
-        printf "\\033[1;32m[+] Systemd service hardening completed successfully.\\033[0m\\n"
-        printf "\\033[1;33m[!] Note: Some services may need to be restarted for changes to take effect.\\033[0m\\n"
-        
-        if command -v whiptail >/dev/null; then
-            whiptail --title "HARDN-XDR" --msgbox "Systemd services have been hardened with security overrides.\n\nChanges applied to UNSAFE, EXPOSED, and MEDIUM risk services.\nSome services have been disabled if deemed unnecessary.\n\nReview /etc/systemd/system/*.d/ directories for applied overrides." 12 78
-        fi
-        
-        # Optional: Restart critical services to apply new settings immediately
-        printf "\\033[1;34m[*] Restarting critical services to apply new security settings...\\033[0m\\n"
-        for service in "ssh" "rsyslog" "fail2ban"; do
-            if systemctl is-active --quiet "$service"; then
-                printf "\\033[1;33m[*] Restarting %s...\\033[0m\\n" "$service"
-                systemctl restart "$service" >/dev/null 2>&1 || \
-                printf "\\033[1;31m[-] Failed to restart %s\\033[0m\\n" "$service"
-            fi
-        done
-    else
-        printf "\\033[1;32m[+] No systemd service hardening changes were needed.\\033[0m\\n"
-    fi
-    
-    printf "\\033[1;32m[+] Systemd service security hardening process completed.\\033[0m\\n"
-}
-
-
 
 
 remove_unnecessary_services() {
@@ -1333,105 +947,16 @@ remove_unnecessary_services() {
 
 
 pen_test() {
-    printf "\\033[1;31m[+] Running comprehensive penetration tests with strongest Lynis configuration...\\033[0m\\n"
-    whiptail --title "HARDN-XDR" --msgbox "Your system will be tested with the most comprehensive and detailed Lynis security audit available. This includes all tests, strict compliance checks, and verbose output." 10 78
-    
-    # Create temporary Lynis profile for maximum testing
-    local lynis_profile="/tmp/hardn-comprehensive.prf"
-    cat << EOF > "$lynis_profile"
-# HARDN-XDR Comprehensive Security Profile
-# This profile enables the most detailed and strict Lynis testing
+    printf "\\033[1;31m[+] Running penetration test with Lynis in pentest mode...\\033[0m\\n"
 
-# Enable all available tests
-config:test_skip_always:no
+    
+    lynis audit system --pentest 
 
-# Maximum verbosity and detail
-config:show_tool_tips:yes
-config:show_warnings_only:no
-config:colors:yes
-config:compliance:yes
-config:forensic_mode:yes
-
-# Strict security settings
-config:strict_compliance:yes
-config:manual_audit:yes
-
-# Enable all compliance frameworks
-config:compliance_standards:all
-
-# Maximum logging
-config:log_tests_incorrect_os:yes
-config:verbose:yes
-
-# Security-focused settings
-config:security_audit:yes
-config:pentest_mode:yes
-EOF
-
-    printf "\\033[1;33m[*] Running the most comprehensive Lynis security audit...\\033[0m\\n"
-    printf "\\033[1;34m[*] This includes all available tests with maximum detail and strict compliance checking\\033[0m\\n"
-    printf "\\033[1;34m======================================\\033[0m\\n"
-    
-    set +e  # Allow commands to fail without exiting
-    
-    # Run comprehensive Lynis audit with all available options
-    printf "\\033[1;32m[PHASE 1] Running full system audit with pentest mode...\\033[0m\\n"
-    lynis audit system --pentest --profile "$lynis_profile" --verbose --no-colors
-    
-    printf "\\n\\033[1;32m[PHASE 2] Running security-focused audit...\\033[0m\\n"
-    lynis audit system --tests-category security --profile "$lynis_profile" --verbose
-    
-    printf "\\n\\033[1;32m[PHASE 3] Running compliance audit (all standards)...\\033[0m\\n"
-    lynis audit system --compliance --profile "$lynis_profile" --verbose
-    
-    printf "\\n\\033[1;32m[PHASE 4] Running forensic mode audit...\\033[0m\\n"
-    lynis audit system --forensics --profile "$lynis_profile" --verbose
-    
-    printf "\\n\\033[1;32m[PHASE 5] Running manual audit mode...\\033[0m\\n"
-    lynis audit system --manpage --profile "$lynis_profile" --verbose
-    
-    printf "\\n\\033[1;32m[PHASE 6] Running all available individual test categories...\\033[0m\\n"
-    for category in accounting authentication banners boot crypto file_integrity \
-                   firewalls hardening kernel logging malware networking ports_packages \
-                   printers processes scheduling shells squid ssh storage time tooling; do
-        if lynis show categories 2>/dev/null | grep -q "$category"; then
-            printf "\\033[1;33m[*] Testing category: %s\\033[0m\\n" "$category"
-            lynis audit system --tests-category "$category" --profile "$lynis_profile"
-        fi
-    done
-    
-    printf "\\n\\033[1;32m[PHASE 7] Running vulnerability assessment...\\033[0m\\n"
-    lynis audit system --check-all --profile "$lynis_profile" --verbose
-    
-    printf "\\n\\033[1;32m[PHASE 8] Generating comprehensive report...\\033[0m\\n"
-    lynis generate report --profile "$lynis_profile"
     
     local lynis_exit_code=$?
-    set -e  # Re-enable exit on error
-    
-    # Clean up temporary profile
-    rm -f "$lynis_profile"
-    
-    printf "\\033[1;34m======================================\\033[0m\\n"
-    printf "\\033[1;33m[*] Comprehensive Lynis audit completed with exit code: %s\\033[0m\\n" "$lynis_exit_code"
-    
-    # Show Lynis report location
-    local lynis_log="/var/log/lynis.log"
-    local lynis_report="/var/log/lynis-report.dat"
-    
-    if [[ -f "$lynis_log" ]]; then
-        printf "\\033[1;32m[+] Detailed log available at: %s\\033[0m\\n" "$lynis_log"
-    fi
-    
-    if [[ -f "$lynis_report" ]]; then
-        printf "\\033[1;32m[+] Machine-readable report available at: %s\\033[0m\\n" "$lynis_report"
-    fi
-    
-    printf "\\033[1;32m[+] Most comprehensive penetration testing completed!\\033[0m\\n"
-    
-    whiptail --title "HARDN-XDR Comprehensive Security Audit Results" --msgbox "Comprehensive Security Audit Completed!\n\nLynis has performed the most detailed security assessment possible including:\n- Full system penetration testing\n- All security categories\n- Compliance checking (all standards)\n- Forensic analysis\n- Vulnerability assessment\n\nReview the detailed output above and check /var/log/lynis.log for complete results." 16 78
-    
-    printf "\\033[1;32m[+] Comprehensive security assessment and penetration testing completed!\\033[0m\\n"
+
+    # Display a message box with the results
+    whiptail --title "Lynis Penetration Test Results" --msgbox "Lynis penetration test completed with exit code: $lynis_exit_code. Check /var/log/lynis.log for details." 10 60
 }
 
 cleanup() {
@@ -1454,7 +979,6 @@ cleanup() {
 main() {
     print_ascii_banner
     welcomemsg
-    
     update_system_packages
     install_package_dependencies "$progsfile"
     maininstall "hardn" "HARDN-XDR Main Program"
@@ -1466,7 +990,6 @@ main() {
     disable_firewire_drivers
     restrict_compilers
     hardn_system_services
-    #hardn_systemd
     disable_binfmt_misc
     remove_unnecessary_services
     pen_test
@@ -1475,4 +998,4 @@ main() {
     printf "\\n\\033[1;32mHARDN-XDR installation completed, Please reboot your System.\\033[0m\\n"
 }
 
-main "$@"
+main "$@" 
