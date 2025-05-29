@@ -17,9 +17,8 @@ rkhunter,1.4.6-12
 libpam-pwquality,1.4.5-3build1
 libvirt-daemon-system,10.0.0-2ubuntu8.7
 libvirt-clients,10.0.0-2ubuntu8.7
-qemu-kvm,latest
+qemu-kvm,
 openssh-server,1:9.6p1-3ubuntu13.11
 chkrootkit,0.58b-1
 yara,4.5.0-1build2
 libpam-tmpdir,0.09build1
-apt-listbugs,latest
