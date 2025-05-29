@@ -66,7 +66,7 @@ jobs:
 
       - name: Create Pull Request if changes
         if: steps.update_packages.outputs.changes_made == 'true'
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v7
         with:
           title: "chore: update progs.csv with latest available package versions"
           body: |
