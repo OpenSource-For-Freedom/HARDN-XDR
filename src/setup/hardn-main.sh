@@ -123,6 +123,47 @@ install_package_dependencies() {
 
 setup_security(){
 
+    # Detect distribution information for Debian 10-12 package configuration
+    local distro_id
+    local distro_codename
+    
+    if [[ -f /etc/os-release ]]; then
+        distro_id=$(grep "^ID=" /etc/os-release | cut -d'=' -f2 | tr -d '"')
+        distro_codename=$(grep "^VERSION_CODENAME=" /etc/os-release | cut -d'=' -f2 | tr -d '"')
+        
+        # Enhanced Debian detection
+        case "$distro_id" in
+            "debian")
+                # Map Debian versions to codenames if not detected
+                if [[ -z "$distro_codename" ]] && [[ -f /etc/debian_version ]]; then
+                    local debian_version
+                    debian_version=$(cut -d'.' -f1 /etc/debian_version)
+                    case "$debian_version" in
+                        "10") distro_codename="buster" ;;
+                        "11") distro_codename="bullseye" ;;
+                        "12") distro_codename="bookworm" ;;
+                        "13") distro_codename="trixie" ;;
+                    esac
+                fi
+                ;;
+            "ubuntu")
+                # Fallback for Ubuntu codename if not found
+                if [[ -z "$distro_codename" ]]; then
+                    distro_codename=$(grep "^UBUNTU_CODENAME=" /etc/os-release | cut -d'=' -f2 | tr -d '"')
+                fi
+                ;;
+        esac
+        
+        # Set Debian-focused defaults if still empty
+        [[ -z "$distro_id" ]] && distro_id="debian"
+        [[ -z "$distro_codename" ]] && distro_codename="bullseye"  # Debian 11 default
+    else
+        # Debian-focused fallback defaults for systems without os-release
+        distro_id="debian"
+        distro_codename="bullseye"
+    fi
+    
+    printf "\\033[1;32m[+] Detected system: %s (%s)\\033[0m\\n" "$distro_id" "$distro_codename"
 
     # ##################  TOMOYO Linux ( in case someone is stuck in 2003)
     printf "\\033[1;31m[+] Checking and configuring TOMOYO Linux...\\033[0m\\n"
@@ -690,13 +731,45 @@ EOF
     echo "fs.suid_dumpable = 0" >> /etc/sysctl.conf
     
     ############################### automatic security updates
-    printf "Configuring automatic security updates...\\n"
- 
-    echo "Unattended-Upgrade::Allowed-Origins {
-        "${distro_id}:${distro_codename}-security";
-        "${distro_id}ESMApps:${distro_codename}-apps-security";
-        "${distro_id}ESM:${distro_codename}-infra-security";
-    };' > /etc/apt/apt.conf.d/50unattended-upgrades
+    printf "Configuring automatic security updates for Debian-based systems...\\n"
+    
+    # Configure unattended upgrades based on distribution
+    case "$distro_id" in
+        "debian")
+            cat > /etc/apt/apt.conf.d/50unattended-upgrades << EOF
+Unattended-Upgrade::Allowed-Origins {
+    "\${distro_id}:\${distro_codename}-security";
+    "\${distro_id}:\${distro_codename}-updates";
+};
+Unattended-Upgrade::Package-Blacklist {
+    // Add any packages you want to exclude from automatic updates
+};
+Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+Unattended-Upgrade::MinimalSteps "true";
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+Unattended-Upgrade::Remove-New-Unused-Dependencies "true";
+Unattended-Upgrade::Remove-Unused-Dependencies "false";
+Unattended-Upgrade::Automatic-Reboot "false";
+EOF
+            ;;
+        "ubuntu")
+            cat > /etc/apt/apt.conf.d/50unattended-upgrades << EOF
+Unattended-Upgrade::Allowed-Origins {
+    "\${distro_id}:\${distro_codename}-security";
+    "\${distro_id}ESMApps:\${distro_codename}-apps-security";
+    "\${distro_id}ESM:\${distro_codename}-infra-security";
+};
+EOF
+            ;;
+        *)
+            # Generic Debian-based fallback
+            cat > /etc/apt/apt.conf.d/50unattended-upgrades << EOF
+Unattended-Upgrade::Allowed-Origins {
+    "\${distro_id}:\${distro_codename}-security";
+};
+EOF
+            ;;
+    esac
     
     ########################### Secure network parameters
     printf "Configuring secure network parameters...\\n"
@@ -1081,7 +1154,7 @@ EOF
         fi
 
     else
-        printf "\\033[1;33m[!] Warning: auditd is not installed (checked with dpkg -s). Skipping configuration.\\033[0m\\n"
+        printf "\\033[1;33m[!] Warning: auditd is not installed \\(checked with dpkg -s\\). Skipping configuration.\\033[0m\\n"
         printf "\\033[1;33m[!] Please ensure auditd is listed in ../../progs.csv for installation.\\033[0m\\n"
     fi
     printf "\\033[1;32m[+] auditd configuration attempt completed.\\033[0m\\n"
