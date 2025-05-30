@@ -138,12 +138,7 @@ setup_security(){
                 if [[ -z "$distro_codename" ]] && [[ -f /etc/debian_version ]]; then
                     local debian_version
                     debian_version=$(cut -d'.' -f1 /etc/debian_version)
-                    case "$debian_version" in
-                        "10") distro_codename="buster" ;;
-                        "11") distro_codename="bullseye" ;;
-                        "12") distro_codename="bookworm" ;;
-                        "13") distro_codename="trixie" ;;
-                    esac
+                    distro_codename=$(map_debian_version_to_codename "$debian_version")
                 fi
                 ;;
             "ubuntu")
