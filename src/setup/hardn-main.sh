@@ -90,32 +90,27 @@ detect_os_details
 welcomemsg() {
     printf "\\n\\n Welcome to HARDN-XDR a Debian Security tool for System Hardening\\n"
     printf "\\nThis installer will update your system first...\\n"
-    # Original yes/no whiptail did not have an explicit exit path for "no"
 }
 
 preinstallmsg() {
     printf "\\nWelcome to HARDN-XDR. A Linux Security Hardening program.\\n"
     printf "The system will be configured to ensure STIG and Security compliance.\\n"
-    # Removed: || { clear; exit 1; }
 }
 
 update_system_packages() {
     printf "\033[1;31m[+] Updating system packages...\033[0m\n"
-    apt update && apt upgrade -y
-    # apt update -y # This is redundant after apt upgrade -y which often includes an update
+    apt update -y
 }
 
 install_package_dependencies() {
     printf "\033[1;31m[+] Installing package dependencies from %s...\033[0m\n" "${PROGS_CSV_PATH}"
 
-    # Ensure git is installed first, as it might be needed for source/custom installs (though not currently used)
     if ! command -v git >/dev/null 2>&1; then
         printf "\033[1;34m[*] Git is not installed. Attempting to install git...\033[0m\n"
         if DEBIAN_FRONTEND=noninteractive apt-get install -y git >/dev/null 2>&1; then
             printf "\033[1;32m[+] Successfully installed git.\033[0m\n"
         else
             printf "\033[1;31m[-] Error: Failed to install git. Some packages might fail to install if they require git.\033[0m\n"
-            # Do not exit, allow script to continue if git is not strictly needed by all packages
         fi
     else
         printf "\033[1;34m[*] Git is already installed.\033[0m\n"
@@ -132,7 +127,6 @@ install_package_dependencies() {
         # Skip comments and empty lines
         [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
 
-        # Clean up fields (remove quotes and trim whitespace)
         name=$(echo "$name" | xargs)
         version=$(echo "$version" | xargs)
         debian_min_version=$(echo "$debian_min_version" | xargs)
@@ -145,10 +139,9 @@ install_package_dependencies() {
 
         printf "\033[1;34m[*] Processing package: %s (Version: %s, Min Debian: %s, Codenames: '%s')\033[0m\n" "$name" "$version" "$debian_min_version" "$debian_codenames_str"
 
-        # Check OS compatibility - simplified for Debian 12 only
+        # Check OS compatibility
         os_compatible=false
         if [[ ",${debian_codenames_str}," == *",${CURRENT_DEBIAN_CODENAME},"* ]]; then
-            # Since we only support Debian 12 now, and all packages are for 12+, this should always pass
             if [[ "${debian_min_version}" == "12" ]]; then
                 os_compatible=true
             else
@@ -211,8 +204,6 @@ install_package_dependencies() {
 
 
 setup_security(){
-    # OS detection is done by detect_os_details() 
-    # global variables CURRENT_DEBIAN_VERSION_ID and CURRENT_DEBIAN_CODENAME are available.
     printf "\033[1;32m[+] Using detected system: Debian %s (%s) for security setup.\033[0m\n" "${CURRENT_DEBIAN_VERSION_ID}" "${CURRENT_DEBIAN_CODENAME}"
 
  ####################### DELETED FILES
@@ -704,7 +695,7 @@ EOF
     ########################### Set secure file permissions
     printf "Setting secure file permissions...\\n"
     chmod 700 /root # root only
-    chmod 644 /etc/passwd  # group access
+    chmod 600 /etc/passwd  # root
     chmod 600 /etc/shadow # root only
     chmod 644 /etc/group  # group access
     chmod 600 /etc/gshadow # root only
@@ -911,9 +902,7 @@ EOF
                 if [[ -d "$download_dir/$extracted_dir" ]]; then
                     cd "$download_dir/$extracted_dir" || { printf "\\033[1;31m[-] Error: Cannot change directory to extracted folder.\\033[0m\\n"; return 1; }
                     printf "Running chkrootkit installer...\\n"
-                    # The installer script might not exist or be named differently,
-                    # or installation might just involve copying files.
-                    # A common approach is to just copy the main script and man page.
+                   
                     if [[ -f "chkrootkit" ]]; then
                         cp chkrootkit /usr/local/sbin/
                         chmod +x /usr/local/sbin/chkrootkit
@@ -989,7 +978,7 @@ EOF
         fi
 
         # Configure specific audit rules (/etc/audit/audit.rules) based on STIG
-        # Note: Rules optimized to reduce system impact while maintaining security
+  
         printf "\\033[1;34m[*] Configuring optimized auditd rules based on STIG...\\033[0m\\n"
         local audit_rules_file="/etc/audit/audit.rules"
 
@@ -1462,7 +1451,6 @@ restrict_compilers() {
 	compilers="/usr/bin/gcc /usr/bin/g++ /usr/bin/make /usr/bin/cc /usr/bin/c++ /usr/bin/as /usr/bin/ld"
     for bin in $compilers; do
         if [[ -f "$bin" ]]; then
-            # FIX: Only restrict if you are sure no users need compilers
             chmod 755 "$bin"
             chown root:root "$bin"
             printf "\033[1;32m[+] Set %s to 755 root:root (default for compilers).\\033[0m\\n" "$bin"
