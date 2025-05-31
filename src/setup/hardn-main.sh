@@ -101,8 +101,8 @@ preinstallmsg() {
 
 update_system_packages() {
     printf "\033[1;31m[+] Updating system packages...\033[0m\n"
-    apt update && apt upgrade -y
-    # apt update -y # This is redundant after apt upgrade -y which often includes an update
+    apt update -y
+
 }
 
 install_package_dependencies() {
