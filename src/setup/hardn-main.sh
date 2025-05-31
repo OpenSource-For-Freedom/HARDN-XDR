@@ -3,6 +3,13 @@
 # HARDN-XDR - The Linux Security Hardening Sentinel
 # Developed and built by Christopher Bingham and Tim Burns
 
+# --- Global Variables ---
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROGS_CSV_PATH="${SCRIPT_DIR}/../../progs.csv" 
+CURRENT_DEBIAN_VERSION_ID=""
+CURRENT_DEBIAN_CODENAME=""
+
+
 print_ascii_banner() {
     cat << "EOF"
 
@@ -22,8 +29,63 @@ print_ascii_banner() {
 EOF
 }
 
+######### DETECT OS VERSIONS
+detect_os_details() {
+    printf "\033[1;34m[*] Detecting operating system details...\033[0m\n"
+    if [[ -f /etc/os-release ]]; then
+        
+       
+        source /etc/os-release
+        CURRENT_DEBIAN_VERSION_ID="${VERSION_ID}"
+        CURRENT_DEBIAN_CODENAME="${VERSION_CODENAME}"
+
+        if [[ "${ID}" != "debian" ]]; then
+            printf "\033[1;31m[-] Error: This script is intended for Debian distributions only. Detected ID: %s\033[0m\n" "${ID}"
+            exit 1
+        fi
+
+        # FALLBACK for Debian 12 only
+        if [[ -z "${CURRENT_DEBIAN_CODENAME}" ]] && [[ -f /etc/debian_version ]]; then
+            local debian_version_major
+            debian_version_major=$(cut -d'.' -f1 /etc/debian_version)
+            case "${debian_version_major}" in
+                "12") CURRENT_DEBIAN_CODENAME="bookworm" ;;
+                *) CURRENT_DEBIAN_CODENAME="" ;;
+            esac
+            # If VERSION_ID was also empty, try to set it from debian_version_major
+            [[ -z "${CURRENT_DEBIAN_VERSION_ID}" ]] && CURRENT_DEBIAN_VERSION_ID="${debian_version_major}"
+        fi
+
+        if [[ -z "${CURRENT_DEBIAN_VERSION_ID}" || -z "${CURRENT_DEBIAN_CODENAME}" ]]; then
+            printf "\033[1;31m[-] Error: Could not reliably determine Debian version ID or codename.\033[0m\n"
+            printf "\033[1;31m[-] Please ensure /etc/os-release and /etc/debian_version are correctly populated.\033[0m\n"
+            exit 1
+        fi
+
+        printf "\033[1;32m[+] Detected Debian Version ID: %s, Codename: %s\033[0m\n" "${CURRENT_DEBIAN_VERSION_ID}" "${CURRENT_DEBIAN_CODENAME}"
+
+        # Validate supported Debian versions (only Debian 12 bookworm)
+        case "${CURRENT_DEBIAN_CODENAME}" in
+            "bookworm")
+                printf "\033[1;32m[+] Debian %s (%s) is the supported version.\033[0m\n" "${CURRENT_DEBIAN_VERSION_ID}" "${CURRENT_DEBIAN_CODENAME}"
+                ;;
+            *)
+                printf "\033[1;31m[-] Error: Debian %s (%s) is not supported. This script only supports Debian 12 (bookworm).\033[0m\n" "${CURRENT_DEBIAN_VERSION_ID}" "${CURRENT_DEBIAN_CODENAME}"
+                exit 1
+                ;;
+        esac
+    else
+        printf "\033[1;31m[-] Error: /etc/os-release not found. Cannot determine OS details.\033[0m\n"
+        exit 1
+    fi
+}
+
+
 # Check for root privileges
 [ "$(id -u)" -ne 0 ] && echo "This script must be run as root." && exit 1
+
+# Call OS detection early
+detect_os_details
 
 welcomemsg() {
     printf "\\n\\n Welcome to HARDN-XDR a Debian Security tool for System Hardening\\n"
@@ -40,195 +102,120 @@ preinstallmsg() {
 update_system_packages() {
     printf "\033[1;31m[+] Updating system packages...\033[0m\n"
     apt update && apt upgrade -y
-    apt update -y
+    # apt update -y # This is redundant after apt upgrade -y which often includes an update
 }
 
 install_package_dependencies() {
-    printf "\\033[1;31m[+] Installing package dependencies from ../../progs.csv...\\033[0m\\n"
-    progsfile="../../progs.csv"
+    printf "\033[1;31m[+] Installing package dependencies from %s...\033[0m\n" "${PROGS_CSV_PATH}"
 
-    # Ensure git is installed first
+    # Ensure git is installed first, as it might be needed for source/custom installs (though not currently used)
     if ! command -v git >/dev/null 2>&1; then
-        printf "\\033[1;34m[*] Git is not installed. Attempting to install git...\\033[0m\\n"
+        printf "\033[1;34m[*] Git is not installed. Attempting to install git...\033[0m\n"
         if DEBIAN_FRONTEND=noninteractive apt-get install -y git >/dev/null 2>&1; then
-            printf "\\033[1;32m[+] Successfully installed git.\\033[0m\\n"
+            printf "\033[1;32m[+] Successfully installed git.\033[0m\n"
         else
-            printf "\\033[1;31m[-] Error: Failed to install git. Please check your package manager.\\033[0m\\n"
-            return 1
+            printf "\033[1;31m[-] Error: Failed to install git. Some packages might fail to install if they require git.\033[0m\n"
+            # Do not exit, allow script to continue if git is not strictly needed by all packages
         fi
     else
-        printf "\\033[1;34m[*] Git is already installed.\\033[0m\\n"
+        printf "\033[1;34m[*] Git is already installed.\033[0m\n"
     fi
 
     # Check if the CSV file exists
-    if [[ ! -f "$progsfile" ]]; then
-        printf "\\033[1;31m[-] Error: Package list file not found: %s\\033[0m\\n" "$progsfile"
+    if [[ ! -f "${PROGS_CSV_PATH}" ]]; then
+        printf "\033[1;31m[-] Error: Package list file not found: %s\033[0m\n" "${PROGS_CSV_PATH}"
         return 1
     fi
 
-    while IFS=, read -r name version || [[ -n "$name" ]]; do
+    # Read the CSV file, skipping the header
+    while IFS=, read -r name version debian_min_version debian_codenames_str rest || [[ -n "$name" ]]; do
         # Skip comments and empty lines
         [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
 
-        # Clean up package name (remove quotes and trim whitespace)
+        # Clean up fields (remove quotes and trim whitespace)
         name=$(echo "$name" | xargs)
         version=$(echo "$version" | xargs)
+        debian_min_version=$(echo "$debian_min_version" | xargs)
+        debian_codenames_str=$(echo "$debian_codenames_str" | xargs | tr -d '"') # Remove quotes from codenames string
 
-        if [[ -n "$name" ]]; then
-            if [[ "$version" == "latest" ]]; then
-                printf "\\033[1;34m[*] Attempting to manually install package: %s (version: %s)...\\033[0m\\n" "$name" "$version"
-                # Custom logic for git-based installation
-                case "$name" in
-                    qemu-kvm)
-                        printf "\\033[1;34m[*] Manually installing qemu-kvm using git...\\033[0m\\n"
-                        git clone https://github.com/qemu/qemu.git /tmp/qemu
-                        cd /tmp/qemu || { printf "\\033[1;31m[-] Failed to access QEMU directory.\\033[0m\\n"; return 1; }
-                        ./configure && make && sudo make install
-                        ;;
-                    chkrootkit)
-                        printf "\\033[1;34m[*] Manually installing chkrootkit using git...\\033[0m\\n"
-                        git clone https://github.com/ChkRootkit/chkrootkit.git /tmp/chkrootkit
-                        cd /tmp/chkrootkit || { printf "\\033[1;31m[-] Failed to access chkrootkit directory.\\033[0m\\n"; return 1; }
-                        make sense && sudo make install
-                        ;;
-                    *)
-                        printf "\\033[1;33m[!] Warning: No manual installation process defined for %s. Skipping...\\033[0m\\n" "$name"
-                        ;;
-                esac
+        if [[ -z "$name" ]]; then
+            printf "\033[1;33m[!] Warning: Skipping line with empty package name.\033[0m\n"
+            continue
+        fi
+
+        printf "\033[1;34m[*] Processing package: %s (Version: %s, Min Debian: %s, Codenames: '%s')\033[0m\n" "$name" "$version" "$debian_min_version" "$debian_codenames_str"
+
+        # Check OS compatibility - simplified for Debian 12 only
+        os_compatible=false
+        if [[ ",${debian_codenames_str}," == *",${CURRENT_DEBIAN_CODENAME},"* ]]; then
+            # Since we only support Debian 12 now, and all packages are for 12+, this should always pass
+            if [[ "${debian_min_version}" == "12" ]]; then
+                os_compatible=true
             else
+                printf "\033[1;33m[!] Skipping %s: Requires Debian version >= %s, but current is %s.\033[0m\n" "$name" "$debian_min_version" "$CURRENT_DEBIAN_VERSION_ID"
+            fi
+        else
+            printf "\033[1;33m[!] Skipping %s: Not compatible with Debian codename %s (requires one of: %s).\033[0m\n" "$name" "$CURRENT_DEBIAN_CODENAME" "$debian_codenames_str"
+        fi
+
+        if ! $os_compatible; then
+            continue
+        fi
+
+        # Installation logic based on version
+        case "$version" in
+            "latest")
                 if ! dpkg -s "$name" >/dev/null 2>&1; then
-                    printf "\\033[1;34m[*] Attempting to install package: %s (%s)...\\033[0m\\n" "$name" "${version:-No description}"
-                    if DEBIAN_FRONTEND=noninteractive apt install -y "$name=$version"; then
-                        printf "\\033[1;32m[+] Successfully installed %s.\\033[0m\\n" "$name"
+                    printf "\033[1;34m[*] Attempting to install package: %s (latest from apt)...\033[0m\n" "$name"
+                    if DEBIAN_FRONTEND=noninteractive apt install -y "$name"; then
+                        printf "\033[1;32m[+] Successfully installed %s.\033[0m\n" "$name"
                     else
-                        printf "\\033[1;33m[!] apt install failed for %s, trying apt-get...\\033[0m\\n" "$name"
-                        if DEBIAN_FRONTEND=noninteractive apt-get install -y "$name=$version"; then
-                             printf "\\033[1;32m[+] Successfully installed %s with apt-get.\\033[0m\\n" "$name"
+                        printf "\033[1;33m[!] apt install failed for %s, trying apt-get...\033[0m\n" "$name"
+                        if DEBIAN_FRONTEND=noninteractive apt-get install -y "$name"; then
+                             printf "\033[1;32m[+] Successfully installed %s with apt-get.\033[0m\n" "$name"
                         else
-                            printf "\\033[1;31m[-] Error: Failed to install %s with both apt and apt-get. Please check manually.\\033[0m\\n" "$name"
+                            printf "\033[1;31m[-] Error: Failed to install %s with both apt and apt-get. Please check manually.\033[0m\n" "$name"
                         fi
                     fi
                 else
-                    printf "\\033[1;34m[*] Package %s is already installed.\\033[0m\\n" "$name"
+                    printf "\033[1;34m[*] Package %s is already installed.\033[0m\n" "$name"
                 fi
-            fi
-        else
-            printf "\\033[1;33m[!] Warning: Skipping line with empty package name.\\033[0m\\n"
-        fi
-    done < "$progsfile"
-    printf "\\033[1;31m[+] Package dependency installation attempt completed.\\033[0m\\n"
+                ;;
+            "source")
+                printf "\033[1;33m[!] INFO: 'source' installation type for %s. This type requires manual implementation in the script.\033[0m\n" "$name"
+                printf "\033[1;33m[!] Example steps for a source install (e.g., for a package named 'mytool'):\033[0m\n"
+                printf "\033[1;33m[!]   1. Ensure build dependencies are installed (e.g., build-essential, cmake, etc.).\033[0m\n"
+                printf "\033[1;33m[!]   2. wget https://example.com/mytool-src.tar.gz -O /tmp/mytool-src.tar.gz\033[0m\n"
+                printf "\033[1;33m[!]   3. tar -xzf /tmp/mytool-src.tar.gz -C /tmp\033[0m\n"
+                printf "\033[1;33m[!]   4. cd /tmp/mytool-* || exit 1\033[0m\n"
+                printf "\033[1;33m[!]   5. ./configure && make && sudo make install\033[0m\n"
+                printf "\033[1;33m[!] Skipping %s as its specific source installation steps are not defined.\033[0m\n" "$name"
+                ;;
+            "custom")
+                printf "\033[1;33m[!] INFO: 'custom' installation type for %s. This type requires manual implementation in the script.\033[0m\n" "$name"
+                printf "\033[1;33m[!] Example steps for a custom install (e.g., for a package named 'mycustomapp'):\033[0m\n"
+                printf "\033[1;33m[!]   1. Add custom repository: curl -sSL https://example.com/repo/gpg | sudo apt-key add - \033[0m\n"
+                printf "\033[1;33m[!]   2. echo 'deb https://example.com/repo %s main' | sudo tee /etc/apt/sources.list.d/mycustomapp.list \033[0m\n" "${CURRENT_DEBIAN_CODENAME}"
+                printf "\033[1;33m[!]   3. sudo apt update \033[0m\n"
+                printf "\033[1;33m[!]   4. sudo apt install -y mycustomapp \033[0m\n"
+                printf "\033[1;33m[!] Skipping %s as its specific custom installation steps are not defined.\033[0m\n" "$name"
+                ;;
+            *)
+                printf "\033[1;31m[-] Error: Unknown version '%s' for package %s. Skipping...\033[0m\n" "$version" "$name"
+                ;;
+        esac
+    done < <(tail -n +2 "${PROGS_CSV_PATH}")
+    printf "\033[1;31m[+] Package dependency installation attempt completed.\033[0m\n"
 }
 
 
 
 setup_security(){
+    # OS detection is done by detect_os_details() 
+    # global variables CURRENT_DEBIAN_VERSION_ID and CURRENT_DEBIAN_CODENAME are available.
+    printf "\033[1;32m[+] Using detected system: Debian %s (%s) for security setup.\033[0m\n" "${CURRENT_DEBIAN_VERSION_ID}" "${CURRENT_DEBIAN_CODENAME}"
 
-    # Detect distribution information for Debian 10-12 package configuration
-    local distro_id
-    local distro_codename
-    
-    if [[ -f /etc/os-release ]]; then
-        distro_id=$(grep "^ID=" /etc/os-release | cut -d'=' -f2 | tr -d '"')
-        distro_codename=$(grep "^VERSION_CODENAME=" /etc/os-release | cut -d'=' -f2 | tr -d '"')
-        
-        # Enhanced Debian detection
-        case "$distro_id" in
-            "debian")
-                # Map Debian versions to codenames if not detected
-                if [[ -z "$distro_codename" ]] && [[ -f /etc/debian_version ]]; then
-                    local debian_version
-                    debian_version=$(cut -d'.' -f1 /etc/debian_version)
-                    case "$debian_version" in
-                        "10") distro_codename="buster" ;;
-                        "11") distro_codename="bullseye" ;;
-                        "12") distro_codename="bookworm" ;;
-                        "13") distro_codename="trixie" ;;
-                    esac
-                fi
-                ;;
-            "ubuntu")
-                # Fallback for Ubuntu codename if not found
-                if [[ -z "$distro_codename" ]]; then
-                    distro_codename=$(grep "^UBUNTU_CODENAME=" /etc/os-release | cut -d'=' -f2 | tr -d '"')
-                fi
-                ;;
-        esac
-        
-        # Set Debian-focused defaults if still empty
-        [[ -z "$distro_id" ]] && distro_id="debian"
-        [[ -z "$distro_codename" ]] && distro_codename="bullseye"  # Debian 11 default
-    else
-        # Debian-focused fallback defaults for systems without os-release
-        distro_id="debian"
-        distro_codename="bullseye"
-    fi
-    
-    printf "\\033[1;32m[+] Detected system: %s (%s)\\033[0m\\n" "$distro_id" "$distro_codename"
-
-    # ##################  TOMOYO Linux ( in case someone is stuck in 2003)
-    printf "\\033[1;31m[+] Checking and configuring TOMOYO Linux...\\033[0m\\n"
-
-    # Check if TOMOYO package is installed
-    if dpkg -s tomoyo-tools >/dev/null 2>&1; then
-        printf "\\033[1;32m[+] TOMOYO Linux package is installed.\\033[0m\\n"
-
-        if command -v tomoyo-init >/dev/null 2>&1; then
-
-            if ! tomoyo-init --check >/dev/null 2>&1; then
-                printf "\\033[1;34m[*] Initializing TOMOYO Linux...\\033[0m\\n"
-                if tomoyo-init --init >/dev/null 2>&1; then
-                    printf "\\033[1;32m[+] TOMOYO Linux initialized successfully.\\033[0m\\n"
-                else
-                    printf "\\033[1;31m[-] Failed to initialize TOMOYO Linux.\\033[0m\\n"
-                fi
-            else
-                printf "\\033[1;34m[*] TOMOYO Linux is already initialized.\\033[0m\\n"
-            fi
-        else
-            printf "\\033[1;31m[-] Error: tomoyo-init command not found despite package being installed. Manual check required.\\033[0m\\n"
-        fi
-    else
-        printf "\\033[1;33m[*] TOMOYO Linux package not found. Attempting to install...\\033[0m\\n"
-        
-        if apt-get update >/dev/null 2>&1 && apt-get install -y tomoyo-tools >/dev/null 2>&1; then
-            printf "\\033[1;32m[+] TOMOYO Linux package installed successfully.\\033[0m\\n"
-          
-            if command -v tomoyo-init >/dev/null 2>&1; then
-                 printf "\\033[1;34m[*] Initializing TOMOYO Linux after installation...\\033[0m\\n"
-                 if tomoyo-init --init >/dev/null 2>&1; then
-                     printf "\\033[1;32m[+] TOMOYO Linux initialized successfully.\\033[0m\\n"
-                 else
-                     printf "\\033[1;31m[-] Failed to initialize TOMOYO Linux after installation.\\033[0m\\n"
-                 fi
-            else
-                 printf "\\033[1;31m[-] Error: tomoyo-init command not found after installation. Manual check required.\\033[0m\\n"
-            fi
-        else
-            printf "\\033[1;31m[-] Error: Failed to install TOMOYO Linux package. Skipping configuration.\\033[0m\\n"
-        fi
-    fi
-    printf "\\033[1;32m[+] TOMOYO Linux configuration attempt completed.\\033[0m\\n"
-
-    #########################################  GRSecurity
-    printf "\\033[1;31m[+] Checking for GRSecurity...\\033[0m\\n"
-
-    if grep -q "GRKERNSEC" /proc/cmdline; then
-        printf "\\033[1;32m[+] GRSecurity-patched kernel is running.\\033[0m\\n"
-        
-        if sysctl kernel.grsecurity.grsec 2>/dev/null | grep -q "= 1"; then
-             printf "\\033[1;32m[+] GRSecurity is enabled and enforcing.\\033[0m\\n"
-        else
-             printf "\\033[1;33m[!] Warning: GRSecurity-patched kernel is running, but it might not be fully enabled or enforcing.\\033[0m\\n"
-        fi
-    else
-        printf "\\033[1;33m[!] Warning: GRSecurity-patched kernel is not detected as running.\\033[0m\\n"
-        printf "\\033[1;31m[-] GRSecurity cannot be automatically installed by this script.\\033[0m\\n"
-        printf "\\033[1;31m[-] Installing GRSecurity requires compiling a custom kernel with the GRSecurity patch.\\033[0m\\n"
-        printf "\\033[1;31m[-] Please refer to the GRSecurity documentation for manual installation steps.\\033[0m\\n"
-    fi
-
-
-    # ###################### DELETED FILES
+ ####################### DELETED FILES
     printf "\\033[1;31m[+] Checking for deleted files in use...\\033[0m\\n"
     if command -v lsof >/dev/null 2>&1; then
         deleted_files=$(lsof +L1 | awk '{print $9}' | grep -v '^$')
@@ -243,8 +230,7 @@ setup_security(){
         printf "\\033[1;31m[-] Error: lsof command not found. Cannot check for deleted files in use.\\033[0m\\n"
     fi
     
-
-    ################################## ntp daemon
+################################## ntp daemon
     printf "\\033[1;31m[+] Setting up NTP daemon...\\033[0m\\n"
 
     local ntp_servers="0.debian.pool.ntp.org 1.debian.pool.ntp.org 2.debian.pool.ntp.org 3.debian.pool.ntp.org"
@@ -463,16 +449,15 @@ setup_security(){
             sed -i 's/^\s*maxretry\s*=\s*.*/maxretry = 5/' "$jail_local" 2>/dev/null || true
 
             # Ensure sshd jail is enabled (uncomment or add if missing)
-            if ! grep -q '^\s*\[sshd\]' "$jail_local"; then
+            if ! grep -q '^\[sshd\]' "$jail_local"; then # Removed space and corrected grep pattern for [sshd]
                  echo -e "\n[sshd]\nenabled = true" >> "$jail_local"
                  printf "\\033[1;32m[+] Added [sshd] jail configuration to %s.\\033[0m\\n" "$jail_local"
             else
-                 sed -i '/^\s*\[sshd\]/,/^\[.*\]/ s/^\s*enabled\s*=\s*false/enabled = true/' "$jail_local" 2>/dev/null || true
+                 sed -i '/^\[sshd\]/,/^\[.*\]/ s/^\s*enabled\s*=\s*false/enabled = true/' "$jail_local" 2>/dev/null || true # Corrected grep pattern for [sshd]
                  printf "\\033[1;34m[*] Ensured sshd jail is enabled in %s.\\033[0m\\n" "$jail_local"
             fi
 
-
-            printf "\\033[1;32m[+] Applied STIG-like settings (bantime=1h, findtime=15m, maxretry=3) to sshd jail in %s.\\033[0m\\n" "$jail_local"
+            printf "\\033[1;32m[+] Applied STIG-like settings \\(bantime=1h, findtime=15m, maxretry=3\\) to sshd jail in %s.\\033[0m\\n" "$jail_local"
 
             # Restart Fail2Ban to apply changes
             if systemctl list-unit-files --type=service | grep -q '^fail2ban\.service'; then
@@ -734,12 +719,12 @@ EOF
     printf "Configuring automatic security updates for Debian-based systems...\\n"
     
     # Configure unattended upgrades based on distribution
-    case "$distro_id" in
+    case "${ID}" in # Use ${ID} from /etc/os-release
         "debian")
             cat > /etc/apt/apt.conf.d/50unattended-upgrades << EOF
 Unattended-Upgrade::Allowed-Origins {
-    "\${distro_id}:\${distro_codename}-security";
-    "\${distro_id}:\${distro_codename}-updates";
+    "${ID}:${CURRENT_DEBIAN_CODENAME}-security";
+    "${ID}:${CURRENT_DEBIAN_CODENAME}-updates";
 };
 Unattended-Upgrade::Package-Blacklist {
     // Add any packages you want to exclude from automatic updates
@@ -755,9 +740,9 @@ EOF
         "ubuntu")
             cat > /etc/apt/apt.conf.d/50unattended-upgrades << EOF
 Unattended-Upgrade::Allowed-Origins {
-    "\${distro_id}:\${distro_codename}-security";
-    "\${distro_id}ESMApps:\${distro_codename}-apps-security";
-    "\${distro_id}ESM:\${distro_codename}-infra-security";
+    "${ID}:${CURRENT_DEBIAN_CODENAME}-security";
+    "${ID}ESMApps:${CURRENT_DEBIAN_CODENAME}-apps-security";
+    "${ID}ESM:${CURRENT_DEBIAN_CODENAME}-infra-security";
 };
 EOF
             ;;
@@ -765,7 +750,7 @@ EOF
             # Generic Debian-based fallback
             cat > /etc/apt/apt.conf.d/50unattended-upgrades << EOF
 Unattended-Upgrade::Allowed-Origins {
-    "\${distro_id}:\${distro_codename}-security";
+    "${ID}:${CURRENT_DEBIAN_CODENAME}-security";
 };
 EOF
             ;;
@@ -886,7 +871,15 @@ EOF
     printf "Configuring libvirt...\\n"
     systemctl enable libvirtd
     systemctl start libvirtd
-    usermod -a -G libvirt "$name" >/dev/null 2>&1 || true
+    if [[ -n "$SUDO_USER" ]]; then
+        if usermod -a -G libvirt "$SUDO_USER" >/dev/null 2>&1; then
+            printf "\\033[1;34m[*] Added user %s to libvirt group (if not already a member).\\033[0m\\n" "$SUDO_USER"
+        else
+            printf "\\033[1;33m[!] Warning: Failed to add %s to libvirt group. User might already be a member or another issue occurred.\\033[0m\\n" "$SUDO_USER"
+        fi
+    else
+        printf "\\033[1;33m[!] \$SUDO_USER is not set. Cannot automatically add user to libvirt group. Please do this manually if needed for user: %s\\033[0m\\n" "$(logname)"
+    fi
     
     ################################### OpenSSH Server
     printf "Configuring OpenSSH...\\n"
@@ -1597,7 +1590,7 @@ purge_old_packages() {
 }
 
 enable_nameservers() {
-    printf "\\033[1;31m[+] Checking and configuring DNS nameservers (Quad9 primary, Google secondary)...\033[0m\\n"
+    printf "\\033[1;31m[+] Checking and configuring DNS nameservers (Quad9 primary, Google secondary)...\033{0m\\n"
     local resolv_conf quad9_ns google_ns nameserver_count configured_persistently changes_made
 	resolv_conf="/etc/resolv.conf"
     quad9_ns="9.9.9.9"
@@ -1664,7 +1657,7 @@ enable_nameservers() {
                 printf "\\033[1;31m[-] Failed to restart systemd-resolved. Manual check required.\033[0m\\n"
             fi
         else
-            printf "\\033[1;34m[*] No effective changes to %s were needed.\\033[0m\\n" "$resolved_conf_systemd"
+            printf "\\033[1;34m[*] No effective changes to %s were needed.\033[0m\\n" "$resolved_conf_systemd"
         fi
         rm -f "$temp_resolved_conf"
     fi
@@ -1703,42 +1696,42 @@ enable_process_accounting_and_sysstat() {
     changed_sysstat=false
 
     # Enable Process Accounting (acct/psacct)
-    printf "\\033[1;34m[*] Checking and installing acct (process accounting)...\033[0m\\n"
+    printf "\\033[1;34m[*] Checking and installing acct (process accounting)...\\033[0m\\n"
     if ! dpkg -s acct >/dev/null 2>&1 && ! dpkg -s psacct >/dev/null 2>&1; then
         whiptail --infobox "Installing acct (process accounting)..." 7 60
         if apt-get install -y acct; then
-            printf "\\033[1;32m[+] acct installed successfully.\033[0m\\n"
+            printf "\\033[1;32m[+] acct installed successfully.\\033[0m\\n"
             changed_acct=true
         else
-            printf "\\033[1;31m[-] Failed to install acct. Please check manually.\033[0m\\n"
+            printf "\\033[1;31m[-] Failed to install acct. Please check manually.\\033[0m\\n"
         fi
     else
-        printf "\\033[1;34m[*] acct/psacct is already installed.\033[0m\\n"
+        printf "\\033[1;34m[*] acct/psacct is already installed.\\033[0m\\n"
     fi
 
     if dpkg -s acct >/dev/null 2>&1 || dpkg -s psacct >/dev/null 2>&1; then
         if ! systemctl is-active --quiet acct && ! systemctl is-active --quiet psacct; then
-            printf "\\033[1;33m[*] Attempting to enable and start acct/psacct service...\033[0m\\n"
+            printf "\\033[1;33m[*] Attempting to enable and start acct/psacct service...\\033[0m\\n"
             systemctl enable --now acct 2>/dev/null || systemctl enable --now psacct 2>/dev/null
-            printf "\\033[1;32m[+] acct/psacct service enabled and started.\033[0m\\n"
+            printf "\\033[1;32m[+] acct/psacct service enabled and started.\\033[0m\\n"
             changed_acct=true
         else
-            printf "\\033[1;32m[+] acct/psacct service is already active.\033[0m\\n"
+            printf "\\033[1;32m[+] acct/psacct service is already active.\\033[0m\\n"
         fi
     fi
 
     # Enable Sysstat
-    printf "\\033[1;34m[*] Checking and installing sysstat...\033[0m\\n"
+    printf "\\033[1;34m[*] Checking and installing sysstat...\\033[0m\\n"
     if ! dpkg -s sysstat >/dev/null 2>&1; then
         whiptail --infobox "Installing sysstat..." 7 60
         if apt-get install -y sysstat; then
-            printf "\\033[1;32m[+] sysstat installed successfully.\033[0m\\n"
+            printf "\\033[1;32m[+] sysstat installed successfully.\\033[0m\\n"
             changed_sysstat=true
         else
-            printf "\\033[1;31m[-] Failed to install sysstat. Please check manually.\033[0m\\n"
+            printf "\\033[1;31m[-] Failed to install sysstat. Please check manually.\\033[0m\\n"
         fi
     else
-        printf "\\033[1;34m[*] sysstat is already installed.\033[0m\\n"
+        printf "\\033[1;34m[*] sysstat is already installed.\\033[0m\\n"
     fi
 
     if dpkg -s sysstat >/dev/null 2>&1; then
@@ -1746,40 +1739,40 @@ enable_process_accounting_and_sysstat() {
 		sysstat_conf="/etc/default/sysstat"
         if [[ -f "$sysstat_conf" ]]; then
             if ! grep -qE '^\s*ENABLED="true"' "$sysstat_conf"; then
-                printf "\\033[1;33m[*] Enabling sysstat data collection in %s...\033[0m\\n" "$sysstat_conf"
+                printf "\\033[1;33m[*] Enabling sysstat data collection in %s...\\033[0m\\n" "$sysstat_conf"
                 sed -i 's/^\s*ENABLED="false"/ENABLED="true"/' "$sysstat_conf"
           
                 if ! grep -qE '^\s*ENABLED=' "$sysstat_conf"; then
                     echo 'ENABLED="true"' >> "$sysstat_conf"
                 fi
                 changed_sysstat=true
-                printf "\\033[1;32m[+] sysstat data collection enabled.\033[0m\\n"
+                printf "\\033[1;32m[+] sysstat data collection enabled.\\033[0m\\n"
             else
-                printf "\\033[1;32m[+] sysstat data collection is already enabled in %s.\033[0m\\n" "$sysstat_conf"
+                printf "\\033[1;32m[+] sysstat data collection is already enabled in %s.\\033[0m\\n" "$sysstat_conf"
             fi
         else
             # Fallback for systems where config might be /etc/sysstat/sysstat (e.g. RHEL based, but this is Debian focused)
             # For Debian, /etc/default/sysstat is standard.
-            printf "\\033[1;33m[!] sysstat configuration file %s not found. Manual check might be needed.\033[0m\\n" "$sysstat_conf"
+            printf "\\033[1;33m[!] sysstat configuration file %s not found. Manual check might be needed.\\033[0m\\n" "$sysstat_conf"
         fi
 
         if ! systemctl is-active --quiet sysstat; then
-            printf "\\033[1;33m[*] Attempting to enable and start sysstat service...\033[0m\\n"
+            printf "\\033[1;33m[*] Attempting to enable and start sysstat service...\\033[0m\\n"
             if systemctl enable --now sysstat; then
-                printf "\\033[1;32m[+] sysstat service enabled and started.\033[0m\\n"
+                printf "\\033[1;32m[+] sysstat service enabled and started.\\033[0m\\n"
                 changed_sysstat=true
             else
-                printf "\\033[1;31m[-] Failed to enable/start sysstat service.\033[0m\\n"
+                printf "\\033[1;31m[-] Failed to enable/start sysstat service.\\033[0m\\n"
             fi
         else
-            printf "\\033[1;32m[+] sysstat service is already active.\033[0m\\n"
+            printf "\\033[1;32m[+] sysstat service is already active.\\033[0m\\n"
         fi
     fi
 
     if [[ "$changed_acct" = true || "$changed_sysstat" = true ]]; then
-        printf "\\033[1;32m[+] Process accounting (acct) and sysstat configured successfully.\033[0m\\n"
+        printf "\\033[1;32m[+] Process accounting (acct) and sysstat configured successfully.\\033[0m\\n"
     else
-        printf "\\033[1;32m[+] Process accounting (acct) and sysstat already configured or no changes needed.\033[0m\\n"
+        printf "\\033[1;32m[+] Process accounting (acct) and sysstat already configured or no changes needed.\\033[0m\\n"
     fi
 }
 
@@ -1888,11 +1881,6 @@ EOF
     chmod 644 /etc/logrotate.d/hardn-xdr
     printf "\\033[1;32m[+] Logrotate configuration created/updated.\\033[0m\\n"
 
-    #####################################################################################
-    # @linuxuser255
-    # Other tools (Fail2Ban, AppArmor, Auditd, Debsums, Chkrootkit, Lynis) are configured
-    # to log to syslog either by default or via the crontab/service setup in setup_security.
-    # No specific configuration needed here beyond the rsyslog rules.
 
 
     # Restart rsyslog to apply changes

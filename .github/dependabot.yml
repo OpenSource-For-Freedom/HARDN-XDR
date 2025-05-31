@@ -1,21 +1,6 @@
 version: 2
 updates:
-  # Updates for npm dependencies (for package.json files)
-  - package-ecosystem: "npm"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "npm"
-    assignees:
-      - "OpenSource-For-Freedom"
-    commit-message:
-      prefix: "npm"
-      include: "scope"
-
+ 
   # Updates for GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"

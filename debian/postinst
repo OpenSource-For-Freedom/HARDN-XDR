@@ -1,9 +1,0 @@
-#!/bin/sh
-set -eu
-
-chmod 755 /usr/bin/hardn-main.sh
-chown root:root /usr/bin/hardn-main.sh
-ln -sf /usr/bin/hardn-main.sh /usr/bin/hardn
-mkdir -p /etc/hardn
-
-exit 0

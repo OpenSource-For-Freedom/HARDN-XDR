@@ -1,4 +1,4 @@
-name: Validate Package Dependancies
+name: Validate Debian Package Dependencies
 
 on:
   schedule:
@@ -8,7 +8,10 @@ on:
 jobs:
   validate-progs:
     runs-on: ubuntu-latest
-
+    strategy:
+      matrix:
+        debian_version: ['10', '11', '12']
+    
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -18,48 +21,197 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Validate and Update progs.csv
-        id: update_packages
+      - name: Setup Debian ${{ matrix.debian_version }} sources
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/*
+          
+          case "${{ matrix.debian_version }}" in
+            "10")
+              codename="buster"
+              ;;
+            "11") 
+              codename="bullseye"
+              ;;
+            "12")
+              codename="bookworm"
+              ;;
+          esac
+          
+          echo "deb http://deb.debian.org/debian $codename main" | sudo tee /etc/apt/sources.list
+          echo "deb http://deb.debian.org/debian $codename-updates main" | sudo tee -a /etc/apt/sources.list
+          echo "deb http://security.debian.org/debian-security $codename-security main" | sudo tee -a /etc/apt/sources.list
+          
+          sudo apt-get update || { echo "::error::apt-get update failed for Debian ${{ matrix.debian_version }}"; exit 1; }
+
+      - name: Validate Debian ${{ matrix.debian_version }} packages
+        id: validate_packages
         run: |
           set -o pipefail
-          set +e
-
-          sudo apt-get update || { echo "::error::apt-get update failed"; exit 1; }
-
+          
           if [ ! -f "progs.csv" ]; then
-            echo "progs.csv file not found. Creating one."
-            echo "name,version" > progs.csv
-            echo "changes_made=false" >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "::error::progs.csv file not found"
+            exit 1
           fi
-
-          echo "name,version" > progs-temp.csv
 
           packages_validated=0
           packages_missing=0
+          packages_incompatible=0
+          
+          # Create validation report
+          echo "# Debian ${{ matrix.debian_version }} Package Validation Report" > validation-report-${{ matrix.debian_version }}.md
+          echo "Generated: $(date)" >> validation-report-${{ matrix.debian_version }}.md
+          echo "" >> validation-report-${{ matrix.debian_version }}.md
+          echo "| Package | Status | Available Version | Notes |" >> validation-report-${{ matrix.debian_version }}.md
+          echo "|---------|--------|------------------|-------|" >> validation-report-${{ matrix.debian_version }}.md
 
-          tail -n +2 progs.csv | while IFS=',' read -r pkg_name version; do
+          # Skip header and comment lines, parse CSV properly
+          grep -v "^#" progs.csv | tail -n +2 | while IFS=',' read -r pkg_name version min_debian_version debian_codenames; do
+            # Clean up fields
             pkg_name=$(echo "$pkg_name" | xargs)
-            if [ -z "$pkg_name" ]; then continue; fi
+            min_debian_version=$(echo "$min_debian_version" | xargs)
+            debian_codenames=$(echo "$debian_codenames" | xargs | tr -d '"')
+            
+            if [ -z "$pkg_name" ] || [ "$pkg_name" = "name" ]; then continue; fi
+            
+            # Check if package is compatible with this Debian version
+            if [ -n "$min_debian_version" ] && [ "${{ matrix.debian_version }}" -lt "$min_debian_version" ]; then
+              echo "| $pkg_name | :red_circle: Incompatible | N/A | Requires Debian $min_debian_version+ |" >> validation-report-${{ matrix.debian_version }}.md
+              ((packages_incompatible++))
+              continue
+            fi
+            
+            # Check codename compatibility if specified
+            if [ -n "$debian_codenames" ] && ! echo "$debian_codenames" | grep -q "$(case ${{ matrix.debian_version }} in 10) echo buster;; 11) echo bullseye;; 12) echo bookworm;; esac)"; then
+              echo "| $pkg_name | :red_circle: Codename Mismatch | N/A | Not in supported codenames: $debian_codenames |" >> validation-report-${{ matrix.debian_version }}.md
+              ((packages_incompatible++))
+              continue
+            fi
 
+            # Handle special installation types
+            case "$version" in
+              "source"|"custom")
+                echo "| $pkg_name | :sparkles: Special Install | $version | Requires $version installation |" >> validation-report-${{ matrix.debian_version }}.md
+                ((packages_validated++))
+                continue
+                ;;
+            esac
+
+            # Check package availability in APT
             if apt-cache show "$pkg_name" > /dev/null 2>&1; then
               latest_version=$(apt-cache show "$pkg_name" | grep "^Version:" | head -n1 | awk '{print $2}')
-              echo "$pkg_name,$latest_version" >> progs-temp.csv
+              echo "| $pkg_name | :green_circle: Available | $latest_version | OK |" >> validation-report-${{ matrix.debian_version }}.md
               ((packages_validated++))
             else
-              echo "# REMOVED: $pkg_name,$version - package not found" >> progs-temp.csv
+              echo "| $pkg_name | :red_circle: Missing | N/A | Package not found in repositories |" >> validation-report-${{ matrix.debian_version }}.md
               ((packages_missing++))
             fi
           done
 
-          echo "Validated: $packages_validated"
-          echo "Missing: $packages_missing"
+          # Summary
+          echo "" >> validation-report-${{ matrix.debian_version }}.md
+          echo "## Summary" >> validation-report-${{ matrix.debian_version }}.md
+          echo "- :red_check_mark: Available: $packages_validated" >> validation-report-${{ matrix.debian_version }}.md
+          echo "- :warning: Missing: $packages_missing" >> validation-report-${{ matrix.debian_version }}.md
+          echo "- :exclamation: Incompatible: $packages_incompatible" >> validation-report-${{ matrix.debian_version }}.md
 
-          if ! cmp -s progs.csv progs-temp.csv; then
+          echo "validated=$packages_validated" >> "$GITHUB_OUTPUT"
+          echo "missing=$packages_missing" >> "$GITHUB_OUTPUT"
+          echo "incompatible=$packages_incompatible" >> "$GITHUB_OUTPUT"
+
+      - name: Test hardn-main.sh compatibility
+        run: |
+          if [ -f "src/setup/hardn-main.sh" ]; then
+            echo "Testing hardn-main.sh syntax and Debian compatibility..."
+            
+            # Test shell syntax
+            bash -n src/setup/hardn-main.sh || { echo "::error::hardn-main.sh has syntax errors"; exit 1; }
+            
+            # Test distribution detection logic
+            echo "Testing distribution detection..."
+            grep -q "debian" src/setup/hardn-main.sh || { echo "::warning::hardn-main.sh may not properly detect Debian"; }
+            grep -q "buster\|bullseye\|bookworm" src/setup/hardn-main.sh || { echo "::warning::hardn-main.sh may not handle Debian 10-12 codenames"; }
+            
+            echo ":) hardn-main.sh compatibility check passed"
+          else
+            echo "::warning::hardn-main.sh not found in expected location"
+          fi
+
+      - name: Upload validation report
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-report-debian-${{ matrix.debian_version }}
+          path: validation-report-${{ matrix.debian_version }}.md
+          retention-days: 30
+
+  update-progs:
+    needs: validate-progs
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Download all validation reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: validation-report-debian-*
+          merge-multiple: true
+
+      - name: Update progs.csv with latest compatible versions
+        id: update_packages
+        run: |
+          set -o pipefail
+          
+          # Setup latest Debian (bookworm) for version checking
+          sudo rm -f /etc/apt/sources.list.d/*
+          echo "deb http://deb.debian.org/debian bookworm main" | sudo tee /etc/apt/sources.list
+          echo "deb http://deb.debian.org/debian bookworm-updates main" | sudo tee -a /etc/apt/sources.list
+          echo "deb http://security.debian.org/debian-security bookworm-security main" | sudo tee -a /etc/apt/sources.list
+          sudo apt-get update
+          
+          if [ ! -f "progs.csv" ]; then
+            echo "::error::progs.csv file not found"
+            exit 1
+          fi
+
+          # Backup original
+          cp progs.csv progs.csv.backup
+          
+          # Create updated version
+          head -n 1 progs.csv > progs-temp.csv  # Keep header
+          
+          changes_made=false
+          
+          # Process each package
+          grep -v "^#" progs.csv | tail -n +2 | while IFS=',' read -r pkg_name version min_debian_version debian_codenames; do
+            pkg_name=$(echo "$pkg_name" | xargs)
+            version=$(echo "$version" | xargs)
+            min_debian_version=$(echo "$min_debian_version" | xargs)
+            debian_codenames=$(echo "$debian_codenames" | xargs)
+            
+            if [ -z "$pkg_name" ] || [ "$pkg_name" = "name" ]; then continue; fi
+            
+            new_version="$version"
+            
+            # Only update packages marked as "latest"
+            if [ "$version" = "latest" ]; then
+              if apt-cache show "$pkg_name" > /dev/null 2>&1; then
+                latest_version=$(apt-cache show "$pkg_name" | grep "^Version:" | head -n1 | awk '{print $2}')
+                new_version="$latest_version"
+                if [ "$version" != "$latest_version" ]; then
+                  changes_made=true
+                fi
+              fi
+            fi
+            
+            echo "$pkg_name,$new_version,$min_debian_version,$debian_codenames" >> progs-temp.csv
+          done
+          
+          if [ "$changes_made" = "true" ]; then
             mv progs-temp.csv progs.csv
             echo "changes_made=true" >> "$GITHUB_OUTPUT"
           else
-            echo "No changes detected."
             rm -f progs-temp.csv
             echo "changes_made=false" >> "$GITHUB_OUTPUT"
           fi
@@ -68,15 +220,54 @@ jobs:
         if: steps.update_packages.outputs.changes_made == 'true'
         uses: peter-evans/create-pull-request@v7
         with:
-          title: "chore: update progs.csv with latest available package versions"
+          title: "chore: update Debian package versions in progs.csv"
           body: |
-            This PR updates the package list with:
-            - Refreshed versions from apt-cache
-            - Comments for packages no longer available
-          commit-message: "chore: update progs.csv with latest package versions"
-          branch: update-packages-${{ github.run_number }}
+            ## 📦 Debian Package Updates
+            
+            This automated PR updates package versions for Debian 10-12 compatibility:
+            
+            ### Changes Made:
+            - Updated package versions to latest available in Debian repositories
+            - Validated compatibility across Debian 10 (Buster), 11 (Bullseye), and 12 (Bookworm)
+            - Maintained Debian-specific dependency information
+            
+            ### Validation Reports:
+            - Check the attached artifacts for detailed validation reports per Debian version
+            - All packages tested for availability and compatibility
+            
+            ### Integration:
+            - Compatible with hardn-main.sh Debian detection logic
+            - Supports enhanced package installation with alternatives
+            - Maintains backward compatibility with existing installations
+            
+            **Note:** This PR was automatically generated by the dependency validation workflow.
+          commit-message: "chore: update progs.csv with latest Debian-compatible package versions"
+          branch: update-debian-packages-${{ github.run_number }}
           delete-branch: true
 
       - name: No changes found
         if: steps.update_packages.outputs.changes_made == 'false'
-        run: echo "✓ progs.csv is already up-to-date"
+        run: |
+          echo ":green_circle: progs.csv is already up-to-date with latest Debian package versions"
+          echo ":book: Validation reports generated for Debian 10, 11, and 12"
+
+      - name: Consolidate validation reports
+        run: |
+          echo "# :bar_chart: Debian Package Validation Summary" > validation-summary.md
+          echo "Generated: $(date)" >> validation-summary.md
+          echo "" >> validation-summary.md
+          
+          for version in 10 11 12; do
+            if [ -f "validation-report-$version.md" ]; then
+              echo "## Debian $version Results" >> validation-summary.md
+              tail -n +4 "validation-report-$version.md" >> validation-summary.md
+              echo "" >> validation-summary.md
+            fi
+          done
+          
+      - name: Upload consolidated report
+        uses: actions/upload-artifact@v4
+        with:
+          name: debian-validation-summary
+          path: validation-summary.md
+          retention-days: 90
