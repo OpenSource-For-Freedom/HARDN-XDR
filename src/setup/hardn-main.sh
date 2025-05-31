@@ -101,8 +101,8 @@ preinstallmsg() {
 
 update_system_packages() {
     printf "\033[1;31m[+] Updating system packages...\033[0m\n"
-    apt update -y
-
+    apt update && apt upgrade -y
+    # apt update -y # This is redundant after apt upgrade -y which often includes an update
 }
 
 install_package_dependencies() {
@@ -1943,15 +1943,41 @@ remove_unnecessary_services() {
 
 pen_test() {
     printf "\\033[1;31m[+] Running penetration tests...\\033[0m\\n"
-    local lynis_path="/usr/bin/lynis"
+    local lynis_path=""
     local manual_install_dir=""
     local current_dir
     current_dir=$(pwd)
 
-    # Ensure Lynis is installed
-    if ! dpkg -s lynis >/dev/null 2>&1; then
+    # First, try to find Lynis in common locations
+    if command -v lynis >/dev/null 2>&1; then
+        lynis_path=$(command -v lynis)
+        printf "\\033[1;32m[+] Lynis found at %s.\\033[0m\\n" "$lynis_path"
+    elif [ -x "/usr/bin/lynis" ]; then
+        lynis_path="/usr/bin/lynis"
+    elif [ -x "/usr/local/bin/lynis" ]; then
+        lynis_path="/usr/local/bin/lynis"
+    elif [ -x "/bin/lynis" ]; then
+        lynis_path="/bin/lynis"
+    fi
+
+    # If not found, check if package is installed and try to locate it
+    if [ -z "$lynis_path" ] && dpkg -s lynis >/dev/null 2>&1; then
+        printf "\\033[1;33m[*] Lynis package is installed but executable not found in standard locations. Searching...\\033[0m\\n"
+        lynis_path=$(find /usr -name "lynis" -type f -executable 2>/dev/null | head -n 1)
+        if [ -n "$lynis_path" ]; then
+            printf "\\033[1;32m[+] Lynis found at %s.\\033[0m\\n" "$lynis_path"
+        fi
+    fi
+
+    # If still not found, attempt installation
+    if [ -z "$lynis_path" ]; then
         printf "\\033[1;33m[*] Lynis not found. Attempting to install via apt-get...\\033[0m\\n"
         if apt-get update && apt install -y lynis; then
+            lynis_path="/usr/bin/lynis"
+            if [ ! -x "$lynis_path" ]; then
+                chmod +x "$lynis_path"
+            fi
+
             printf "\\033[1;32m[+] Lynis installed successfully via apt-get.\\033[0m\\n"
         else
             printf "\\033[1;31m[-] Failed to install Lynis via apt-get. Attempting manual installation...\\033[0m\\n"
@@ -2013,7 +2039,7 @@ cleanup(){
     apt clean >/dev/null 2>&1
     apt update -y >/dev/null 2>&1
     printf "\\033[1;32m[+] Cleanup completed!\\033[0m\\n"
-
+    
 }
 
 
