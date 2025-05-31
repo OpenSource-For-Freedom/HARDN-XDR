@@ -14,7 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       security-events: write
-
+    container:
+      image: debian:latest 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -22,7 +23,7 @@ jobs:
     - name: Install Dependencies
       run: |
         echo "Installing dependencies..."
-        sudo apt update && sudo apt install -y shellcheck
+        apt update && apt install -y shellcheck python3-pip
         python3 -m pip install --upgrade pip
         pip install pylint bandit trufflehog
 
