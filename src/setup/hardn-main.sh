@@ -1438,14 +1438,6 @@ EOF
     } > "$banner_net_file"
     chmod 644 "$banner_net_file"
     HARDN_STATUS "pass" "STIG compliant banner configured in $banner_net_file."    
-
-    ########################################## Lynis
-    HARDN_STATUS "info" "Configuring Lynis..."
-    apt install lynis
-    lynis update info >/dev/null 2>&1 || true
-    echo "0 2 * * 0 root /usr/bin/lynis audit system --cronjob" >> /etc/crontab
-    
-    HARDN_STATUS "pass" "Security tools configuration completed!"
 }
 
 restrict_compilers() {
@@ -1580,13 +1572,13 @@ purge_old_packages() {
     apt-get clean
     whiptail --infobox "Apt cache cleaned." 7 70
 }
-
+### Let userdecide DNS, but place recommendaiton. ADD TO /DOCS
 enable_nameservers() {
     HARDN_STATUS "error" "Checking and configuring DNS nameservers (Quad9 primary, Google secondary)..."
     local resolv_conf quad9_ns google_ns nameserver_count configured_persistently changes_made
 	resolv_conf="/etc/resolv.conf"
     quad9_ns="9.9.9.9"
-    google_ns="8.8.8.8"
+    google_ns="1.1.1.1"
     nameserver_count=0
     configured_persistently=false
     changes_made=false
@@ -1790,6 +1782,7 @@ setup_central_logging() {
 
 
     # Create necessary directories
+    # ADD ALL DIR's fo monitoring
     HARDN_STATUS "info" "Creating log directories and files..."
     mkdir -p /usr/local/var/log/suricata
     # Note: /var/log/suricata is often created by the suricata package itself
@@ -1911,7 +1904,7 @@ remove_unnecessary_services() {
     disable_service_if_active cups
     disable_service_if_active rpcbind
     disable_service_if_active nfs-server
-        disable_service_if_active smbd
+    disable_service_if_active smbd
     disable_service_if_active snmpd
     disable_service_if_active apache2
     disable_service_if_active mysql
@@ -1995,7 +1988,7 @@ pen_test() {
     HARDN_STATUS "pass" "Penetration tests completed!"
 }
 
-
+### Add whiptail status bar
 cleanup(){
     HARDN_STATUS "error" "Cleaning up temporary files..."
     rm -rf /tmp/* >/dev/null 2>&1
