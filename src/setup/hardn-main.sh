@@ -129,9 +129,9 @@ preinstallmsg() {
 }
 
 update_system_packages() {
+
     HARDN_STATUS "pass" "Updating system packages..."
-    apt update && apt upgrade -y
-    # apt update -y # This is redundant after apt upgrade -y which often includes an update
+    apt update -y
 }
 
 install_package_dependencies() {

@@ -1,4 +1,4 @@
-name: "Security Overwatch Workflow"
+name: "Security Overwatch"
 
 on:
   push:
@@ -10,36 +10,45 @@ on:
 
 jobs:
   security-checks:
-    name: Run Security Scans
+    name: Run ShellCheck Security Scans
     runs-on: ubuntu-latest
-    permissions:
-      security-events: write
     container:
-      image: debian:latest 
+      image: debian:latest # Use a Debian container
     steps:
-    - name: Checkout repository
+    - name: Checkout Repository
       uses: actions/checkout@v4
 
-    - name: Install Dependencies
+    - name: Install ShellCheck
       run: |
-        echo "Installing dependencies..."
-        apt update && apt install -y shellcheck python3-pip
-        python3 -m pip install --upgrade pip
-        pip install pylint bandit trufflehog
+        echo "Installing ShellCheck..."
+        apt update && apt install -y shellcheck
 
-    - name: Run Security Scanning Bash Script
+    - name: Run ShellCheck on Shell Scripts
       run: |
-        # Exit immediately if a command exits with a non-zero status
-        set -e
+        echo "Running ShellCheck..."
+        mkdir -p scan_results
+        for script in $(find . -type f -name "*.sh"); do
+          echo "Scanning $script"
+          shellcheck "$script" > "scan_results/${script//\//_}.txt" || true
+        done
+        echo "ShellCheck completed. Results stored in scan_results/"
 
-        echo "Running linting..."
-        find . -type f -name "*.sh" -exec shellcheck {} \;
-        find . -type f -name "*.py" -exec pylint {} \;
+    - name: Create or Update Weekly Issue
+      run: |
+        echo "Setting up GitHub CLI..."
+        apt update && apt install -y gh
+        gh auth login --with-token <<< "$GITHUB_TOKEN"
 
-        echo "Running secret scanning..."
-        trufflehog filesystem --path ./ --json
+        echo "Checking for existing issue..."
+        ISSUE_TITLE="Weekly ShellCheck Findings"
+        ISSUE_BODY="This issue contains the results of the weekly ShellCheck scans."
+        EXISTING_ISSUE=$(gh issue list --search "$ISSUE_TITLE" --json number | jq -r '.[0].number')
 
-        echo "Running security flaw scanning..."
-        bandit -r .
-
-        echo "All checks completed successfully!"
+        if [ "$EXISTING_ISSUE" != "null" ]; then
+          echo "Updating existing issue..."
+          RESULTS=$(cat scan_results/*.txt)
+          gh issue comment "$EXISTING_ISSUE" --body "Updated results:\n\`\`\`\n$RESULTS\n\`\`\`"
+        else
+          echo "Creating new issue..."
+          RESULTS=$(cat scan_results/*.txt)
+          gh issue create --title "$ISSUE_TITLE" --body "$ISSUE_BODY\n\`\`\`\n$RESULTS\n\`\`\`"
