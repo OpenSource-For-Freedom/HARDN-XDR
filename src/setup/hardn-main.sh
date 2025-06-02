@@ -865,18 +865,21 @@ EOF
     fi
     
     #############################   libvirt and KVM
-    HARDN_STATUS "info" "Configuring libvirt..."
+    printf "Configuring libvirt...\n"
     systemctl enable libvirtd
     systemctl start libvirtd
-    if [[ -n "$SUDO_USER" ]]; then
-        if usermod -a -G libvirt "$SUDO_USER" >/dev/null 2>&1; then
-            HARDN_STATUS "info" "Added user $SUDO_USER to libvirt group (if not already a member)."
-        else
-            HARDN_STATUS "warning" "Warning: Failed to add $SUDO_USER to libvirt group. User might already be a member or another issue occurred."
-        fi
+
+if [ -n "$SUDO_USER" ]; then
+    if usermod -aG libvirt "$SUDO_USER" 2>/dev/null; then
+        printf "Added user %s to libvirt group\n" "$SUDO_USER"
+        printf "User should log out and log back in for group change to take effect.\n"
     else
-        HARDN_STATUS "warning" "\$SUDO_USER is not set. Cannot automatically add user to libvirt group. Please do this manually if needed for user: $(logname)"
+        printf "Failed to add user %s to libvirt group\n" "$SUDO_USER"
     fi
+else
+    printf "Warning: Could not determine user to add to libvirt group. If you ran this as root, manually add your user to the 'libvirt' group.\n"
+fi
+
     
     ################################### OpenSSH Server
     HARDN_STATUS "info" "Configuring OpenSSH..."
