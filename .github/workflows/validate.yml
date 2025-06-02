@@ -65,7 +65,7 @@ jobs:
           echo "|---------|--------|------------------|-------|" >> validation-report-${{ matrix.debian_version }}.md
 
           # Skip header and comment lines, parse CSV properly
-          grep -v "^#" progs.csv | tail -n +2 | while IFS=',' read -r pkg_name version min_debian_version debian_codenames; do
+          while IFS=',' read -r pkg_name version min_debian_version debian_codenames; do < <(grep -v "^#" progs.csv | tail -n +2)
             # Clean up fields
             pkg_name=$(echo "$pkg_name" | xargs)
             min_debian_version=$(echo "$min_debian_version" | xargs)
