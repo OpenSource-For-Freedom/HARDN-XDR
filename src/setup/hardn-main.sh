@@ -1994,7 +1994,6 @@ pen_test() {
 ### Add whiptail status bar
 cleanup(){
     HARDN_STATUS "error" "Cleaning up temporary files..."
-    rm -rf /tmp/* >/dev/null 2>&1
     apt autoremove -y >/dev/null 2>&1
     apt clean >/dev/null 2>&1
     apt update -y >/dev/null 2>&1
