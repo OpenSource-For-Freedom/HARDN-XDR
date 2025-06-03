@@ -83,7 +83,14 @@ jobs:
             fi
             
             # Check codename compatibility if specified
-            codename=$(case ${{ matrix.debian_version }} in 10) echo buster;; 11) echo bullseye;; 12) echo bookworm;; esac)
+            codename=$(
+              case "${{ matrix.debian_version }}" in
+                10) echo "buster" ;;
+                11) echo "bullseye" ;;
+                12) echo "bookworm" ;;
+                *) echo "unknown" ;;
+              esac
+            )
             if [ -n "$debian_codenames" ] && ! echo "$debian_codenames" | grep -q "$codename"; then
               echo "| $pkg_name | :red_circle: Codename Mismatch | N/A | Not in supported codenames: $debian_codenames |" >> validation-report-${{ matrix.debian_version }}.md
               ((packages_incompatible++))
