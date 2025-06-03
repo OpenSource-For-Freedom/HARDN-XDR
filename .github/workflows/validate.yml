@@ -4,7 +4,9 @@ on:
   schedule:
     - cron: '0 3 * * 1'  # Weekly on Mondays at 3 AM UTC
   workflow_dispatch:
-  contents: read
+
+permissions:
+  contents: write
 jobs:
   validate-progs:
     runs-on: ubuntu-latest
@@ -148,6 +150,9 @@ jobs:
     needs: validate-progs
     runs-on: ubuntu-latest
     if: always()
+    permissions:
+      contents: read
+      pull-requests: write
     
     steps:
       - name: Checkout repo
