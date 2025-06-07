@@ -2,11 +2,11 @@ name: Generate GitHub Insights
 
 on:
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '0 3 * * *' 
   workflow_dispatch:
   
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   traffic-badges:
