@@ -1,5 +1,33 @@
 # Changelog
 
+## Version 2.0.0
+
+### 🎉 Major Release - Final Public Version
+
+#### Added
+- **Version Tracking**: Added explicit version identifier (v2.0.0) throughout the script and user interface
+- **Enhanced User Experience**: Improved welcome messages, banners, and completion notifications with version information
+- **Production Ready**: Finalized as the definitive public release of HARDN-XDR
+
+#### Improved
+- **User Interface**: Enhanced all user-facing messages with clearer version information and better formatting
+- **Feedback Systems**: Improved completion messages and system cleanup notifications
+- **Code Quality**: Maintained high code quality standards from previous ShellCheck improvements
+
+#### Fixed
+- **Version Consistency**: Unified version numbering across all components
+- **User Communication**: Better feedback during installation and completion phases
+
+### 🏆 Final Mission Completed
+This marks the completion of the HARDN-XDR "Final Mission" with a production-ready security hardening solution featuring:
+- Comprehensive STIG compliance for Debian-based systems
+- Advanced malware detection and response capabilities
+- Complete system hardening with security tools integration
+- Central logging and monitoring systems
+- Extended Detection and Response (XDR) functionality
+
+---
+
 ## Version 1.1.8
 
 ### Added

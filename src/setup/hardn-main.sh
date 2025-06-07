@@ -1,9 +1,10 @@
 #!/bin/bash
 
 # HARDN-XDR - The Linux Security Hardening Sentinel
+# Version 2.0.0
 # Developed and built by Christopher Bingham and Tim Burns
 
-
+HARDN_VERSION="2.0.0"
 export APT_LISTBUGS_FRONTEND=none
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROGS_CSV_PATH="${SCRIPT_DIR}/../../progs.csv"
@@ -45,10 +46,12 @@ detect_os_details
 welcomemsg() {
     echo ""
     echo ""
-    whiptail --title "HARDN-XDR" --msgbox "Welcome to HARDN-XDR a Debian Security tool for System Hardening" 10 60
+    echo "HARDN-XDR v${HARDN_VERSION} - Linux Security Hardening Sentinel"
+    echo "================================================================"
+    whiptail --title "HARDN-XDR v${HARDN_VERSION}" --msgbox "Welcome to HARDN-XDR v${HARDN_VERSION} - A Debian Security tool for System Hardening\n\nThis will apply STIG compliance, security tools, and comprehensive system hardening." 12 70
     echo ""
     echo "This installer will update your system first..."
-    if whiptail --title "HARDN-XDR" --yesno "Do you want to continue with the installation?" 10 60; then
+    if whiptail --title "HARDN-XDR v${HARDN_VERSION}" --yesno "Do you want to continue with the installation?" 10 60; then
         true  
     else
         echo "Installation cancelled by user."
@@ -190,6 +193,7 @@ print_ascii_banner() {
                                         ███    ███ 
                            
                             Extended Detection and Response
+                                   Version ${HARDN_VERSION}
                             by Security International Group
                                   
 EOF
@@ -1775,11 +1779,13 @@ pen_test() {
 }
 
 cleanup() {
+    HARDN_STATUS "info" "Performing final system cleanup..."
     apt-get autoremove -y >/dev/null 2>&1
     apt-get clean >/dev/null 2>&1
     apt-get autoclean >/dev/null 2>&1
     HARDN_STATUS "pass" "System cleanup completed. Unused packages and cache cleared."
-    whiptail --infobox "HARDN-XDR has been Setup, please reboot your system." 7 70
+    whiptail --infobox "HARDN-XDR v${HARDN_VERSION} setup complete! Please reboot your system." 8 75
+    sleep 3
 
 }
 
@@ -1802,7 +1808,42 @@ main() {
     cleanup
     print_ascii_banner
 
-    HARDN_STATUS "pass" "HARDN-XDR installation completed, Please reboot your System."
+    HARDN_STATUS "pass" "HARDN-XDR v${HARDN_VERSION} installation completed successfully!"
+    HARDN_STATUS "info" "Your system has been hardened with STIG compliance and security tools."
+    HARDN_STATUS "warning" "Please reboot your system to complete the configuration."
 }
+
+# Command line argument handling
+if [[ $# -gt 0 ]]; then
+    case "$1" in
+        --version|-v)
+            echo "HARDN-XDR v${HARDN_VERSION}"
+            echo "Linux Security Hardening Sentinel"
+            echo "Extended Detection and Response"
+            exit 0
+            ;;
+        --help|-h)
+            echo "HARDN-XDR v${HARDN_VERSION} - Linux Security Hardening Sentinel"
+            echo ""
+            echo "Usage: $0 [OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  --version, -v    Show version information"
+            echo "  --help, -h       Show this help message"
+            echo ""
+            echo "This script applies comprehensive security hardening to Debian-based systems"
+            echo "including STIG compliance, malware detection, and security monitoring."
+            echo ""
+            echo "WARNING: This script makes significant system changes. Run only on systems"
+            echo "         intended for security hardening."
+            exit 0
+            ;;
+        *)
+            echo "Error: Unknown option '$1'"
+            echo "Use '$0 --help' for usage information."
+            exit 1
+            ;;
+    esac
+fi
 
 main

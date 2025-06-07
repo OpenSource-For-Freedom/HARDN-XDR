@@ -8,7 +8,7 @@
 <p align="center">
   <img src="docs/assets/HARDN(1).png" alt="HARDN Logo" width="300px" /><br><br>
   <img src="https://img.shields.io/badge/The_Linux_Security_Project-red?style=for-the-badge&labelColor=black" alt="The Linux Security Project"><br><br>
-  <code>HARDN-XDR</code>
+  <code>HARDN-XDR v2.0.0</code>
 </p>
 
 
@@ -25,7 +25,7 @@
 </p>
 
 
-## HARDN-XDR
+## HARDN-XDR v2.0.0 - Final Release
 - **Our Goal**: 
   - Assist the open source community in building a Debian based **"GOLDEN IMAGE"** System.
 - **Our Purpose**: 
@@ -33,7 +33,8 @@
 - **What we have to offer**:
   - A robust and secure endpoint management solution designed to simplify and enhance the management of devices in your network. 
   - Advanced features for monitoring, securing, and maintaining endpoints efficiently.
-  - `STIG` COMPLIANCE to align with the [Security Technical Information Guides](https://public.cyber.mil/stigs/) provided by the [DOD Cyber Exchange](https://public.cyber.mil/).
+  - Complete `STIG` COMPLIANCE to align with the [Security Technical Information Guides](https://public.cyber.mil/stigs/) provided by the [DOD Cyber Exchange](https://public.cyber.mil/).
+  - **Production-Ready**: This v2.0.0 release represents the final, polished version of HARDN-XDR for public use.
 
 
 <br>
@@ -81,13 +82,19 @@
     curl -LO https://raw.githubusercontent.com/OpenSource-For-Freedom/HARDN-XDR/main/src/setup/hardn-main.sh
     ```
 
-2.  **Run the HARDN setup:**
+2.  **Check version and help (optional):**
+    ```bash
+    chmod +x hardn-main.sh
+    ./hardn-main.sh --version
+    ./hardn-main.sh --help
+    ```
+
+3.  **Run the HARDN setup:**
     Launch the script with superuser privileges to begin the hardening process:
     ```bash
-    sudo chmod +x hardn-main.sh
     sudo ./hardn-main.sh
     ```
-    This will start the HARDN setup. 
+    This will start the HARDN v2.0.0 setup with enhanced user interface and comprehensive system hardening. 
 
 
 
