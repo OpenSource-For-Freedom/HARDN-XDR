@@ -25,44 +25,65 @@ jobs:
           set -o pipefail
           sudo apt-get update || { echo "::error::apt-get update failed"; exit 1; }
 
-      - name: Create progs.csv if missing
+      - name: Validate and create progs.csv if missing
         id: csv
         run: |
           if [ ! -f "progs.csv" ]; then
-            echo "progs.csv file not found. Creating one."
-            echo "name,version" > progs.csv
+            echo "progs.csv file not found. Creating one with proper headers."
+            echo "name,version,debian_min_version,debian_codenames" > progs.csv
+            echo "# Add your package dependencies here" >> progs.csv
+            echo "# Example: curl,latest,12,\"bookworm\"" >> progs.csv
+            echo "changes_made=true" >> $GITHUB_OUTPUT
+          else
+            echo "progs.csv exists. Validating format..."
+            # Check if file has proper headers
+            header=$(head -n 1 progs.csv)
+            if [[ "$header" != "name,version,debian_min_version,debian_codenames" ]]; then
+              echo "::warning::progs.csv header format is incorrect. Expected: name,version,debian_min_version,debian_codenames"
+              echo "::warning::Found: $header"
+            fi
+            
+            # Count non-comment, non-empty lines
+            package_count=$(grep -v '^#' progs.csv | grep -v '^[[:space:]]*$' | grep -v '^name,version' | wc -l)
+            echo "Found $package_count package entries in progs.csv"
+            
+            if [ "$package_count" -eq 0 ]; then
+              echo "::warning::No package entries found in progs.csv"
+            fi
+            
             echo "changes_made=false" >> $GITHUB_OUTPUT
-            exit 0
           fi
 
-      - name: Configure git user
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Create or switch to unique update branch
-        run: |
-          BRANCH_NAME="update-packages-${GITHUB_RUN_ID}"
-          git checkout -B "$BRANCH_NAME"
-
-      - name: Commit any changes
+      - name: Stage changes for PR creation
+        if: steps.csv.outputs.changes_made == 'true'
         run: |
           git add progs.csv
-          git diff --cached --quiet || git commit -m "Update progs.csv if missing"
-        continue-on-error: true   
 
-      - name: Push changes to unique update branch
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: No changes needed
+        if: steps.csv.outputs.changes_made == 'false'
         run: |
-          BRANCH_NAME="update-packages-${GITHUB_RUN_ID}"
-          git push --set-upstream origin "$BRANCH_NAME"
+          echo "✅ progs.csv exists and validation completed successfully"
+          echo "No pull request needed as no changes were made"
 
       - name: Create Pull Request
+        if: steps.csv.outputs.changes_made == 'true'
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "Update progs.csv if missing"
+          commit-message: "Create progs.csv with proper format"
           branch: update-packages-${{ github.run_id }}
-          title: "Update progs.csv if missing"
-          body: "This PR updates or creates the progs.csv file if it was missing."
+          title: "Create missing progs.csv file"
+          body: |
+            This PR creates the missing progs.csv file with the proper format.
+            
+            ## Changes
+            - Created progs.csv with correct headers: name,version,debian_min_version,debian_codenames
+            - Added example comments for adding package dependencies
+            - File is ready for package dependency definitions
+            
+            ## Next Steps
+            Add your package dependencies to this file following the format:
+            ```
+            package_name,version,debian_min_version,debian_codenames
+            ```
+          delete-branch: true
