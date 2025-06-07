@@ -39,8 +39,11 @@ jobs:
             # Check if file has proper headers
             header=$(head -n 1 progs.csv)
             if [[ "$header" != "name,version,debian_min_version,debian_codenames" ]]; then
-              echo "::warning::progs.csv header format is incorrect. Expected: name,version,debian_min_version,debian_codenames"
-              echo "::warning::Found: $header"
+              echo "::error::progs.csv header format is incorrect. Expected: name,version,debian_min_version,debian_codenames"
+              echo "::error::Found: $header"
+              echo "Correcting header to expected format..."
+              sed -i '1s/.*/name,version,debian_min_version,debian_codenames/' progs.csv
+              echo "Header corrected successfully."
             fi
             
             # Count non-comment, non-empty lines
