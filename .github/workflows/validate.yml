@@ -47,7 +47,7 @@ jobs:
             fi
             
             # Count non-comment, non-empty lines
-            package_count=$(grep -v '^#' progs.csv | grep -v '^[[:space:]]*$' | grep -v '^name,version' | wc -l)
+            package_count=$(grep -E -v '^(#|[[:space:]]*$|name,version)' progs.csv | wc -l)
             echo "Found $package_count package entries in progs.csv"
             
             if [ "$package_count" -eq 0 ]; then
