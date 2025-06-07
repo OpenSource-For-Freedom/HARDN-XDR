@@ -1336,13 +1336,6 @@ disable_binfmt_misc() {
     if [[ ! -f "$modprobe_conf" ]]; then
         echo "install binfmt_misc /bin/true" > "$modprobe_conf"
         HARDN_STATUS "pass" "Added modprobe rule to prevent binfmt_misc from loading on boot: $modprobe_conf"
-   
-
-   
-
-
-   
-
     else
         if ! grep -q "install binfmt_misc /bin/true" "$modprobe_conf"; then
             echo "install binfmt_misc /bin/true" >> "$modprobe_conf"
@@ -1397,7 +1390,6 @@ disable_firewire_drivers() {
     fi
     
 }
-    
 
 purge_old_packages() {
     HARDN_STATUS "error" "Purging configuration files of old/removed packages..."
@@ -1436,7 +1428,70 @@ purge_old_packages() {
     apt-get clean
     whiptail --infobox "Apt cache cleaned." 7 70
 }
-### Let userdecide DNS, but place recommendaiton. ADD TO /DOCS
+
+secure_ssh() {
+        local sshd_config="/etc/ssh/sshd_config"
+        local backup_conf="/etc/ssh/sshd_config.bak_$(date +%Y%m%d_%H%M%S)"
+
+        printf "# Backup of original sshd_config file: %s\n" "$backup_conf" > "$sshd_config"
+        cp "$sshd_config" "$backup_conf"
+
+        printf "\e[1m\e[31mApplying SSH hardening...\e[0m\n""]]]"
+
+        # Disable root login
+        sed -i's/^#PermitRootLogin yes$/PermitRootLogin no/' "$sshd_config"
+
+        # Disable password authentication, (optional if using keys)
+        sed -i's/^#PasswordAuthentication yes$/PasswordAuthentication no/' "$sshd_config"
+
+        # Disable empty passwords for users
+        sed -i's/^#ChallengeResponseAuthentication yes$/ChallengeResponseAuthentication no/' "$sshd_config"
+
+        # Use protocol version 2 only
+        sed -i's/^#Protocol 2$/Protocol 2/' "$sshd_config"
+
+        # Disable X11 forwarding
+        sed -i's/^#X11Forwarding yes$/X11Forwarding no/' "$sshd_config"
+
+        # Login grace time is 30 seconds
+        sed -i's/^#LoginGraceTime 2m$/LoginGraceTime 30s/' "$sshd_config"
+
+        # Limit max sessions to 3
+        sed -i '/^#MaxSessions/s/.*/MaxSessions 3/'"$sshd_config"
+
+        # Enable strict mode
+        sed -i's/^#StrictModes yes$/StrictModes yes/' "$sshd_config"
+
+        # Set idle timeout
+        echo "ClientAliveInterval 30s" >> "$sshd_config"
+        echo "ClientAliveCountMax 0" >> "$sshd_config"
+
+        # Disable unnecessary port forwarding
+        sed -i's/^#AllowTcpForwarding yes$/AllowTcpForwarding no/' "$sshd_config"
+
+        # Enforce strong ciphers, MACs, and key exchange algorithms
+        {
+          echo "Chiphers: chacha20-poly1305:aes128-gcm@openssh.com:aes256-gcm@openssh.com:aes12"
+          echo "MACs: hmac-sha2-512,hmac-sha2-256,hmac-sha1"
+          echo "KexAlgorithms: curve25519-sha256@libssh.org:ecdh-sha2-nistp256,ecdh-sha2"
+        } >> "$sshd_config"
+
+        # Restart sshd
+        printf "\e[1m\e[32mSSH hardening applied successfully. Restarting ssh now.\e[0m\n""]]]"
+        if systemctl is-active --quiet sshd; then
+          systemctl restart sshd
+        else
+          service ssh restart
+        fi
+
+        printf "\e[1m\e[32mSSH hardening applied successfully. Restarted ssh.\e[0m\n""]]]"
+
+        HARDN_STATUS "pass" "SSH hardening applied successfully."
+
+}
+
+
+### Let user decide DNS, but place recommendation. ADD TO /DOCS
 enable_nameservers() {
         HARDN_STATUS "error" "Checking and configuring DNS nameservers (Quad9 primary, Google secondary)..."
         local resolv_conf quad9_ns cloudflare_ns nameserver_count configured_persistently changes_made
@@ -2064,6 +2119,7 @@ main() {
     setup_security
     apply_kernel_security
     enable_process_accounting_and_sysstat
+    secure_ssh
     enable_nameservers
     purge_old_packages
     disable_firewire_drivers
