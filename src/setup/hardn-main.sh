@@ -43,6 +43,19 @@ detect_os_details() {
 
 detect_os_details
 
+show_system_info() {
+    echo "HARDN-XDR v${HARDN_VERSION} - System Information"
+    echo "================================================"
+    echo "Script Version: ${HARDN_VERSION}"
+    echo "Target OS: Debian-based systems (Debian 12+, Ubuntu 24.04+)"
+    if [[ -n "${CURRENT_DEBIAN_VERSION_ID}" && -n "${CURRENT_DEBIAN_CODENAME}" ]]; then
+        echo "Detected OS: ${ID:-Unknown} ${CURRENT_DEBIAN_VERSION_ID} (${CURRENT_DEBIAN_CODENAME})"
+    fi
+    echo "Features: STIG Compliance, Malware Detection, System Hardening"
+    echo "Security Tools: UFW, Fail2Ban, AppArmor, AIDE, rkhunter, and more"
+    echo ""
+}
+
 welcomemsg() {
     echo ""
     echo ""
@@ -1791,6 +1804,7 @@ cleanup() {
 
 main() {
     print_ascii_banner
+    show_system_info
     welcomemsg
     update_system_packages
     install_package_dependencies "../../progs.csv"
@@ -1820,6 +1834,12 @@ if [[ $# -gt 0 ]]; then
             echo "HARDN-XDR v${HARDN_VERSION}"
             echo "Linux Security Hardening Sentinel"
             echo "Extended Detection and Response"
+            echo ""
+            echo "Target Systems: Debian 12+, Ubuntu 24.04+"
+            echo "Features: STIG Compliance, Malware Detection, System Hardening"
+            echo "Developed by: Christopher Bingham and Tim Burns"
+            echo ""
+            echo "This is the final public release of HARDN-XDR."
             exit 0
             ;;
         --help|-h)
