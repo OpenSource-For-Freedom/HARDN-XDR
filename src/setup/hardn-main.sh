@@ -1,9 +1,16 @@
 #!/bin/bash
 
 # HARDN-XDR - The Linux Security Hardening Sentinel
+# Version 2.0.0
 # Developed and built by Christopher Bingham and Tim Burns
+# About this script:
+# STIG Compliance: Security Technical Implementation Guide.
+# This is a comprehensive system hardening tool designed for Debian-based Linux distributions.
+# It implements a wide range of security measures following industry best practices and,
+# STIG (Security Technical Implementation Guide) compliance standards.
+# The script systematically hardens various aspects of the system.
 
-
+HARDN_VERSION="2.0.0"
 export APT_LISTBUGS_FRONTEND=none
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROGS_CSV_PATH="${SCRIPT_DIR}/../../progs.csv"
@@ -42,13 +49,28 @@ detect_os_details() {
 
 detect_os_details
 
+show_system_info() {
+    echo "HARDN-XDR v${HARDN_VERSION} - System Information"
+    echo "================================================"
+    echo "Script Version: ${HARDN_VERSION}"
+    echo "Target OS: Debian-based systems (Debian 12+, Ubuntu 24.04+)"
+    if [[ -n "${CURRENT_DEBIAN_VERSION_ID}" && -n "${CURRENT_DEBIAN_CODENAME}" ]]; then
+        echo "Detected OS: ${ID:-Unknown} ${CURRENT_DEBIAN_VERSION_ID} (${CURRENT_DEBIAN_CODENAME})"
+    fi
+    echo "Features: STIG Compliance, Malware Detection, System Hardening"
+    echo "Security Tools: UFW, Fail2Ban, AppArmor, AIDE, rkhunter, and more"
+    echo ""
+}
+
 welcomemsg() {
     echo ""
     echo ""
-    whiptail --title "HARDN-XDR" --msgbox "Welcome to HARDN-XDR a Debian Security tool for System Hardening" 10 60
+    echo "HARDN-XDR v${HARDN_VERSION} - Linux Security Hardening Sentinel"
+    echo "================================================================"
+    whiptail --title "HARDN-XDR v${HARDN_VERSION}" --msgbox "Welcome to HARDN-XDR v${HARDN_VERSION} - A Debian Security tool for System Hardening\n\nThis will apply STIG compliance, security tools, and comprehensive system hardening." 12 70
     echo ""
     echo "This installer will update your system first..."
-    if whiptail --title "HARDN-XDR" --yesno "Do you want to continue with the installation?" 10 60; then
+    if whiptail --title "HARDN-XDR v${HARDN_VERSION}" --yesno "Do you want to continue with the installation?" 10 60; then
         true  
     else
         echo "Installation cancelled by user."
@@ -190,6 +212,7 @@ print_ascii_banner() {
                                         ███    ███ 
                            
                             Extended Detection and Response
+                                   Version ${HARDN_VERSION}
                             by Security International Group
                                   
 EOF
@@ -347,7 +370,7 @@ setup_security(){
                 rm -f "$temp_ntp_conf" # Clean up temp file
 
                 # Check NTP peer stratum and warn if not stratum 1 or 2
-                if ntpq -p 2>/dev/null | grep -q '^*'; then
+                if ntpq -p 2>/dev/null | grep -q '^\*'; then
                     stratum=$(ntpq -c rv 2>/dev/null | grep -o 'stratum=[0-9]*' | cut -d= -f2)
                     if [[ -n "$stratum" && "$stratum" -gt 2 ]]; then
                         HARDN_STATUS "warning" "NTP is synchronized but using a high stratum peer (stratum $stratum). Consider using a lower stratum (closer to 1) for better accuracy."
@@ -1198,6 +1221,141 @@ restrict_compilers() {
     
 }
 
+# The following enhances the security settings by:
+# 1. Preventing unauthorized boot parameter modifications
+# 2. Blocking access to single-user/recovery modes without authentication
+# 3. Using strong cryptographic practices (PBKDF2-SHA512 hashing)
+# 4. Generating a high-entropy random password
+# 5. Properly securing the password file with restrictive permissions
+# 1. Verifies GRUB tools are installed
+# 2. Generates a random password for GRUB and sets it in /etc/default/grub
+# 3. Creates a PBKDF2 password for GRUB
+# 4. Configures GRUB to require authentication
+# 5. Secures recovery mode access
+# 6. Updates GRUB configuration with the new password
+setup_grub_password() {
+    HARDN_STATUS "info" "Setting up GRUB password protection for boot security..."
+    
+    # Check if the grub-mkpasswd-pbkdf2 utility is available, which is required to generate password hashes for GRUB.
+    # If not found, it attempts to install the grub-common package and verifies the installation succeeded.
+    if ! command -v grub-mkpasswd-pbkdf2 >/dev/null 2>&1; then
+        HARDN_STATUS "error" "GRUB tools not found. Installing grub-common..."
+        apt-get install -y grub-common >/dev/null 2>&1
+        if ! command -v grub-mkpasswd-pbkdf2 >/dev/null 2>&1; then
+            HARDN_STATUS "error" "Could not install GRUB tools. Skipping GRUB password setup."
+            return 1
+        fi
+    fi
+    
+    # Check if system uses GRUB (look for grub config)
+    if [[ ! -f /etc/default/grub && ! -d /boot/grub ]]; then
+        HARDN_STATUS "warning" "GRUB configuration not found. System may not use GRUB bootloader."
+        return 1
+    fi
+    
+    # Generate a secure random password for GRUB
+    local grub_password
+    grub_password=$(openssl rand -base64 12 | tr -d '\n')
+    
+    # Generate PBKDF2 hash
+    HARDN_STATUS "info" "Generating GRUB password hash..."
+    local grub_hash
+    grub_hash=$(echo -e "${grub_password}\n${grub_password}" | grub-mkpasswd-pbkdf2 2>/dev/null | grep -o 'grub\.pbkdf2\.sha512\..*')
+    
+    if [[ -z "$grub_hash" ]]; then
+        HARDN_STATUS "error" "Failed to generate GRUB password hash."
+        return 1
+    fi
+    
+    # Create a GRUB configuration script that:
+    # 1. Defines a superuser named "hardnxdr"
+    # 2. Sets the PBKDF2 password hash for this user
+    # 3. Makes the script executable (chmod 755)
+    # The file is placed in /etc/grub.d/01_users with a low number prefix (01) to ensure it's processed early in the GRUB configuration generation.
+    local grub_user_file="/etc/grub.d/01_users"
+    HARDN_STATUS "info" "Creating GRUB user configuration at ${grub_user_file}..."
+    
+    cat > "$grub_user_file" << EOF
+#!/bin/sh
+# HARDN-XDR GRUB Password Protection
+# Generated by HARDN-XDR v${HARDN_VERSION}
+cat << GRUB_EOF
+set superusers="hardnxdr"
+password_pbkdf2 hardnxdr ${grub_hash}
+GRUB_EOF
+EOF
+    
+    chmod 755 "$grub_user_file"
+    
+    # Update GRUB configuration to require authentication for modifications
+    local grub_config="/etc/default/grub"
+    if [[ -f "$grub_config" ]]; then
+        # 1.Create Backup original configuration
+        cp "$grub_config" "${grub_config}.bak.hardn"
+        
+        # 2. Add or update GRUB_CMDLINE_LINUX to prevent single user mode without password
+        # And, Sets standard boot parameters for quiet splash and quiet boot
+        if grep -q "^GRUB_CMDLINE_LINUX=" "$grub_config"; then
+            sed -i 's/^GRUB_CMDLINE_LINUX=.*/GRUB_CMDLINE_LINUX="quiet splash"/' "$grub_config"
+        else
+            echo 'GRUB_CMDLINE_LINUX="quiet splash"' >> "$grub_config"
+        fi
+        
+        # Disable password-less access to recovery mode by setting GRUB_DISABLE_RECOVERY=true
+        if grep -q "^GRUB_DISABLE_RECOVERY=" "$grub_config"; then
+            sed -i 's/^GRUB_DISABLE_RECOVERY=.*/GRUB_DISABLE_RECOVERY="true"/' "$grub_config"
+        else
+            echo 'GRUB_DISABLE_RECOVERY="true"' >> "$grub_config"
+        fi
+    fi
+    
+    # Password Storage for Admin Reference
+    # This saves the generated password in a secure file that:
+    # 1. Is only accessible by the root user (chmod 600)
+    # 2.Contains the username, password, generation date, and hash
+    # 3.Is stored in the root user's home directory
+    local password_file="/root/.hardn-grub-password"
+    {
+        echo "HARDN-XDR GRUB Password (Username: hardnxdr)"
+        echo "Password: ${grub_password}"
+        echo "Generated: $(date)"
+        echo "Hash: ${grub_hash}"
+    } > "$password_file"
+    chmod 600 "$password_file"
+    chown root:root "$password_file"
+    
+    # GRUB configuration update
+    # 1.Attempts to update the GRUB configuration using either update-grub (Debian/Ubuntu) or grub-mkconfig (otr dists)
+    # 2.Provides appropriate status messages based on success or failure
+    # 3.Returns an error code if the update fails
+    HARDN_STATUS "info" "Updating GRUB configuration..."
+    if command -v update-grub >/dev/null 2>&1; then
+        if update-grub >/dev/null 2>&1; then
+            HARDN_STATUS "pass" "GRUB password protection enabled successfully."
+            HARDN_STATUS "info" "GRUB Username: hardnxdr"
+            HARDN_STATUS "info" "GRUB Password saved to: ${password_file}"
+            HARDN_STATUS "warning" "Reboot required for GRUB password to take effect."
+        else
+            HARDN_STATUS "error" "Failed to update GRUB configuration."
+            return 1
+        fi
+    elif command -v grub-mkconfig >/dev/null 2>&1; then
+        if grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1; then
+            HARDN_STATUS "pass" "GRUB password protection enabled successfully."
+            HARDN_STATUS "info" "GRUB Username: hardnxdr"
+            HARDN_STATUS "info" "GRUB Password saved to: ${password_file}"
+            HARDN_STATUS "warning" "Reboot required for GRUB password to take effect."
+        else
+            HARDN_STATUS "error" "Failed to update GRUB configuration."
+            return 1
+        fi
+    else
+        HARDN_STATUS "error" "Could not find GRUB update command."
+        return 1
+    fi
+}
+
+# Binary Format Support (binfmt). Disable running non-native binaries
 disable_binfmt_misc() {
     HARDN_STATUS "error" "Checking/Disabling non-native binary format support (binfmt_misc)..."
     if mount | grep -q 'binfmt_misc'; then
@@ -1226,6 +1384,7 @@ disable_binfmt_misc() {
     if [[ ! -f "$modprobe_conf" ]]; then
         echo "install binfmt_misc /bin/true" > "$modprobe_conf"
         HARDN_STATUS "pass" "Added modprobe rule to prevent binfmt_misc from loading on boot: $modprobe_conf"
+
     else
         if ! grep -q "install binfmt_misc /bin/true" "$modprobe_conf"; then
             echo "install binfmt_misc /bin/true" >> "$modprobe_conf"
@@ -1319,167 +1478,231 @@ purge_old_packages() {
     whiptail --infobox "Apt cache cleaned." 7 70
 }
 
-secure_ssh() {
-        local sshd_config="/etc/ssh/sshd_config"
-        local backup_conf="/etc/ssh/sshd_config.bak_$(date +%Y%m%d_%H%M%S)"
-
-        printf "# Backup of original sshd_config file: %s\n" "$backup_conf" > "$sshd_config"
-        cp "$sshd_config" "$backup_conf"
-
-        printf "\e[1m\e[31mApplying SSH hardening...\e[0m\n""]]]"
-
-        # Disable root login
-        sed -i's/^#PermitRootLogin yes$/PermitRootLogin no/' "$sshd_config"
-
-        # Disable password authentication, (optional if using keys)
-        sed -i's/^#PasswordAuthentication yes$/PasswordAuthentication no/' "$sshd_config"
-
-        # Disable empty passwords for users
-        sed -i's/^#ChallengeResponseAuthentication yes$/ChallengeResponseAuthentication no/' "$sshd_config"
-
-        # Use protocol version 2 only
-        sed -i's/^#Protocol 2$/Protocol 2/' "$sshd_config"
-
-        # Disable X11 forwarding
-        sed -i's/^#X11Forwarding yes$/X11Forwarding no/' "$sshd_config"
-
-        # Login grace time is 30 seconds
-        sed -i's/^#LoginGraceTime 2m$/LoginGraceTime 30s/' "$sshd_config"
-
-        # Limit max sessions to 3
-        sed -i '/^#MaxSessions/s/.*/MaxSessions 3/'"$sshd_config"
-
-        # Enable strict mode
-        sed -i's/^#StrictModes yes$/StrictModes yes/' "$sshd_config"
-
-        # Set idle timeout
-        echo "ClientAliveInterval 30s" >> "$sshd_config"
-        echo "ClientAliveCountMax 0" >> "$sshd_config"
-
-        # Disable unnecessary port forwarding
-        sed -i's/^#AllowTcpForwarding yes$/AllowTcpForwarding no/' "$sshd_config"
-
-        # Enforce strong ciphers, MACs, and key exchange algorithms
-        {
-          echo "Chiphers: chacha20-poly1305:aes128-gcm@openssh.com:aes256-gcm@openssh.com:aes12"
-          echo "MACs: hmac-sha2-512,hmac-sha2-256,hmac-sha1"
-          echo "KexAlgorithms: curve25519-sha256@libssh.org:ecdh-sha2-nistp256,ecdh-sha2"
-        } >> "$sshd_config"
-
-        # Restart sshd
-        printf "\e[1m\e[32mSSH hardening applied successfully. Restarting ssh now.\e[0m\n""]]]"
-        if systemctl is-active --quiet sshd; then
-          systemctl restart sshd
-        else
-          service ssh restart
-        fi
-
-        printf "\e[1m\e[32mSSH hardening applied successfully. Restarted ssh.\e[0m\n""]]]"
-
-        HARDN_STATUS "pass" "SSH hardening applied successfully."
-
-}
-
-
-### Let user decide DNS, but place recommendation. ADD TO /DOCS
+# ENABLE NAME SERVERS FUNCTION: Let user decide DNS, but place recommendation. ADD TO /DOCS
 enable_nameservers() {
-        HARDN_STATUS "error" "Checking and configuring DNS nameservers (Quad9 primary, Google secondary)..."
-        local resolv_conf quad9_ns cloudflare_ns nameserver_count configured_persistently changes_made
-        resolv_conf="/etc/resolv.conf"
-        quad9_ns="9.9.9.9"
-        cloudflare_ns="1.1.1.1"
-        nameserver_count=0
-        HARDN_STATUS "info" "Using Quad9 ($quad9_ns) as primary and Cloudflare ($cloudflare_ns) as secondary DNS nameservers."
-        configured_persistently=false
-        changes_made=false
+    HARDN_STATUS "info" "Configuring DNS nameservers..."
 
-        if [[ -f "$resolv_conf" ]]; then
-            nameserver_count=$(grep -E "^\s*nameserver\s+" "$resolv_conf" | grep -Ev "127\.0\.0\.1|::1" | awk '{print $2}' | sort -u | wc -l)
+    # Define DNS providers with their primary and secondary servers
+    declare -A dns_providers=(
+        ["Quad9"]="9.9.9.9 149.112.112.112"
+        ["Cloudflare"]="1.1.1.1 1.0.0.1"
+        ["Google"]="8.8.8.8 8.8.4.4"
+        ["OpenDNS"]="208.67.222.222 208.67.220.220"
+        ["CleanBrowsing"]="185.228.168.9 185.228.169.9"
+        ["UncensoredDNS"]="91.239.100.100 89.233.43.71"
+    )
+
+    # Create menu options for whiptail
+    local menu_options=()
+    for provider in "${!dns_providers[@]}"; do
+        read -r primary secondary <<< "${dns_providers[$provider]}"
+        menu_options+=("$provider" "Primary: $primary, Secondary: $secondary")
+    done
+
+    # A through selection of recommended Secured DNS provider
+    local selected_provider
+    selected_provider=$(whiptail --title "DNS Provider Selection" --menu \
+        "Select a DNS provider for enhanced security and privacy:" 18 78 6 \
+        "Quad9" "DNSSEC, Malware Blocking, No Logging (Recommended)" \
+        "Cloudflare" "DNSSEC, Privacy-First, No Logging" \
+        "Google" "DNSSEC, Fast, Reliable (some logging)" \
+        "OpenDNS" "DNSSEC, Custom Filtering, Logging (opt-in)" \
+        "CleanBrowsing" "Family-safe, Malware Block, DNSSEC" \
+        "UncensoredDNS" "DNSSEC, No Logging, Europe-based, Privacy Focus" \
+        3>&1 1>&2 2>&3)
+
+    # Exit if user cancels
+    if [[ -z "$selected_provider" ]]; then
+        HARDN_STATUS "warning" "DNS configuration cancelled by user. Using system defaults."
+        return 0
+    fi
+
+    # Get the selected DNS servers
+    read -r primary_dns secondary_dns <<< "${dns_providers[$selected_provider]}"
+    HARDN_STATUS "info" "Selected $selected_provider DNS: Primary $primary_dns, Secondary $secondary_dns"
+
+    local resolv_conf="/etc/resolv.conf"
+    local configured_persistently=false
+    local changes_made=false
+
+    # Check for systemd-resolved
+    if systemctl is-active --quiet systemd-resolved && \
+       [[ -L "$resolv_conf" ]] && \
+       (readlink "$resolv_conf" | grep -qE "systemd/resolve/(stub-resolv.conf|resolv.conf)"); then
+        HARDN_STATUS "info" "systemd-resolved is active and manages $resolv_conf."
+        local resolved_conf_systemd="/etc/systemd/resolved.conf"
+        local temp_resolved_conf=$(mktemp)
+
+        if [[ ! -f "$resolved_conf_systemd" ]]; then
+            HARDN_STATUS "info" "Creating $resolved_conf_systemd as it does not exist."
+            echo "[Resolve]" > "$resolved_conf_systemd"
+            chmod 644 "$resolved_conf_systemd"
         fi
 
-        HARDN_STATUS "info" "Found $nameserver_count non-localhost nameserver(s) in $resolv_conf."
+        cp "$resolved_conf_systemd" "$temp_resolved_conf"
 
-        # Check for systemd-resolved
-        if systemctl is-active --quiet systemd-resolved && \
-           [[ -L "$resolv_conf" ]] && \
-           (readlink "$resolv_conf" | grep -qE "systemd/resolve/(stub-resolv.conf|resolv.conf)"); then
-            HARDN_STATUS "info" "systemd-resolved is active and manages $resolv_conf."
-            local resolved_conf_systemd temp_resolved_conf
-            resolved_conf_systemd="/etc/systemd/resolved.conf"
-            temp_resolved_conf=$(mktemp)
-
-            if [[ ! -f "$resolved_conf_systemd" ]]; then
-                HARDN_STATUS "info" "Creating $resolved_conf_systemd as it does not exist."
-                echo "[Resolve]" > "$resolved_conf_systemd"
-                chmod 644 "$resolved_conf_systemd"
-            fi
-
-            cp "$resolved_conf_systemd" "$temp_resolved_conf"
-
-            # Set DNS= and FallbackDNS= explicitly
-            if grep -qE "^\s*DNS=" "$temp_resolved_conf"; then
-                sed -i -E "s/^\s*DNS=.*/DNS=$quad9_ns $cloudflare_ns/" "$temp_resolved_conf"
+        # Set DNS= and FallbackDNS= explicitly
+        if grep -qE "^\s*DNS=" "$temp_resolved_conf"; then
+            sed -i -E "s/^\s*DNS=.*/DNS=$primary_dns $secondary_dns/" "$temp_resolved_conf"
+        else
+            if grep -q "\[Resolve\]" "$temp_resolved_conf"; then
+                sed -i "/\[Resolve\]/a DNS=$primary_dns $secondary_dns" "$temp_resolved_conf"
             else
-                if grep -q "\[Resolve\]" "$temp_resolved_conf"; then
-                    sed -i "/\[Resolve\]/a DNS=$quad9_ns $cloudflare_ns" "$temp_resolved_conf"
-                else
-                    echo -e "\n[Resolve]\nDNS=$quad9_ns $cloudflare_ns" >> "$temp_resolved_conf"
-                fi
+                echo -e "\n[Resolve]\nDNS=$primary_dns $secondary_dns" >> "$temp_resolved_conf"
             fi
+        fi
 
-            # Set FallbackDNS as well (optional, for redundancy)
-            if grep -qE "^\s*FallbackDNS=" "$temp_resolved_conf"; then
-                sed -i -E "s/^\s*FallbackDNS=.*/FallbackDNS=$cloudflare_ns $quad9_ns/" "$temp_resolved_conf"
+        # Set FallbackDNS as well (optional, for redundancy)
+        if grep -qE "^\s*FallbackDNS=" "$temp_resolved_conf"; then
+            sed -i -E "s/^\s*FallbackDNS=.*/FallbackDNS=$secondary_dns $primary_dns/" "$temp_resolved_conf"
+        else
+            if grep -q "\[Resolve\]" "$temp_resolved_conf"; then
+                sed -i "/\[Resolve\]/a FallbackDNS=$secondary_dns $primary_dns" "$temp_resolved_conf"
             else
-                if grep -q "\[Resolve\]" "$temp_resolved_conf"; then
-                    sed -i "/\[Resolve\]/a FallbackDNS=$cloudflare_ns $quad9_ns" "$temp_resolved_conf"
-                else
-                    echo -e "\n[Resolve]\nFallbackDNS=$cloudflare_ns $quad9_ns" >> "$temp_resolved_conf"
-                fi
+                echo -e "\n[Resolve]\nFallbackDNS=$secondary_dns $primary_dns" >> "$temp_resolved_conf"
             fi
+        fi
 
-            if ! cmp -s "$temp_resolved_conf" "$resolved_conf_systemd"; then
-                cp "$temp_resolved_conf" "$resolved_conf_systemd"
-                HARDN_STATUS "pass" "Updated $resolved_conf_systemd. Restarting systemd-resolved..."
-                if systemctl restart systemd-resolved; then
-                    HARDN_STATUS "pass" "systemd-resolved restarted successfully."
+        # Add DNSSEC support if available
+        if grep -qE "^\s*DNSSEC=" "$temp_resolved_conf"; then
+            sed -i -E "s/^\s*DNSSEC=.*/DNSSEC=allow-downgrade/" "$temp_resolved_conf"
+        else
+            if grep -q "\[Resolve\]" "$temp_resolved_conf"; then
+                sed -i "/\[Resolve\]/a DNSSEC=allow-downgrade" "$temp_resolved_conf"
+            else
+                echo -e "\n[Resolve]\nDNSSEC=allow-downgrade" >> "$temp_resolved_conf"
+            fi
+        fi
+
+        if ! cmp -s "$temp_resolved_conf" "$resolved_conf_systemd"; then
+            cp "$temp_resolved_conf" "$resolved_conf_systemd"
+            HARDN_STATUS "pass" "Updated $resolved_conf_systemd. Restarting systemd-resolved..."
+            if systemctl restart systemd-resolved; then
+                HARDN_STATUS "pass" "systemd-resolved restarted successfully."
+                configured_persistently=true
+                changes_made=true
+            else
+                HARDN_STATUS "error" "Failed to restart systemd-resolved. Manual check required."
+            fi
+        else
+            HARDN_STATUS "info" "No effective changes to $resolved_conf_systemd were needed."
+        fi
+        rm -f "$temp_resolved_conf"
+    fi
+
+    # Check for NetworkManager
+    if [[ "$configured_persistently" = false ]] && command -v nmcli >/dev/null 2>&1; then
+        HARDN_STATUS "info" "NetworkManager detected. Attempting to configure DNS via NetworkManager..."
+
+        # Get the current active connection
+        local active_conn
+        active_conn=$(nmcli -t -f NAME,TYPE,DEVICE,STATE c show --active | grep -E ':(ethernet|wifi):.+:activated' | head -1 | cut -d: -f1)
+
+        if [[ -n "$active_conn" ]]; then
+            HARDN_STATUS "info" "Configuring DNS for active connection: $active_conn"
+            if nmcli c modify "$active_conn" ipv4.dns "$primary_dns,$secondary_dns" ipv4.ignore-auto-dns yes; then
+                HARDN_STATUS "pass" "NetworkManager DNS configuration updated."
+
+                # Restart the connection to apply changes
+                if nmcli c down "$active_conn" && nmcli c up "$active_conn"; then
+                    HARDN_STATUS "pass" "NetworkManager connection restarted successfully."
                     configured_persistently=true
                     changes_made=true
                 else
-                    HARDN_STATUS "error" "Failed to restart systemd-resolved. Manual check required."
+                    HARDN_STATUS "error" "Failed to restart NetworkManager connection. Changes may not be applied."
                 fi
             else
-                HARDN_STATUS "info" "No effective changes to $resolved_conf_systemd were needed."
+                HARDN_STATUS "error" "Failed to update NetworkManager DNS configuration."
             fi
-            rm -f "$temp_resolved_conf"
-        fi
-
-        # If not using systemd-resolved, try to set directly in /etc/resolv.conf
-        if [[ "$configured_persistently" = false ]]; then
-            HARDN_STATUS "info" "Attempting direct modification of $resolv_conf."
-            if [[ -f "$resolv_conf" ]] && [[ -w "$resolv_conf" ]]; then
-                # Actually set the nameservers
-                cp "$resolv_conf" "${resolv_conf}.tmp"
-                {
-                    echo "nameserver $quad9_ns"
-                    echo "nameserver $cloudflare_ns"
-                    grep -vE "^\s*nameserver\s+" "${resolv_conf}.tmp"
-                } > "$resolv_conf"
-                rm -f "${resolv_conf}.tmp"
-                HARDN_STATUS "pass" "Set Quad9 as primary and Cloudflare as secondary in $resolv_conf."
-                HARDN_STATUS "warning" "Warning: Direct changes to $resolv_conf might be overwritten by network management tools."
-                changes_made=true
-            else
-                HARDN_STATUS "error" "Could not modify $resolv_conf (file not found or not writable)."
-            fi
-        fi
-
-        if [[ "$changes_made" = true ]]; then
-            whiptail --infobox "DNS configured: Quad9 primary, Cloudflare secondary." 7 70
         else
-            whiptail --infobox "DNS configuration checked. No changes made or needed." 8 70
+            HARDN_STATUS "warning" "No active NetworkManager connection found."
         fi
-    }
+    fi
+
+    # If not using systemd-resolved or NetworkManager, try to set directly in /etc/resolv.conf
+    if [[ "$configured_persistently" = false ]]; then
+        HARDN_STATUS "info" "Attempting direct modification of $resolv_conf."
+        if [[ -f "$resolv_conf" ]] && [[ -w "$resolv_conf" ]]; then
+            # Backup the original file
+            cp "$resolv_conf" "${resolv_conf}.bak.$(date +%Y%m%d%H%M%S)"
+
+            # Create a new resolv.conf with our DNS servers
+            {
+                echo "# Generated by HARDN-XDR"
+                echo "# DNS Provider: $selected_provider"
+                echo "nameserver $primary_dns"
+                echo "nameserver $secondary_dns"
+                # Preserve any options or search domains from the original file
+                grep -E "^\s*(options|search|domain)" "$resolv_conf" || true
+            } > "${resolv_conf}.new"
+
+            # Replace the original file
+            mv "${resolv_conf}.new" "$resolv_conf"
+            chmod 644 "$resolv_conf"
+
+            HARDN_STATUS "pass" "Set $selected_provider DNS servers in $resolv_conf."
+            HARDN_STATUS "warning" "Warning: Direct changes to $resolv_conf might be overwritten by network management tools."
+            changes_made=true
+
+            # Make resolv.conf immutable to prevent overwriting
+            if whiptail --title "Protect DNS Configuration" --yesno "Would you like to make $resolv_conf immutable to prevent other services from changing it?\n\nNote: This may interfere with DHCP or VPN services." 10 78; then
+                if chattr +i "$resolv_conf" 2>/dev/null; then
+                    HARDN_STATUS "pass" "Made $resolv_conf immutable to prevent changes."
+                else
+                    HARDN_STATUS "error" "Failed to make $resolv_conf immutable. Manual protection may be needed."
+                fi
+            fi
+        else
+            HARDN_STATUS "error" "Could not modify $resolv_conf (file not found or not writable)."
+        fi
+    fi
+
+    # Create a persistent hook for dhclient if it exists
+    if command -v dhclient >/dev/null 2>&1; then
+        local dhclient_dir="/etc/dhcp/dhclient-enter-hooks.d"
+        local hook_file="$dhclient_dir/hardn-dns"
+
+        if [[ ! -d "$dhclient_dir" ]]; then
+            mkdir -p "$dhclient_dir"
+        fi
+
+        cat > "$hook_file" << EOF
+#!/bin/sh
+# HARDN-XDR DNS configuration hook
+# DNS Provider: $selected_provider
+
+make_resolv_conf() {
+    # Override the default make_resolv_conf function
+    cat > /etc/resolv.conf << RESOLVCONF
+# Generated by HARDN-XDR dhclient hook
+# DNS Provider: $selected_provider
+nameserver $primary_dns
+nameserver $secondary_dns
+RESOLVCONF
+
+    # Preserve any search domains from DHCP
+    if [ -n "\$new_domain_search" ]; then
+        echo "search \$new_domain_search" >> /etc/resolv.conf
+    elif [ -n "\$new_domain_name" ]; then
+        echo "search \$new_domain_name" >> /etc/resolv.conf
+    fi
+
+    return 0
+}
+EOF
+        chmod 755 "$hook_file"
+        HARDN_STATUS "pass" "Created dhclient hook to maintain DNS settings."
+    fi
+
+    if [[ "$changes_made" = true ]]; then
+        whiptail --infobox "DNS configured: $selected_provider\nPrimary: $primary_dns\nSecondary: $secondary_dns" 8 70
+    else
+        whiptail --infobox "DNS configuration checked. No changes made or needed." 8 70
+    fi
+
+    # Test DNS resolution
+    HARDN_STATUS "info"
+}
 
 enable_process_accounting_and_sysstat() {
         HARDN_STATUS "error" "Enabling process accounting (acct) and system statistics (sysstat)..."
@@ -1805,60 +2028,264 @@ remove_unnecessary_services() {
     HARDN_STATUS "pass" "Unnecessary services checked and disabled/removed where applicable."
 }
 
-pen_test() {
-    HARDN_STATUS "info" "Running penetration test with nmap and lynis..."
-    apt-get install lynis -y 
-    lynis audit system --pentest 
-    HARDN_STATUS "info" "Starting penetration test..."
-    # Check if nmap is installed
-        
-    # Run nmap scan
-    HARDN_STATUS "info" "Running nmap scan on localhost..."
-    apt install nmap -y >/dev/null 2>&1
-    mkdir -p /var/log
-    touch /var/log/nmap_scan.log
-    chmod 644 /var/log/nmap_scan.log
-    chown root:root /var/log/nmap_scan.log
-    nmap -sS -sV -O -p- localhost > /var/log/nmap_scan.log 2>&1
-    if [[ $? -eq 0 ]]; then
-        HARDN_STATUS "pass" "nmap scan completed successfully. Results saved to /var/log/nmap_scan.log"
-    else
-        HARDN_STATUS "error" "nmap scan failed. Check /var/log/nmap_scan.log for details."
+improve_lynis_score() {
+    HARDN_STATUS "info" "Applying Lynis score improvements..."
+    
+    # Create /tmp with proper permissions (Lynis check FILE-6310)
+    HARDN_STATUS "info" "Setting secure permissions on /tmp directory..."
+    chmod 1777 /tmp
+    
+    # Secure /var/tmp permissions (Lynis check FILE-6311)
+    if [[ -d /var/tmp ]]; then
+        chmod 1777 /var/tmp
     fi
     
+    # Set proper permissions on log files (Lynis checks FILE-6374, FILE-6376)
+    HARDN_STATUS "info" "Securing log file permissions..."
+    find /var/log -type f -exec chmod 640 {} \; 2>/dev/null || true
+    find /var/log -type d -exec chmod 750 {} \; 2>/dev/null || true
+    
+    # Secure SSH configuration improvements (Lynis SSH checks)
+    local ssh_config="/etc/ssh/sshd_config"
+    if [[ -f "$ssh_config" ]]; then
+        HARDN_STATUS "info" "Enhancing SSH configuration for better Lynis scores..."
+        
+        # Backup SSH config
+        cp "$ssh_config" "${ssh_config}.bak.hardn" 2>/dev/null || true
+        
+        # Apply additional SSH hardening for Lynis
+        sed -i 's/^#*ClientAliveInterval.*/ClientAliveInterval 300/' "$ssh_config"
+        sed -i 's/^#*ClientAliveCountMax.*/ClientAliveCountMax 0/' "$ssh_config"
+        sed -i 's/^#*MaxStartups.*/MaxStartups 10:30:60/' "$ssh_config"
+        sed -i 's/^#*LoginGraceTime.*/LoginGraceTime 60/' "$ssh_config"
+        
+        # Add SSH hardening if not present
+        if ! grep -q "^MaxSessions" "$ssh_config"; then
+            echo "MaxSessions 4" >> "$ssh_config"
+        fi
+        
+        systemctl reload ssh 2>/dev/null || true
+    fi
+    
+    # Kernel parameter improvements for Lynis (KRNL checks)
+    HARDN_STATUS "info" "Applying additional kernel parameters for Lynis score improvement..."
+    local sysctl_lynis="/etc/sysctl.d/99-lynis-hardening.conf"
+    
+    cat > "$sysctl_lynis" << 'EOF'
+# Additional kernel parameters for Lynis score improvement
+# Generated by HARDN-XDR
 
+# Network security enhancements
+net.ipv4.conf.all.log_martians = 1
+net.ipv4.conf.default.log_martians = 1
+net.ipv4.conf.all.send_redirects = 0
+net.ipv4.conf.default.send_redirects = 0
+net.ipv4.conf.all.accept_source_route = 0
+net.ipv4.conf.default.accept_source_route = 0
+net.ipv6.conf.all.accept_source_route = 0
+net.ipv6.conf.default.accept_source_route = 0
+
+# Additional memory protection
+kernel.kptr_restrict = 2
+kernel.dmesg_restrict = 1
+kernel.unprivileged_bpf_disabled = 1
+net.core.bpf_jit_harden = 2
+
+# Process restrictions
+fs.protected_hardlinks = 1
+fs.protected_symlinks = 1
+EOF
+    
+    sysctl -p "$sysctl_lynis" >/dev/null 2>&1 || true
+    
+    # PAM configuration improvements (Plugable Authentication Module)
+    HARDN_STATUS "info" "Enhancing PAM configuration for Lynis scores..."
+    local pam_login="/etc/pam.d/login"
+    if [[ -f "$pam_login" ]] && ! grep -q "pam_limits.so" "$pam_login"; then
+        echo "session required pam_limits.so" >> "$pam_login"
+    fi
+    
+    # Set proper file permissions that Lynis checks
+    HARDN_STATUS "info" "Setting secure file permissions for Lynis checks..."
+    
+    # Secure crontab permissions
+    chmod 600 /etc/crontab 2>/dev/null || true
+    chmod -R 600 /etc/cron.d/* 2>/dev/null || true
+    chmod -R 700 /etc/cron.daily /etc/cron.hourly /etc/cron.monthly /etc/cron.weekly 2>/dev/null || true
+    
+    # Secure system configuration files
+    chmod 644 /etc/passwd 2>/dev/null || true
+    chmod 640 /etc/shadow 2>/dev/null || true
+    chmod 644 /etc/group 2>/dev/null || true
+    chmod 640 /etc/gshadow 2>/dev/null || true
+    
+    # Remove world-writable files (Lynis check FILE-6362)
+    HARDN_STATUS "info" "Removing world-writable permissions from system files..."
+    find /etc -type f -perm -002 -exec chmod o-w {} \; 2>/dev/null || true
+    
+    # Set umask in system profiles
+    if ! grep -q "umask 027" /etc/profile; then
+        echo "umask 027" >> /etc/profile
+    fi
+    
+    # Secure mail queue permissions if postfix is installed
+    if command -v postfix >/dev/null 2>&1; then
+        chmod 700 /var/spool/postfix/maildrop 2>/dev/null || true
+    fi
+    
+    HARDN_STATUS "pass" "Lynis score improvements applied successfully."
+}
+
+pen_test() {
+    HARDN_STATUS "info" "Running comprehensive security audit with Lynis and nmap..."
+    
+    # Ensure Lynis is installed (it should be from progs.csv)
+    if ! command -v lynis >/dev/null 2>&1; then
+        HARDN_STATUS "info" "Installing Lynis..."
+        apt-get install lynis -y >/dev/null 2>&1
+    fi
+    
+    # Create Lynis log directory
+    mkdir -p /var/log/lynis
+    chmod 750 /var/log/lynis
+    
+    # Apply Lynis score improvements first
+    improve_lynis_score
+    
+    # Run comprehensive Lynis audit
+    HARDN_STATUS "info" "Running comprehensive Lynis system audit..."
+    lynis audit system --verbose --log-file /var/log/lynis/hardn-audit.log --report-file /var/log/lynis/hardn-report.dat 2>/dev/null
+    
+    # Run Lynis with pentest profile for additional checks
+    HARDN_STATUS "info" "Running Lynis penetration testing profile..."
+    lynis audit system --pentest --verbose --log-file /var/log/lynis/hardn-pentest.log 2>/dev/null
+    
+    # Generate Lynis report
+    if [[ -f /var/log/lynis/hardn-report.dat ]]; then
+        HARDN_STATUS "pass" "Lynis audit completed. Report saved to /var/log/lynis/hardn-report.dat"
+        
+        # Extract and display hardening index if available
+        local hardening_index
+        hardening_index=$(grep "hardening_index=" /var/log/lynis/hardn-report.dat 2>/dev/null | cut -d'=' -f2)
+        if [[ -n "$hardening_index" ]]; then
+            HARDN_STATUS "info" "Lynis Hardening Index: ${hardening_index}%"
+        fi
+    else
+        HARDN_STATUS "warning" "Lynis report file not found. Check /var/log/lynis/ for details."
+    fi
+    
+    # Run nmap scan for network security assessment
+    HARDN_STATUS "info" "Starting network security assessment with nmap..."
+    
+    # Install nmap if not present
+    if ! command -v nmap >/dev/null 2>&1; then
+        apt install nmap -y >/dev/null 2>&1
+    fi
+    
+    # Create nmap log directory
+    mkdir -p /var/log/nmap
+    chmod 750 /var/log/nmap
+    
+    # Run comprehensive nmap scan
+    nmap -sS -sV -O -p- localhost > /var/log/nmap/hardn-localhost-scan.log 2>&1 &
+    local nmap_pid=$!
+    
+    # Run network interface scan
+    local interface_ip
+    interface_ip=$(ip route get 1.1.1.1 2>/dev/null | grep -oP 'src \K\S+' | head -1)
+    if [[ -n "$interface_ip" ]]; then
+        nmap -sn "${interface_ip%.*}.0/24" > /var/log/nmap/hardn-network-discovery.log 2>&1 &
+    fi
+    
+    # Wait for localhost scan to complete
+    wait $nmap_pid
+    if wait $nmap_pid; then
+        HARDN_STATUS "pass" "Network security scan completed. Results saved to /var/log/nmap/"
+    else
+        HARDN_STATUS "error" "Network scan encountered issues. Check /var/log/nmap/ for details."
+    fi
+    
+    # Summary of security audit
+    HARDN_STATUS "info" "Security audit summary:"
+    HARDN_STATUS "info" "- Lynis reports: /var/log/lynis/"
+    HARDN_STATUS "info" "- Network scans: /var/log/nmap/"
+    HARDN_STATUS "info" "- Review these files for security recommendations"
 }
 
 cleanup() {
+    HARDN_STATUS "info" "Performing final system cleanup..."
     apt-get autoremove -y >/dev/null 2>&1
     apt-get clean >/dev/null 2>&1
     apt-get autoclean >/dev/null 2>&1
     HARDN_STATUS "pass" "System cleanup completed. Unused packages and cache cleared."
-    whiptail --infobox "HARDN-XDR has been Setup, please reboot your system." 7 70
+    whiptail --infobox "HARDN-XDR v${HARDN_VERSION} setup complete! Please reboot your system." 8 75
+    sleep 3
 
 }
 
 main() {
     print_ascii_banner
+    show_system_info
     welcomemsg
     update_system_packages
     install_package_dependencies "../../progs.csv"
     setup_security
     apply_kernel_security
-    enable_process_accounting_and_sysstat
-    secure_ssh
     enable_nameservers
+    enable_process_accounting_and_sysstat
     purge_old_packages
     disable_firewire_drivers
     restrict_compilers
     disable_binfmt_misc
     remove_unnecessary_services
+    setup_grub_password
     setup_central_logging
     pen_test
     cleanup
     print_ascii_banner
 
-    HARDN_STATUS "pass" "HARDN-XDR installation completed, Please reboot your System."
+    HARDN_STATUS "pass" "HARDN-XDR v${HARDN_VERSION} installation completed successfully!"
+    HARDN_STATUS "info" "Your system has been hardened with STIG compliance and security tools."
+    HARDN_STATUS "warning" "Please reboot your system to complete the configuration."
 }
+
+# Command line argument handling
+if [[ $# -gt 0 ]]; then
+    case "$1" in
+        --version|-v)
+            echo "HARDN-XDR v${HARDN_VERSION}"
+            echo "Linux Security Hardening Sentinel"
+            echo "Extended Detection and Response"
+            echo ""
+            echo "Target Systems: Debian 12+, Ubuntu 24.04+"
+            echo "Features: STIG Compliance, Malware Detection, System Hardening"
+            echo "Developed by: Christopher Bingham and Tim Burns"
+            echo ""
+            echo "This is the final public release of HARDN-XDR."
+            exit 0
+            ;;
+        --help|-h)
+            echo "HARDN-XDR v${HARDN_VERSION} - Linux Security Hardening Sentinel"
+            echo ""
+            echo "Usage: $0 [OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  --version, -v    Show version information"
+            echo "  --help, -h       Show this help message"
+            echo ""
+            echo "This script applies comprehensive security hardening to Debian-based systems"
+            echo "including STIG compliance, malware detection, and security monitoring."
+            echo ""
+            echo "WARNING: This script makes significant system changes. Run only on systems"
+            echo "         intended for security hardening."
+            exit 0
+            ;;
+        *)
+            echo "Error: Unknown option '$1'"
+            echo "Use '$0 --help' for usage information."
+            exit 1
+            ;;
+    esac
+fi
 
 main
