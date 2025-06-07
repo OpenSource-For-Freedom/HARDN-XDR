@@ -191,7 +191,7 @@ sed -i '/aide --check/d' /etc/crontab
 uninstall_status "pass" "Removed HARDN-XDR cron jobs"
 
 # 1.11 Restore auditd configuration
-if [[ -f /etc/audit/audit.rules.bak.* ]]; then
+if ls /etc/audit/audit.rules.bak.* >/dev/null 2>&1; then
     newest_backup=$(ls -t /etc/audit/audit.rules.bak.* | head -1)
     if [[ -n "$newest_backup" ]]; then
         cp "$newest_backup" /etc/audit/audit.rules
@@ -199,7 +199,7 @@ if [[ -f /etc/audit/audit.rules.bak.* ]]; then
     fi
 fi
 
-if [[ -f /etc/audit/auditd.conf.bak.* ]]; then
+if ls /etc/audit/auditd.conf.bak.* >/dev/null 2>&1; then
     newest_backup=$(ls -t /etc/audit/auditd.conf.bak.* | head -1)
     if [[ -n "$newest_backup" ]]; then
         cp "$newest_backup" /etc/audit/auditd.conf
@@ -208,7 +208,7 @@ if [[ -f /etc/audit/auditd.conf.bak.* ]]; then
 fi
 
 # 1.12 Restore SSH configuration
-if [[ -f /etc/ssh/sshd_config.bak.* ]]; then
+if ls /etc/ssh/sshd_config.bak.* >/dev/null 2&1; then
     newest_backup=$(ls -t /etc/ssh/sshd_config.bak.* | head -1)
     if [[ -n "$newest_backup" ]]; then
         cp "$newest_backup" /etc/ssh/sshd_config
@@ -218,7 +218,7 @@ if [[ -f /etc/ssh/sshd_config.bak.* ]]; then
 fi
 
 # 1.13 Restore NTP configuration
-if [[ -f /etc/systemd/timesyncd.conf.bak.* ]]; then
+if ls /etc/systemd/timesyncd.conf.bak.* >/dev/null 2&1; then
     newest_backup=$(ls -t /etc/systemd/timesyncd.conf.bak.* | head -1)
     if [[ -n "$newest_backup" ]]; then
         cp "$newest_backup" /etc/systemd/timesyncd.conf
@@ -227,7 +227,7 @@ if [[ -f /etc/systemd/timesyncd.conf.bak.* ]]; then
     fi
 fi
 
-if [[ -f /etc/ntp.conf.bak.* ]]; then
+if ls /etc/ntp.conf.bak.* >/dev/null 2&1; then
     newest_backup=$(ls -t /etc/ntp.conf.bak.* | head -1)
     if [[ -n "$newest_backup" ]]; then
         cp "$newest_backup" /etc/ntp.conf
