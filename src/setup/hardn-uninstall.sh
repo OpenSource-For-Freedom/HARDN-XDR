@@ -398,7 +398,7 @@ echo -e "${YELLOW}It is recommended to reboot your system now${NC}"
 echo -e "${GREEN}===========================================================${NC}"
 
 # Ask for reboot
-read -p "Would you like to reboot now? (y/N): " reboot_now
+read -r -p "Would you like to reboot now? (y/N): " reboot_now
 if [[ "$reboot_now" =~ ^[yY]$ ]]; then
     uninstall_status "info" "Rebooting system..."
     reboot
