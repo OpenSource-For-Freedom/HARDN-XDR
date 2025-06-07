@@ -208,9 +208,8 @@ if ls /etc/audit/auditd.conf.bak.* >/dev/null 2>&1; then
 fi
 
 # 1.12 Restore SSH configuration
-if ls /etc/ssh/sshd_config.bak.* >/dev/null 2&1; then
-    if ls /etc/ssh/sshd_config.bak.* >/dev/null 2>&1; then
-        newest_backup=$(find /etc/ssh -name "sshd_config.bak.*" -type f -printf "%T@ %p\n" | sort -nr | head -1 | cut -d' ' -f2-)
+if ls /etc/ssh/sshd_config.bak.* >/dev/null 2>&1; then
+    newest_backup=$(find /etc/ssh -name "sshd_config.bak.*" -type f -printf "%T@ %p\n" | sort -nr | head -1 | cut -d' ' -f2-)
     if [[ -n "$newest_backup" ]]; then
         cp "$newest_backup" /etc/ssh/sshd_config
         systemctl restart sshd 2>/dev/null || true
@@ -280,7 +279,7 @@ uninstall_status "info" "Uninstalling security packages..."
 # If progs.csv exists, use it to uninstall packages
 if [[ -f "${PROGS_CSV_PATH}" ]]; then
     # Read the CSV file, skipping the header
-    while IFS=, read -r name version debian_min_version debian_codenames_str rest || [[ -n "$name" ]]; do
+    while IFS=, read -r name _ _ _ rest || [[ -n "$name" ]]; do
         # Skip comments and empty lines
         [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
 
