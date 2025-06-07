@@ -59,7 +59,7 @@ echo -e "${RED}WARNING: This script will remove HARDN-XDR configurations and pac
 echo -e "${RED}This may leave your system less secure and could potentially cause issues.${NC}"
 echo -e "${YELLOW}It is recommended to perform this on a test system or VM first.${NC}"
 echo ""
-read -p "Do you want to continue with uninstallation? (y/N): " confirm
+read -r -p "Do you want to continue with uninstallation? (y/N): " confirm
 if [[ ! "$confirm" =~ ^[yY]$ ]]; then
     echo "Uninstallation cancelled."
     exit 0
@@ -72,7 +72,7 @@ PROGS_CSV_PATH="${SCRIPT_DIR}/../../progs.csv"
 # Check if progs.csv exists
 if [[ ! -f "${PROGS_CSV_PATH}" ]]; then
     uninstall_status "warning" "Package list file not found: ${PROGS_CSV_PATH}"
-    read -p "Continue without package list? (y/N): " continue_without_list
+    read -r -p "Continue without package list? (y/N): " continue_without_list
     if [[ ! "$continue_without_list" =~ ^[yY]$ ]]; then
         echo "Uninstallation cancelled."
         exit 0
@@ -192,7 +192,7 @@ uninstall_status "pass" "Removed HARDN-XDR cron jobs"
 
 # 1.11 Restore auditd configuration
 if ls /etc/audit/audit.rules.bak.* >/dev/null 2>&1; then
-    newest_backup=$(ls -t /etc/audit/audit.rules.bak.* | head -1)
+    newest_backup=$(find /etc/audit -name "audit.rules.bak.*" -type f -printf "%T@ %p\n" | sort -nr | head -1 | cut -d' ' -f2-)
     if [[ -n "$newest_backup" ]]; then
         cp "$newest_backup" /etc/audit/audit.rules
         uninstall_status "pass" "Restored original audit rules from $newest_backup"
@@ -200,7 +200,7 @@ if ls /etc/audit/audit.rules.bak.* >/dev/null 2>&1; then
 fi
 
 if ls /etc/audit/auditd.conf.bak.* >/dev/null 2>&1; then
-    newest_backup=$(ls -t /etc/audit/auditd.conf.bak.* | head -1)
+    newest_backup=$(find /etc/audit -name "auditd.conf.bak.*" -type f -printf "%T@ %p\n" | sort -nr | head -1 | cut -d' ' -f2-)
     if [[ -n "$newest_backup" ]]; then
         cp "$newest_backup" /etc/audit/auditd.conf
         uninstall_status "pass" "Restored original auditd configuration from $newest_backup"
@@ -209,7 +209,8 @@ fi
 
 # 1.12 Restore SSH configuration
 if ls /etc/ssh/sshd_config.bak.* >/dev/null 2&1; then
-    newest_backup=$(ls -t /etc/ssh/sshd_config.bak.* | head -1)
+    if ls /etc/ssh/sshd_config.bak.* >/dev/null 2>&1; then
+        newest_backup=$(find /etc/ssh -name "sshd_config.bak.*" -type f -printf "%T@ %p\n" | sort -nr | head -1 | cut -d' ' -f2-)
     if [[ -n "$newest_backup" ]]; then
         cp "$newest_backup" /etc/ssh/sshd_config
         systemctl restart sshd 2>/dev/null || true
@@ -219,7 +220,7 @@ fi
 
 # 1.13 Restore NTP configuration
 if ls /etc/systemd/timesyncd.conf.bak.* >/dev/null 2&1; then
-    newest_backup=$(ls -t /etc/systemd/timesyncd.conf.bak.* | head -1)
+    newest_backup=$(find /etc/systemd -name "timesyncd.conf.bak.*" -type f -printf "%T@ %p\n" | sort -nr | head -1 | cut -d' ' -f2-)
     if [[ -n "$newest_backup" ]]; then
         cp "$newest_backup" /etc/systemd/timesyncd.conf
         systemctl restart systemd-timesyncd 2>/dev/null || true
@@ -228,7 +229,7 @@ if ls /etc/systemd/timesyncd.conf.bak.* >/dev/null 2&1; then
 fi
 
 if ls /etc/ntp.conf.bak.* >/dev/null 2&1; then
-    newest_backup=$(ls -t /etc/ntp.conf.bak.* | head -1)
+    newest_backup=$(find /etc -name "ntp.conf.bak.*" -type f -printf "%T@ %p\n" | sort -nr | head -1 | cut -d' ' -f2-)
     if [[ -n "$newest_backup" ]]; then
         cp "$newest_backup" /etc/ntp.conf
         systemctl restart ntp 2>/dev/null || true
