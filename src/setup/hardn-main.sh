@@ -13,7 +13,7 @@
 HARDN_VERSION="2.0.0"
 export APT_LISTBUGS_FRONTEND=none
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROGS_CSV_PATH="${SCRIPT_DIR}/../../progs.csv"
+PROGS_CSV_PATH="https://raw.githubusercontent.com/LinuxUser255/HARDN-XDR/refs/heads/main/progs.csv"
 CURRENT_DEBIAN_VERSION_ID=""
 CURRENT_DEBIAN_CODENAME=""
 
