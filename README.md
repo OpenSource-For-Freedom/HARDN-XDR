@@ -62,8 +62,9 @@
 
 1.  **One command**
 
+    **A one-liner: curls it, change mod, make executable, then runs it**
+
     ```bash
-    # A one-liner to curl it, change mod make executable, then run it
     curl -LO https://raw.githubusercontent.com/LinuxUser255/HARDN-XDR/refs/heads/main/install.sh && sudo chmod +x install.sh && sudo ./install.sh
     ```
 
