@@ -27,7 +27,9 @@ check_git() {
 
 # Git clone the repo, then cd into the repo and run the script hardn-main.sh
 retrieve_repo() {
-        git clone https://github.com/OpenSource-For-Freedom/HARDN-XDR.git
+        # Tim's repository git clone https://github.com/OpenSource-For-Freedom/HARDN-XDR.git
+        # Christopher's repository git clone https://github.com/ChristopherBingham/HARDN-XDR.git'
+        git https://github.com/LinuxUser255/HARDN-XDR.git
         # then cd into HARDN-XDR/src/setup and run the script hardn-main.sh
         cd HARDN-XDR/src/setup || exit 1
         sudo ./hardn-main.sh
