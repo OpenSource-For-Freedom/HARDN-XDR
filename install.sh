@@ -30,7 +30,7 @@ retrieve_repo() {
         # Christopher's repository git clone https://github.com/ChristopherBingham/HARDN-XDR.git'
         git clone https://github.com/LinuxUser255/HARDN-XDR.git
         # then cd into HARDN-XDR/src/setup and run the script hardn-main.sh
-        cd HARDN-XDR/src/setup && sudo ./hardn-main.sh
+        cd HARDN-XDR/src/setup &&  chmod +x hardn-main.sh && sudo ./hardn-main.sh
 }
 
 main() {
