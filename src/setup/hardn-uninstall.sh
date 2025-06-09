@@ -98,7 +98,6 @@ if [[ -d "${SCRIPT_DIR}/../hardn-xdr" ]]; then
     uninstall_status "pass" "Removed HARDN-XDR repository"
 fi
 
-
 # 1. Restore system configurations
 uninstall_status "info" "Restoring system configurations..."
 
