@@ -63,7 +63,8 @@
 1.  **One command**
 
     ```bash
-    curl -LO https://raw.githubusercontent.com/OpenSource-For-Freedom/HARDN-XDR/main/src/setup/hardn-main.sh && sudo chmod +x hardn-main.sh && sudo ./hardn-main.sh
+    # A one-liner to curl it, change mod make executable, then run it
+    curl -LO https://raw.githubusercontent.com/LinuxUser255/HARDN-XDR/refs/heads/main/install.sh && sudo chmod +x install.sh && sudo ./install.sh
     ```
 
 <br>
