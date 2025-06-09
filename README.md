@@ -1,3 +1,6 @@
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/OpenSource-For-Freedom/HARDN?include_prereleases)
+
+
 <p align="center">
   <img src="https://img.shields.io/badge/OS: Debian Systems-red?style=for-the-badge&labelColor=grey" alt="OS: DEBIAN 12"><br><br>
 </p>
@@ -5,7 +8,7 @@
 <p align="center">
   <img src="docs/assets/HARDN(1).png" alt="HARDN Logo" width="300px" /><br><br>
   <img src="https://img.shields.io/badge/The_Linux_Security_Project-red?style=for-the-badge&labelColor=black" alt="The Linux Security Project"><br><br>
-  <code>HARDN-XDR </code>
+  <code>HARDN-XDR</code>
 </p>
 
 
@@ -22,7 +25,7 @@
 </p>
 
 
-## HARDN-XDR 
+## HARDN-XDR
 - **Our Goal**: 
   - Assist the open source community in building a Debian based **"GOLDEN IMAGE"** System.
 - **Our Purpose**: 
@@ -30,8 +33,7 @@
 - **What we have to offer**:
   - A robust and secure endpoint management solution designed to simplify and enhance the management of devices in your network. 
   - Advanced features for monitoring, securing, and maintaining endpoints efficiently.
-  - Complete `STIG` COMPLIANCE to align with the [Security Technical Information Guides](https://public.cyber.mil/stigs/) provided by the [DOD Cyber Exchange](https://public.cyber.mil/).
-  - **Production-Ready**: This v2.0.0 release represents the final, polished version of HARDN-XDR for public use.
+  - `STIG` COMPLIANCE to align with the [Security Technical Information Guides](https://public.cyber.mil/stigs/) provided by the [DOD Cyber Exchange](https://public.cyber.mil/).
 
 
 <br>
@@ -54,6 +56,17 @@
 </p>
 
 
+## Quick Start: 
+
+### Installation
+
+1.  **One command**
+
+    ```bash
+    curl -LO https://raw.githubusercontent.com/OpenSource-For-Freedom/HARDN-XDR/main/src/setup/hardn-main.sh && sudo chmod +x hardn-main.sh && sudo ./hardn-main.sh
+    ```
+
+<br>
 
 ### Installation Notes
 - HARDN-XDR is currently being developed and tested for **BARE-METAL installs of Debian based distributions and Virtual Machines**.
@@ -67,22 +80,16 @@
 - For a detailed list of all that will be changed, please refer to [HARDN.md](docs/HARDN.md).
 - For an overview of HARDN-Debian STIG Compliance, please refer to [deb_stig.md](docs/deb_stig.md).
 
-<br>
-
-1.  **Up and running with just one command**
-    
-    ```bash
-    curl -LO https://raw.githubusercontent.com/OpenSource-For-Freedom/HARDN-XDR/main/src/setup/hardn-main.sh && sudo chmod +x hardn-main.sh && sudo ./hardn-main.sh
-    ```
 
 
 <br>
+
 
 ## Actions
-- [![Validate Package Dependencies](https://github.com/OpenSource-For-Freedom/HARDN-XDR/actions/workflows/validate.yml/badge.svg)](https://github.com/OpenSource-For-Freedom/HARDN-XDR/actions/workflows/validate.yml)
-- [![Dependabot Updates](https://github.com/OpenSource-For-Freedom/HARDN-XDR/actions/workflows/dependabot/dependabot-updates/badge.svg)](https://github.com/OpenSource-For-Freedom/HARDN-XDR/actions/workflows/dependabot/dependabot-updates)
-- [![Version Control - Patch Increment](https://github.com/OpenSource-For-Freedom/HARDN-XDR/actions/workflows/version-control.yml/badge.svg)](https://github.com/OpenSource-For-Freedom/HARDN-XDR/actions/workflows/version-control.yml)
+- [![Auto Update Dependencies](https://github.com/OpenSource-For-Freedom/HARDN-XDR/actions/workflows/validate.yml/badge.svg)](https://github.com/OpenSource-For-Freedom/HARDN-XDR/actions/workflows/validate.yml)
+- [![Codacy Workflow Status](https://github.com/OpenSource-For-Freedom/HARDN-XDR/actions/workflows/codacy.yml/badge.svg)](https://github.com/OpenSource-For-Freedom/HARDN-XDR/actions/workflows/codacy.yml)
 <br>
+
 ## File Structure
 
 
