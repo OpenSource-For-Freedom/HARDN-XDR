@@ -54,8 +54,6 @@
 </p>
 
 
-## Quick Start: 
-
 
 ### Installation Notes
 - HARDN-XDR is currently being developed and tested for **BARE-METAL installs of Debian based distributions and Virtual Machines**.
@@ -71,32 +69,11 @@
 
 <br>
 
-## Installation
-
-1. **Download Repository**
-
-   Clone the repository using git:
-
-   ```sh
-   git clone https://github.com/OpenSource-For-Freedom/HARDN-XDR.git
-   cd HARDN-XDR/src/setup
-   ```
-
-2. **Make the Script Executable**
-
-   ```sh
-   chmod +x hardn-main.sh
-   ```
-
-3. **Run the HARDN-XDR Setup**
-
-   Start the hardening process with superuser privileges:
-
-   ```sh
-   sudo ./hardn-main.sh
-   ```
-
-   This will launch the enhanced user interface and begin comprehensive system hardening.
+1.  **Up and running with just one command**
+    
+    ```bash
+    curl -LO https://raw.githubusercontent.com/OpenSource-For-Freedom/HARDN-XDR/main/src/setup/hardn-main.sh && sudo chmod +x hardn-main.sh && sudo ./hardn-main.sh
+    ```
 
 
 <br>
@@ -110,31 +87,27 @@
 
 
 ```bash
-HARDN/
-├── .gitignore
-├── README.md
-├── changelog.md
-├── docs/
-│   ├── deb_stig.md
-│   ├── HARDN.md
-│   ├── LICENSE
-│   └── assets/
-│       ├── HARDN(1).png
-│       └── cybersynapse.png
-├── src/
-│   └── setup/
-│       └── hardn-main.sh
-├── debian/
-│   ├── changelog
-│   ├── control
-│   ├── hardn.install
-│   ├── postinst
-│   └── rules
+HARDN-XDR/
+├── changelog.md                 # Documents version history and changes
+├── docs                         # Documentation directory
+│   ├── assets                   # Images and visual resources
+│   │   ├── cybersynapse.png     # Partner logo
+│   │   └── HARDN(1).png         # Project logo
+│   ├── CODE_OF_CONDUCT.md       # Community guidelines and expectations
+│   ├── deb_stig.md              # Debian STIG compliance documentation
+│   ├── hardn-main-sh-review.md  # Review of the main script functionality
+│   ├── HARDN.md                 # Detailed project documentation
+│   ├── hardn-security-tools.md  # Security tools documentation
+│   └── TODO.md                  # Planned features and improvements
+├── install.sh                   # Main installation script
+├── LICENSE                      # MIT License file
+├── progs.csv                    # List of programs and packages to be installed
+├── README.md                    # Project overview and instructions
+└── src                          # Source code directory
+    └── setup                    # Setup scripts
+        ├── hardn-main.sh        # Core hardening implementation script
+        └── hardn-uninstall.sh   # Script to remove HARDN-XDR from system
 ```
-
-</p>
-
-
 
 
 
