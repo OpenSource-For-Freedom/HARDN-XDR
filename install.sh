@@ -18,11 +18,10 @@ check_git() {
         printf "\033[1;31m[+] Checking if git is installed, and installing it if not..\033[0m\n"
         if [ -x "$(command -v git)" ]; then
           printf "\033[1;32m[+] Git is installed.\033[0m\n"
-          return 0
-          else
-            sudo apt install git -y
-            printf "\033[1;32m[+] Git is now installed.\033[0m\n""]"
-            fi
+        else
+           sudo apt install git -y
+           printf "\033[1;32m[+] Git is now installed.\033[0m\n""]"
+         fi
 }
 
 # Git clone the repo, then cd into the repo and run the script hardn-main.sh
