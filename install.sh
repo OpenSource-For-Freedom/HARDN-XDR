@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Christopher Bingham
-# This installation script is responsible for installing and setting up the HARDN-XDR platform.
+# This installation script is responsible for installing and setting up HARDN-XDR
 check_root () {
         [ "$(id -u)" -ne 0 ] && echo "Please run this script as root." && exit 1
 }
@@ -11,16 +11,21 @@ update_system() {
         sudo apt update && sudo apt upgrade -y
 }
 
-# Check if git is installed, if not, then install it.
+# 1. Check if git is installed.
+# 2. If git is not currently installed,
+# 3.then install it.
 check_git() {
-        if ! command -v git &> /dev/null; then
-        printf "\033[1;31m[+] git is not installed. Please install git before proceeding.\033[0m\n"
-        else
-        sudo apt install git -y
-        fi
+        printf "\033[1;31m[+] Checking if git is installed, and installing it if not..\033[0m\n"
+        if [ -x "$(command -v git)" ]; then
+          printf "\033[1;32m[+] Git is installed.\033[0m\n"
+          return 0
+          else
+            sudo apt install git -y
+            printf "\033[1;32m[+] Git is now installed.\033[0m\n""]"
+            fi
 }
 
-# Git clone the repo
+# Git clone the repo, then cd into the repo and run the script hardn-main.sh
 retrieve_repo() {
         git clone https://github.com/OpenSource-For-Freedom/HARDN-XDR.git
         # then cd into HARDN-XDR/src/setup and run the script hardn-main.sh
