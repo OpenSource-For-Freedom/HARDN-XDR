@@ -1455,11 +1455,6 @@ enable_nameservers() {
     )
 
     # Create menu options for whiptail
-    local menu_options=()
-    for provider in "${!dns_providers[@]}"; do
-        read -r primary secondary <<< "${dns_providers[$provider]}"
-        menu_options+=("$provider" "Primary: $primary, Secondary: $secondary")
-    done
 
     # A through selection of recommended Secured DNS provider
     local selected_provider
