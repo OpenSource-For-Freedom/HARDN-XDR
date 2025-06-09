@@ -91,12 +91,7 @@ detect_os_details() {
 detect_os_details
 uninstall_status "info" "Detected system: Debian ${CURRENT_DEBIAN_VERSION_ID} (${CURRENT_DEBIAN_CODENAME})"
 
-# Remove the HARDN-XDR repository
-# check if the HARDN-XDR repository is in the pwd
-if [[ -d "${SCRIPT_DIR}/../hardn-xdr" ]]; then
-    rm -rf "${SCRIPT_DIR}/../hardn-xdr"
-    uninstall_status "pass" "Removed HARDN-XDR repository"
-fi
+
 
 # 1. Restore system configurations
 uninstall_status "info" "Restoring system configurations..."
@@ -394,6 +389,11 @@ uninstall_status "info" "Cleaning up APT..."
 apt-get autoremove -y >/dev/null 2>&1
 apt-get clean >/dev/null 2>&1
 uninstall_status "pass" "APT cleanup completed"
+
+# Lastly, remove the directory HARDN-XDR
+# Search for the directory named HARDN-XDR and rm -rf it
+echo "Locating and removing HARDN-XDR directory...${RED}"
+find / -type d -name "HARDN-XDR" -exec rm -rf {} \; >/dev/null 2>&1
 
 # 7. Final message
 echo ""
