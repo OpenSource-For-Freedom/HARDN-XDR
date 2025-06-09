@@ -8,7 +8,7 @@ check_root () {
 
 update_system() {
         printf "\033[1;31m[+] Updating system...\033[0m\n"
-        sudo apt update && sudo apt upgrade -y
+        apt update && apt upgrade -y
 }
 
 # 1. Check if git is installed.
