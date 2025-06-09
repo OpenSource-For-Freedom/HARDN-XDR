@@ -1315,7 +1315,7 @@ grub_security() {
     return 0
 }
 
-##### END OF SETUP_GRUB_PASSWORD #####
+# End of setup_grub_password
 
 # Binary Format Support (binfmt). Disable running non-native binaries
 disable_binfmt_misc() {
