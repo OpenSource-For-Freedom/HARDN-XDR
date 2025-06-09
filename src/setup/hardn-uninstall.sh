@@ -91,6 +91,14 @@ detect_os_details() {
 detect_os_details
 uninstall_status "info" "Detected system: Debian ${CURRENT_DEBIAN_VERSION_ID} (${CURRENT_DEBIAN_CODENAME})"
 
+# Remove the HARDN-XDR repository
+# check if the HARDN-XDR repository is in the pwd
+if [[ -d "${SCRIPT_DIR}/../hardn-xdr" ]]; then
+    rm -rf "${SCRIPT_DIR}/../hardn-xdr"
+    uninstall_status "pass" "Removed HARDN-XDR repository"
+fi
+
+
 # 1. Restore system configurations
 uninstall_status "info" "Restoring system configurations..."
 
