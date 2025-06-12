@@ -66,6 +66,7 @@
     curl -LO https://raw.githubusercontent.com/opensource-for-freedom/HARDN-XDR/refs/heads/main/install.sh && sudo chmod +x install.sh && sudo ./install.sh
     ```
 
+
 <br>
 
 ### Installation Notes
@@ -91,7 +92,6 @@
 
 ## File Structure
 
-
 ```bash
 HARDN-XDR/
 ├── changelog.md                 # Documents version history and changes
@@ -114,6 +114,8 @@ HARDN-XDR/
         ├── hardn-main.sh        
         └── hardn-uninstall.sh   
 ```
+
+
 
 
 
