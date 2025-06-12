@@ -36,7 +36,7 @@ HARDN_STATUS() {
             echo -e "\033[1;37m[UNKNOWN]\033[0m $message"
             ;;
     esac
-}   
+}
 detect_os_details() {
     if [[ -r /etc/os-release ]]; then
         source /etc/os-release
@@ -69,7 +69,7 @@ welcomemsg() {
     echo ""
     echo "This installer will update your system first..."
     if whiptail --title "HARDN-XDR v${HARDN_VERSION}" --yesno "Do you want to continue with the installation?" 10 60; then
-        true  
+        true
     else
         echo "Installation cancelled by user."
         exit 1
@@ -80,7 +80,7 @@ preinstallmsg() {
     echo ""
     whiptail --title "HARDN-XDR" --msgbox "Welcome to HARDN-XDR. A Linux Security Hardening program." 10 60
     echo "The system will be configured to ensure STIG and Security compliance."
-   
+
 }
 
 update_system_packages() {
@@ -193,27 +193,27 @@ install_package_dependencies() {
     HARDN_STATUS "pass" "Package dependency installation attempt completed."
 }
 
-print_ascii_banner() { 
+print_ascii_banner() {
 
     local terminal_width
     terminal_width=$(tput cols)
     local banner
     banner=$(cat << "EOF"
 
-   ▄█    █▄            ▄████████         ▄████████      ████████▄       ███▄▄▄▄   
-  ███    ███          ███    ███        ███    ███      ███   ▀███      ███▀▀▀██▄ 
-  ███    ███          ███    ███        ███    ███      ███    ███      ███   ███ 
- ▄███▄▄▄▄███▄▄        ███    ███       ▄███▄▄▄▄██▀      ███    ███      ███   ███ 
-▀▀███▀▀▀▀███▀       ▀███████████      ▀▀███▀▀▀▀▀        ███    ███      ███   ███ 
-  ███    ███          ███    ███      ▀███████████      ███    ███      ███   ███ 
-  ███    ███          ███    ███        ███    ███      ███   ▄███      ███   ███ 
-  ███    █▀           ███    █▀         ███    ███      ████████▀        ▀█   █▀  
-                                        ███    ███ 
-                           
+   ▄█    █▄            ▄████████         ▄████████      ████████▄       ███▄▄▄▄
+  ███    ███          ███    ███        ███    ███      ███   ▀███      ███▀▀▀██▄
+  ███    ███          ███    ███        ███    ███      ███    ███      ███   ███
+ ▄███▄▄▄▄███▄▄        ███    ███       ▄███▄▄▄▄██▀      ███    ███      ███   ███
+▀▀███▀▀▀▀███▀       ▀███████████      ▀▀███▀▀▀▀▀        ███    ███      ███   ███
+  ███    ███          ███    ███      ▀███████████      ███    ███      ███   ███
+  ███    ███          ███    ███        ███    ███      ███   ▄███      ███   ███
+  ███    █▀           ███    █▀         ███    ███      ████████▀        ▀█   █▀
+                                        ███    ███
+
                             Extended Detection and Response
                                    Version ${HARDN_VERSION}
                             by Security International Group
-                                  
+
 EOF
 )
     local banner_width
@@ -232,7 +232,7 @@ EOF
 }
 
 setup_security(){
-    # OS detection is done by detect_os_details() 
+    # OS detection is done by detect_os_details()
     # global variables CURRENT_DEBIAN_VERSION_ID and CURRENT_DEBIAN_CODENAME are available.
     HARDN_STATUS "pass" "Using detected system: Debian ${CURRENT_DEBIAN_VERSION_ID} (${CURRENT_DEBIAN_CODENAME}) for security setup."
 
@@ -250,7 +250,7 @@ setup_security(){
     else
         HARDN_STATUS "error" "lsof command not found. Cannot check for deleted files in use."
     fi
-    
+
 ################################## ntp daemon
     HARDN_STATUS "info" "Setting up NTP daemon..."
 
@@ -398,27 +398,27 @@ blacklist uas          # Block USB Attached SCSI (another storage protocol)
 blacklist sd_mod       # Be careful with this - may affect internal storage
 # DO NOT blacklist usbhid - needed for keyboards and mice
 EOF
-    
+
     HARDN_STATUS "info" "USB security policy configured to allow HID devices but block storage."
-    
-    # Create udev rules to further control USB devices 
+
+    # Create udev rules to further control USB devices
     cat > /etc/udev/rules.d/99-usb-storage.rules << 'EOF'
 # Block USB storage devices while allowing keyboards and mice
 ACTION=="add", SUBSYSTEMS=="usb", ATTRS{bInterfaceClass}=="08", RUN+="/bin/sh -c 'echo 0 > /sys$DEVPATH/authorized'"
 # Interface class 08 is for mass storage
 # Interface class 03 is for HID devices (keyboards, mice) - these remain allowed
 EOF
-    
+
     HARDN_STATUS "info" "Additional udev rules created for USB device control."
-    
+
     # Reload rules
     if udevadm control --reload-rules && udevadm trigger; then
         HARDN_STATUS "pass" "Udev rules reloaded successfully."
     else
         HARDN_STATUS "error" "Failed to reload udev rules."
     fi
-    
-    # Unload the usb-storage module 
+
+    # Unload the usb-storage module
     if lsmod | grep -q "usb_storage"; then
         HARDN_STATUS "info" "usb-storage module is currently loaded, attempting to unload..."
         if rmmod usb_storage >/dev/null 2>&1; then
@@ -429,7 +429,7 @@ EOF
     else
         HARDN_STATUS "pass" "usb-storage module is not loaded, no need to unload."
     fi
-    
+
     # HID is enabled
     if lsmod | grep -q "usbhid"; then
         HARDN_STATUS "pass" "USB HID module is loaded - keyboards and mice will work."
@@ -441,13 +441,13 @@ EOF
             HARDN_STATUS "error" "Failed to load USB HID module."
         fi
     fi
-    
+
     HARDN_STATUS "pass" "USB configuration complete: keyboards and mice allowed, storage blocked."
-    
-    
+
+
     ############################ Disable unnecessary network protocols in kernel
     HARDN_STATUS "error" "Disabling unnecessary network protocols..."
-    
+
     # warn network interfaces in promiscuous mode
     for interface in $(/sbin/ip link show | awk '$0 ~ /: / {print $2}' | sed 's/://g'); do
         if /sbin/ip link show "$interface" | grep -q "PROMISC"; then
@@ -481,7 +481,7 @@ install ipx /bin/true
 install appletalk /bin/true
 install x25 /bin/true
 
-# Bluetooth networking (typically unnecessary on servers) 
+# Bluetooth networking (typically unnecessary on servers)
 
 # Wireless protocols (if not needed) put 80211x and 802.11 in the blacklist
 
@@ -504,24 +504,24 @@ install fddi /bin/true
 EOF
 
     HARDN_STATUS "pass" "Network protocol hardening complete: Disabled $(grep -c "^install" /etc/modprobe.d/blacklist-rare-network.conf) protocols"
-    
-    
+
+
     # Apply changes immediately where possible
     sysctl -p
-    
+
     ############################ Secure shared memory
     HARDN_STATUS "info" "Securing shared memory..."
     if ! grep -q "tmpfs /run/shm" /etc/fstab; then
         echo "tmpfs /run/shm tmpfs defaults,noexec,nosuid,nodev 0 0" >> /etc/fstab
     fi
-    
+
     ########################### Set secure file permissions
 	HARDN_STATUS "info" "Setting secure file permissions..."
 	chmod 700 /root                    # root home directory - root
 	chmod 644 /etc/passwd              # user database - readable (required)
 	chmod 600 /etc/shadow              # password hashes - root only
 	chmod 644 /etc/group               # group database - readable
-	chmod 600 /etc/gshadow             # group passwords - root   
+	chmod 600 /etc/gshadow             # group passwords - root
 	chmod 644 /etc/ssh/sshd_config     # SSH daemon config - readable
 
     ########################### Disable core dumps for security
@@ -539,7 +539,7 @@ EOF
     HARDN_STATUS "pass" "Core dumps disabled: Limits set to 0, suid_dumpable set to 0, core_pattern set to /dev/null."
     HARDN_STATUS "info" "Kernel security settings applied successfully."
     HARDN_STATUS "info" "Starting kernel security hardening..."
-      
+
 
 
     ############################### automatic security updates
@@ -581,7 +581,7 @@ Unattended-Upgrade::Allowed-Origins {
 EOF
             ;;
     esac
-    
+
     ########################### Secure network parameters
     HARDN_STATUS "info" "Configuring secure network parameters..."
     {
@@ -601,7 +601,7 @@ EOF
         echo "net.ipv6.conf.default.disable_ipv6 = 1"
     } >> /etc/sysctl.conf
 
-    
+
     #################################### rkhunter
     HARDN_STATUS "info" "Configuring rkhunter..."
     if ! dpkg -s rkhunter >/dev/null 2>&1; then
@@ -640,10 +640,10 @@ EOF
     fi
 
     if command -v rkhunter >/dev/null 2>&1; then
-      
+
         sed -i 's/#CRON_DAILY_RUN=""/CRON_DAILY_RUN="true"/' /etc/default/rkhunter 2>/dev/null || true
-        
-   
+
+
         rkhunter --configcheck >/dev/null 2>&1 || true
         rkhunter --update --nocolors >/dev/null 2>&1 || {
             HARDN_STATUS "warning" "Warning: Failed to update rkhunter database."
@@ -654,7 +654,7 @@ EOF
     else
         HARDN_STATUS "warning" "Warning: rkhunter not found, skipping configuration."
     fi
-    
+
     ######################## STIG-PAM Password Quality
     HARDN_STATUS "info" "Configuring PAM password quality..."
     if [ -f /etc/pam.d/common-password ]; then
@@ -739,7 +739,7 @@ EOF
         else
             HARDN_STATUS "warning" "Warning: auditd.service not found, skipping service enable/start."
         fi
-        # Enable auditing via auditctl 
+        # Enable auditing via auditctl
         if command -v auditctl >/dev/null 2>&1; then
             HARDN_STATUS "info" "Attempting to enable auditd system via auditctl..."
             if auditctl -e 1 >/dev/null 2>&1; then
@@ -760,7 +760,7 @@ EOF
         cat > "$audit_rules_file" << 'EOF'
 # This file is automatically generated by HARDN-XDR for STIG compliance.
 # Any manual changes may be overwritten.
-# 
+#
 # Note: This configuration has been optimized to reduce system impact while
 # maintaining essential security monitoring. Removed overly strict rules that
 # could cause performance degradation or excessive logging.
@@ -910,7 +910,7 @@ EOF
     HARDN_STATUS "pass" "auditd configuration attempt completed."
 
 
-    
+
     ####################################### Suricata
     HARDN_STATUS "error" "Checking and configuring Suricata..."
 
@@ -919,13 +919,13 @@ EOF
     else
         HARDN_STATUS "info" "Suricata package not found. Attempting to install from source..."
 
-        local suricata_version="7.0.0" 
+        local suricata_version="7.0.0"
         local download_url="https://www.suricata-ids.org/download/releases/suricata-${suricata_version}.tar.gz"
         local download_dir="/tmp/suricata_install"
         local tar_file="$download_dir/suricata-${suricata_version}.tar.gz"
         local extracted_dir="suricata-${suricata_version}"
 
-      
+
         HARDN_STATUS "info" "Installing Suricata build dependencies..."
         if ! apt-get update >/dev/null 2>&1 || ! apt-get install -y \
             build-essential libpcap-dev libnet1-dev libyaml-0-2 libyaml-dev zlib1g zlib1g-dev \
@@ -952,7 +952,7 @@ EOF
                     cd "$download_dir/$extracted_dir" || { HARDN_STATUS "error" "Error: Cannot change directory to extracted folder."; return 1; }
 
                     HARDN_STATUS "info" "Running ./configure..."
-                    
+
                     if ./configure \
                         --prefix=/usr \
                         --sysconfdir=/etc \
@@ -960,39 +960,39 @@ EOF
                         --disable-gccmarch-native \
                         --enable-lua \
                         --enable-geoip \
-                        > /dev/null 2>&1; then 
+                        > /dev/null 2>&1; then
                         HARDN_STATUS "pass" "Configure successful."
 
                         HARDN_STATUS "info" "Running make..."
-                        if make > /dev/null 2>&1; then 
+                        if make > /dev/null 2>&1; then
                             HARDN_STATUS "pass" "Make successful."
 
                             HARDN_STATUS "info" "Running make install..."
-                            if make install > /dev/null 2>&1; then 
+                            if make install > /dev/null 2>&1; then
                                 HARDN_STATUS "pass" "Suricata installed successfully from source."
-                             
+
                                 ldconfig >/dev/null 2>&1 || true
                             else
                                 HARDN_STATUS "error" "Error: make install failed."
-                                cd /tmp || true 
+                                cd /tmp || true
                                 rm -rf "$download_dir"
                                 return 1
                             fi
                         else
                             HARDN_STATUS "error" "Error: make failed."
-                            cd /tmp || true 
+                            cd /tmp || true
                             rm -rf "$download_dir"
                             return 1
                         fi
                     else
                         HARDN_STATUS "error" "Error: ./configure failed."
-                        cd /tmp || true 
+                        cd /tmp || true
                         rm -rf "$download_dir"
                         return 1
                     fi
                 else
                     HARDN_STATUS "error" "Error: Extracted directory not found."
-                    cd /tmp || true 
+                    cd /tmp || true
                     rm -rf "$download_dir"
                     return 1
                 fi
@@ -1014,22 +1014,22 @@ EOF
         rm -rf "$download_dir"
     fi
 
-    # If Suricata is installed 
+    # If Suricata is installed
     if command -v suricata >/dev/null 2>&1; then
         HARDN_STATUS "info" "Configuring Suricata..."
 
-        # Ensure the default configuration 
+        # Ensure the default configuration
         if [ ! -d /etc/suricata ]; then
             HARDN_STATUS "info" "Creating /etc/suricata and copying default config..."
             mkdir -p /etc/suricata
-    
+
             if [ ! -f /etc/suricata/suricata.yaml ]; then
                  HARDN_STATUS "error" "Error: Suricata default configuration file /etc/suricata/suricata.yaml not found after installation. Skipping configuration."
                  return 1
             fi
         fi
 
-        # Enable the service 
+        # Enable the service
         if systemctl enable suricata >/dev/null 2>&1; then
             HARDN_STATUS "pass" "Suricata service enabled successfully."
         else
@@ -1068,7 +1068,7 @@ EOF
         HARDN_STATUS "error" "Suricata command not found after installation attempt, skipping configuration."
     fi
 
-    ########################### debsums 
+    ########################### debsums
     HARDN_STATUS "info" "Configuring debsums..."
     if command -v debsums >/dev/null 2>&1; then
         if debsums_init >/dev/null 2>&1; then
@@ -1076,7 +1076,7 @@ EOF
         else
             HARDN_STATUS "error" "Failed to initialize debsums"
         fi
-        
+
         # Add debsums check to daily cron
         if ! grep -q "debsums" /etc/crontab; then
             echo "0 4 * * * root /usr/bin/debsums -s 2>&1 | logger -t debsums" >> /etc/crontab
@@ -1084,7 +1084,7 @@ EOF
         else
             HARDN_STATUS "warning" "debsums already in crontab"
         fi
-        
+
         # Run initial check
         HARDN_STATUS "info" "Running initial debsums check..."
         if debsums -s >/dev/null 2>&1; then
@@ -1095,7 +1095,7 @@ EOF
     else
         HARDN_STATUS "error" "debsums command not found, skipping configuration"
     fi
-    
+
     ############################## AIDE (Advanced Intrusion Detection Environment)
     if ! dpkg -s aide >/dev/null 2>&1; then
         HARDN_STATUS "info" "Installing and configuring AIDE..."
@@ -1117,8 +1117,8 @@ EOF
     # Check if YARA command exists (implies installation)
     if ! command -v yara >/dev/null 2>&1; then
         HARDN_STATUS "warning" "Warning: YARA command not found. Skipping rule setup."
-       
-  
+
+
     else
         HARDN_STATUS "pass" "YARA command found."
         HARDN_STATUS "info" "Creating YARA rules directory..."
@@ -1178,7 +1178,7 @@ EOF
 
         HARDN_STATUS "pass" "YARA rules setup attempt completed."
     fi
-    
+
 
     ######################### STIG banner (/etc/issue.net)
     HARDN_STATUS "error" "Configuring STIG compliant banner for remote logins (/etc/issue.net)..."
@@ -1202,7 +1202,7 @@ EOF
         echo "************************************************************"
     } > "$banner_net_file"
     chmod 644 "$banner_net_file"
-    HARDN_STATUS "pass" "STIG compliant banner configured in $banner_net_file."    
+    HARDN_STATUS "pass" "STIG compliant banner configured in $banner_net_file."
 }
 
 restrict_compilers() {
@@ -1217,7 +1217,7 @@ restrict_compilers() {
             HARDN_STATUS "pass" "Set $bin to 755 root:root (default for compilers)."
         fi
     done
-    
+
 }
 
 grub_security() {
@@ -1399,7 +1399,7 @@ disable_firewire_drivers() {
     else
         whiptail --infobox "FireWire drivers checked. No changes made (likely already disabled/not present)." 8 70
     fi
-    
+
 }
 
 purge_old_packages() {
@@ -1410,7 +1410,7 @@ purge_old_packages() {
     if [[ "$packages_to_purge" ]]; then
         HARDN_STATUS "info" "Found the following packages with leftover configuration files to purge:"
         echo "$packages_to_purge"
-       
+
         if command -v whiptail >/dev/null; then
             whiptail --title "Packages to Purge" --msgbox "The following packages have leftover configuration files that will be purged:\n\n$packages_to_purge" 15 70
         fi
@@ -1433,7 +1433,7 @@ purge_old_packages() {
         HARDN_STATUS "pass" "No old/removed packages with leftover configuration files found to purge."
         whiptail --infobox "No leftover package configurations to purge." 7 70
     fi
-   
+
     HARDN_STATUS "error" "Running apt-get autoremove and clean to free up space..."
     apt-get autoremove -y
     apt-get clean
@@ -1744,7 +1744,7 @@ enable_process_accounting_and_sysstat() {
             HARDN_STATUS "pass" "Process accounting (acct) and sysstat already configured or no changes needed."
         fi
     }
-    
+
 apply_kernel_security() {
     HARDN_STATUS "info" "Applying kernel security settings..."
 
@@ -1960,7 +1960,7 @@ disable_service_if_active() {
 
 remove_unnecessary_services() {
     HARDN_STATUS "pass" "Disabling unnecessary services..."
-    
+
     disable_service_if_active avahi-daemon
     disable_service_if_active cups
     disable_service_if_active rpcbind
@@ -1987,47 +1987,47 @@ remove_unnecessary_services() {
 
 improve_lynis_score() {
     HARDN_STATUS "info" "Applying Lynis score improvements..."
-    
+
     # Create /tmp with proper permissions (Lynis check FILE-6310)
     HARDN_STATUS "info" "Setting secure permissions on /tmp directory..."
     chmod 1777 /tmp
-    
+
     # Secure /var/tmp permissions (Lynis check FILE-6311)
     if [[ -d /var/tmp ]]; then
         chmod 1777 /var/tmp
     fi
-    
+
     # Set proper permissions on log files (Lynis checks FILE-6374, FILE-6376)
     HARDN_STATUS "info" "Securing log file permissions..."
     find /var/log -type f -exec chmod 640 {} \; 2>/dev/null || true
     find /var/log -type d -exec chmod 750 {} \; 2>/dev/null || true
-    
+
     # Secure SSH configuration improvements (Lynis SSH checks)
     local ssh_config="/etc/ssh/sshd_config"
     if [[ -f "$ssh_config" ]]; then
         HARDN_STATUS "info" "Enhancing SSH configuration for better Lynis scores..."
-        
+
         # Backup SSH config
         cp "$ssh_config" "${ssh_config}.bak.hardn" 2>/dev/null || true
-        
+
         # Apply additional SSH hardening for Lynis
         sed -i 's/^#*ClientAliveInterval.*/ClientAliveInterval 300/' "$ssh_config"
         sed -i 's/^#*ClientAliveCountMax.*/ClientAliveCountMax 0/' "$ssh_config"
         sed -i 's/^#*MaxStartups.*/MaxStartups 10:30:60/' "$ssh_config"
         sed -i 's/^#*LoginGraceTime.*/LoginGraceTime 60/' "$ssh_config"
-        
+
         # Add SSH hardening if not present
         if ! grep -q "^MaxSessions" "$ssh_config"; then
             echo "MaxSessions 4" >> "$ssh_config"
         fi
-        
+
         systemctl reload ssh 2>/dev/null || true
     fi
-    
+
     # Kernel parameter improvements for Lynis (KRNL checks)
     HARDN_STATUS "info" "Applying additional kernel parameters for Lynis score improvement..."
     local sysctl_lynis="/etc/sysctl.d/99-lynis-hardening.conf"
-    
+
     cat > "$sysctl_lynis" << 'EOF'
 # Additional kernel parameters for Lynis score improvement
 # Generated by HARDN-XDR
@@ -2052,75 +2052,75 @@ net.core.bpf_jit_harden = 2
 fs.protected_hardlinks = 1
 fs.protected_symlinks = 1
 EOF
-    
+
     sysctl -p "$sysctl_lynis" >/dev/null 2>&1 || true
-    
+
     # PAM configuration improvements (Plugable Authentication Module)
     HARDN_STATUS "info" "Enhancing PAM configuration for Lynis scores..."
     local pam_login="/etc/pam.d/login"
     if [[ -f "$pam_login" ]] && ! grep -q "pam_limits.so" "$pam_login"; then
         echo "session required pam_limits.so" >> "$pam_login"
     fi
-    
+
     # Set proper file permissions that Lynis checks
     HARDN_STATUS "info" "Setting secure file permissions for Lynis checks..."
-    
+
     # Secure crontab permissions
     chmod 600 /etc/crontab 2>/dev/null || true
     chmod -R 600 /etc/cron.d/* 2>/dev/null || true
     chmod -R 700 /etc/cron.daily /etc/cron.hourly /etc/cron.monthly /etc/cron.weekly 2>/dev/null || true
-    
+
     # Secure system configuration files
     chmod 644 /etc/passwd 2>/dev/null || true
     chmod 640 /etc/shadow 2>/dev/null || true
     chmod 644 /etc/group 2>/dev/null || true
     chmod 640 /etc/gshadow 2>/dev/null || true
-    
+
     # Remove world-writable files (Lynis check FILE-6362)
     HARDN_STATUS "info" "Removing world-writable permissions from system files..."
     find /etc -type f -perm -002 -exec chmod o-w {} \; 2>/dev/null || true
-    
+
     # Set umask in system profiles
     if ! grep -q "umask 027" /etc/profile; then
         echo "umask 027" >> /etc/profile
     fi
-    
+
     # Secure mail queue permissions if postfix is installed
     if command -v postfix >/dev/null 2>&1; then
         chmod 700 /var/spool/postfix/maildrop 2>/dev/null || true
     fi
-    
+
     HARDN_STATUS "pass" "Lynis score improvements applied successfully."
 }
 
 pen_test() {
     HARDN_STATUS "info" "Running comprehensive security audit with Lynis and nmap..."
-    
+
     # Ensure Lynis is installed (it should be from progs.csv)
     if ! command -v lynis >/dev/null 2>&1; then
         HARDN_STATUS "info" "Installing Lynis..."
         apt-get install lynis -y >/dev/null 2>&1
     fi
-    
+
     # Create Lynis log directory
     mkdir -p /var/log/lynis
     chmod 750 /var/log/lynis
-    
+
     # Apply Lynis score improvements first
     improve_lynis_score
-    
+
     # Run comprehensive Lynis audit
     HARDN_STATUS "info" "Running comprehensive Lynis system audit..."
     lynis audit system --verbose --log-file /var/log/lynis/hardn-audit.log --report-file /var/log/lynis/hardn-report.dat 2>/dev/null
-    
+
     # Run Lynis with pentest profile for additional checks
     HARDN_STATUS "info" "Running Lynis penetration testing profile..."
     lynis audit system --pentest --verbose --log-file /var/log/lynis/hardn-pentest.log 2>/dev/null
-    
+
     # Generate Lynis report
     if [[ -f /var/log/lynis/hardn-report.dat ]]; then
         HARDN_STATUS "pass" "Lynis audit completed. Report saved to /var/log/lynis/hardn-report.dat"
-        
+
         # Extract and display hardening index if available
         local hardening_index
         hardening_index=$(grep "hardening_index=" /var/log/lynis/hardn-report.dat 2>/dev/null | cut -d'=' -f2)
@@ -2130,30 +2130,30 @@ pen_test() {
     else
         HARDN_STATUS "warning" "Lynis report file not found. Check /var/log/lynis/ for details."
     fi
-    
+
     # Run nmap scan for network security assessment
     HARDN_STATUS "info" "Starting network security assessment with nmap..."
-    
+
     # Install nmap if not present
     if ! command -v nmap >/dev/null 2>&1; then
         apt install nmap -y >/dev/null 2>&1
     fi
-    
+
     # Create nmap log directory
     mkdir -p /var/log/nmap
     chmod 750 /var/log/nmap
-    
+
     # Run comprehensive nmap scan
     nmap -sS -sV -O -p- localhost > /var/log/nmap/hardn-localhost-scan.log 2>&1 &
     local nmap_pid=$!
-    
+
     # Run network interface scan
     local interface_ip
     interface_ip=$(ip route get 1.1.1.1 2>/dev/null | grep -oP 'src \K\S+' | head -1)
     if [[ -n "$interface_ip" ]]; then
         nmap -sn "${interface_ip%.*}.0/24" > /var/log/nmap/hardn-network-discovery.log 2>&1 &
     fi
-    
+
     # Wait for localhost scan to complete
     wait $nmap_pid
     if wait $nmap_pid; then
@@ -2161,7 +2161,7 @@ pen_test() {
     else
         HARDN_STATUS "error" "Network scan encountered issues. Check /var/log/nmap/ for details."
     fi
-    
+
     # Summary of security audit
     HARDN_STATUS "info" "Security audit summary:"
     HARDN_STATUS "info" "- Lynis reports: /var/log/lynis/"
