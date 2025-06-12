@@ -1,4 +1,4 @@
-![GitHub release (latest by date)](https://img.shields.io/github/v/release/OpenSource-For-Freedom/HARDN?include_prereleases)
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/OpenSource-For-Freedom/HARDN-XDR?include_prereleases)
 
 
 <p align="center">
@@ -62,11 +62,10 @@
 
 1.  **One command**
 
-    **A one-liner: curls it, change mod, make executable, then runs it**
-
     ```bash
-    curl -LO https://raw.githubusercontent.com/LinuxUser255/HARDN-XDR/refs/heads/main/install.sh && sudo chmod +x install.sh && sudo ./install.sh
+    curl -LO https://raw.githubusercontent.com/opensource-for-freedom/HARDN-XDR/refs/heads/main/install.sh && sudo chmod +x install.sh && sudo ./install.sh
     ```
+
 
 <br>
 
@@ -89,11 +88,9 @@
 
 ## Actions
 - [![Auto Update Dependencies](https://github.com/OpenSource-For-Freedom/HARDN-XDR/actions/workflows/validate.yml/badge.svg)](https://github.com/OpenSource-For-Freedom/HARDN-XDR/actions/workflows/validate.yml)
-- [![Codacy Workflow Status](https://github.com/OpenSource-For-Freedom/HARDN-XDR/actions/workflows/codacy.yml/badge.svg)](https://github.com/OpenSource-For-Freedom/HARDN-XDR/actions/workflows/codacy.yml)
 <br>
 
 ## File Structure
-
 
 ```bash
 HARDN-XDR/
@@ -111,12 +108,14 @@ HARDN-XDR/
 ├── install.sh                   # Main installation script
 ├── LICENSE                      # MIT License file
 ├── progs.csv                    # List of programs and packages to be installed
-├── README.md                    # Project overview and instructions
-└── src                          # Source code directory
-    └── setup                    # Setup scripts
-        ├── hardn-main.sh        # Core hardening implementation script
-        └── hardn-uninstall.sh   # Script to remove HARDN-XDR from system
+├── README.md                    
+└── src                          
+    └── setup                    
+        ├── hardn-main.sh        
+        └── hardn-uninstall.sh   
 ```
+
+
 
 
 

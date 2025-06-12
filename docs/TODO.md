@@ -1,3 +1,4 @@
+
 # TODO
 
 ## Table of Contents
@@ -7,6 +8,7 @@
 
 
 ## Improving the Lynis Score
+
 
 
 ## ✅ GENERAL SYSTEM IMPROVEMENTS
@@ -331,6 +333,7 @@ main "$@"
 ```
 
 
+
 ## [Features and Edits](#features-and-edits)
 
 - Replace the unistall script with
@@ -338,3 +341,4 @@ main "$@"
 
 
 <br>
+
