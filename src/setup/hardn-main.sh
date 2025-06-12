@@ -1315,7 +1315,7 @@ grub_security() {
     return 0
 }
 
-##### END OF SETUP_GRUB_PASSWORD #####
+# End of setup_grub_password
 
 # Binary Format Support (binfmt). Disable running non-native binaries
 disable_binfmt_misc() {
@@ -1455,11 +1455,6 @@ enable_nameservers() {
     )
 
     # Create menu options for whiptail
-    local menu_options=()
-    for provider in "${!dns_providers[@]}"; do
-        read -r primary secondary <<< "${dns_providers[$provider]}"
-        menu_options+=("$provider" "Primary: $primary, Secondary: $secondary")
-    done
 
     # A through selection of recommended Secured DNS provider
     local selected_provider
