@@ -1,6 +1,13 @@
-Thanks for sharing your Lynis scan results. Based on your output, here's a breakdown of the issues and specific **recommended actions** to improve your system's security posture and score:
+# TODO
 
----
+## Table of Contents
+- [Improving the Lynis Score](#Improving-the-Lynis-Score)
+
+- [Features and Edits](#features-and-edits)
+
+
+## Improving the Lynis Score
+
 
 ## ✅ GENERAL SYSTEM IMPROVEMENTS
 
@@ -322,3 +329,12 @@ main() {
 main "$@"
 
 ```
+
+
+## [Features and Edits](#features-and-edits)
+
+- Replace the unistall script with
+- A menu that disables services and checks logs
+
+
+<br>

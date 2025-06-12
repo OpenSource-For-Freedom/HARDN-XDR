@@ -8,12 +8,10 @@ check_root () {
 
 update_system() {
         printf "\033[1;31m[+] Updating system...\033[0m\n"
-        sudo apt update && sudo apt upgrade -y
+         apt update &&  apt upgrade -y
 }
 
-# 1. Check if git is installed.
-# 2. If git is not currently installed,
-# 3.then install it.
+# 1. Check if git is installed. And install if not.
 check_git() {
         printf "\033[1;31m[+] Checking if git is installed, and installing it if not..\033[0m\n"
         if [ -x "$(command -v git)" ]; then
@@ -26,10 +24,7 @@ check_git() {
 
 # Git clone the repo, then cd into the repo and run the script hardn-main.sh
 retrieve_repo() {
-        # Tim's repository git clone https://github.com/OpenSource-For-Freedom/HARDN-XDR.git
-        # Christopher's repository git clone https://github.com/ChristopherBingham/HARDN-XDR.git'
-        git clone https://github.com/LinuxUser255/HARDN-XDR.git
-        # then cd into HARDN-XDR/src/setup and run the script hardn-main.sh
+        git clone https://github.com/OpenSource-For-Freedom/HARDN-XDR.git
         cd HARDN-XDR/src/setup &&  chmod +x hardn-main.sh && sudo ./hardn-main.sh
 }
 
