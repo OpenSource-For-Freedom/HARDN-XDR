@@ -70,7 +70,7 @@
 ### Installation Notes
 - HARDN-XDR is currently being developed and tested for **BARE-METAL installs of Debian based distributions and Virtual Machines**.
 - Ensure you have the latest version of **Debian 12** or **Ubuntu 24.04**.
-- By installing HARDN-XDR with the commands listed in the installation process, the following changes will be made to your system:
+- By installing HARDN-XDR with the command listed in the installation, the following changes will be made to your system:
 > - A collection of security focused packages will be installed.
 > - Security tools and services will be enabled.
 > - System hardening and STIG settings will be applied.
@@ -93,25 +93,25 @@
 
 ```bash
 HARDN-XDR/
-├── changelog.md                 # Documents version history and changes
-├── docs                         # Documentation directory
-│   ├── assets                   # Images and visual resources
-│   │   ├── cybersynapse.png     # Partner logo
-│   │   └── HARDN(1).png         # Project logo
-│   ├── CODE_OF_CONDUCT.md       # Community guidelines and expectations
-│   ├── deb_stig.md              # Debian STIG compliance documentation
-│   ├── hardn-main-sh-review.md  # Review of the main script functionality
-│   ├── HARDN.md                 # Detailed project documentation
-│   ├── hardn-security-tools.md  # Security tools documentation
-│   └── TODO.md                  # Planned features and improvements
-├── install.sh                   # Main installation script
-├── LICENSE                      # MIT License file
-├── progs.csv                    # List of programs and packages to be installed
+├── changelog.md                 
+├── docs                         
+│   ├── assets                   
+│   │   ├── cybersynapse.png     
+│   │   └── HARDN(1).png         
+│   ├── CODE_OF_CONDUCT.md       
+│   ├── deb_stig.md              
+│   ├── hardn-main-sh-review.md  
+│   ├── HARDN.md                 
+│   ├── hardn-security-tools.md  
+│   └── TODO.md                  
+├── install.sh                  
+├── LICENSE                      
+├── progs.csv                    
 ├── README.md                    
 └── src                          
     └── setup                    
         ├── hardn-main.sh        
-        └── hardn-uninstall.sh   
+           
 ```
 
 
