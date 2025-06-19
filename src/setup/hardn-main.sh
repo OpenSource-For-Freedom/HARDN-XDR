@@ -223,6 +223,7 @@ EOF
         done
         printf "%s\n" "$line"
     done <<< "$banner"
+    sleep 2
     printf "\033[0m"
 
 }
@@ -232,7 +233,7 @@ setup_security(){
     # global variables CURRENT_DEBIAN_VERSION_ID and CURRENT_DEBIAN_CODENAME are available.
     HARDN_STATUS "pass" "Using detected system: Debian ${CURRENT_DEBIAN_VERSION_ID} (${CURRENT_DEBIAN_CODENAME}) for security setup."
     
-    #################### UFW
+########################### UFW
     HARDN_STATUS "info" "UFW Setup"
     ufw --force reset
     ufw default deny incoming
