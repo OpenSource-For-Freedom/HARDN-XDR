@@ -45,6 +45,7 @@ detect_os_details() {
     fi
 }
 
+# calling os_details function
 detect_os_details
 
 show_system_info() {
@@ -1821,6 +1822,216 @@ apply_kernel_security() {
     HARDN_STATUS "pass" "Kernel hardening applied successfully."
 }
 
+# Function to ensure SSH prerequisites are met
+ensure_ssh_prerequisites() {
+    HARDN_STATUS "info" "Checking SSH prerequisites..."
+
+    # Check if sshd directory exists, create if not
+    if [ ! -d "/run/sshd" ]; then
+        HARDN_STATUS "info" "Creating missing privilege separation directory: /run/sshd"
+        mkdir -p /run/sshd
+        chmod 0755 /run/sshd
+    fi
+
+    # Check if OpenSSH server is installed
+    if ! command -v sshd >/dev/null 2>&1; then
+        HARDN_STATUS "info" "OpenSSH server is not installed. Installing..."
+        apt update && apt install -y openssh-server
+        if [ ! $? -eq 0 ]; then
+            HARDN_STATUS "error" "Failed to install OpenSSH server. Aborting SSH hardening."
+            return 1
+        fi
+    fi
+
+    return 0
+}
+
+# Function to harden SSH configuration
+harden_ssh_config() {
+    HARDN_STATUS "section" "Hardening SSH Configuration"
+
+    # Ensure SSH prerequisites are met
+    ensure_ssh_prerequisites
+    if [ $? -ne 0 ]; then
+        HARDN_STATUS "error" "Failed to meet SSH prerequisites. Skipping SSH hardening."
+        return 1
+    fi
+
+    # Define paths
+    local system_config="/etc/ssh/sshd_config"
+    local backup_config
+    backup_config="/etc/ssh/sshd_config.bak.$(date +%Y%m%d%H%M%S)"
+    local temp_config="/tmp/sshd_config.new"
+
+    # Backup original config sshd_config
+    if ! cp "${system_config}" "${backup_config}"; then
+        HARDN_STATUS "error" "Failed to create backup of SSH config. Aborting SSH hardening."
+        return 1
+    fi
+    HARDN_STATUS "pass" "Backup created at ${backup_config}"
+
+    # Create custom config in a temporary file first
+    cat > "${temp_config}" << 'EOF'
+###################################################
+# THIS IS THE SECURITY HARDNED CUSTOM SSHD_CONFIG #
+###################################################
+
+# This is the sshd server system-wide configuration file.
+# This is the configuration we shall use for HARDN-XDR
+# Much of the settings in this file are from.
+# https://linux-audit.com/ssh/audit-and-harden-your-ssh-configuration/
+# And they are set as the result of much lynis testing.
+# It is Configured according to lynis security testing
+# This is the configuration file that will be implemented as part of
+# HARDN-XDR
+# All the uncommented lines are self-explanatory
+
+
+# The strategy used for options in the default sshd_config shipped with
+# OpenSSH is to specify options with their default value where
+# possible, but leave them commented.  Uncommented options override the
+# default value.
+
+Include /etc/ssh/sshd_config.d/*.conf
+
+# Use an unconventional port number for ssh.
+# Protects against brute force attacks that seek port 22
+Port 8022
+#AddressFamily any
+#ListenAddress 0.0.0.0
+#ListenAddress ::
+
+#HostKey /etc/ssh/ssh_host_rsa_key
+#HostKey /etc/ssh/ssh_host_ecdsa_key
+#HostKey /etc/ssh/ssh_host_ed25519_key
+
+# Ciphers and keying
+#RekeyLimit default none
+
+# Logging
+#SyslogFacility AUTH
+LogLevel VERBOSE
+
+# Authentication:
+LoginGraceTime 60
+PermitRootLogin prohibit-password
+StrictModes yes
+MaxAuthTries 3
+MaxSessions 4
+
+PubkeyAuthentication yes
+
+# Expect .ssh/authorized_keys2 to be disregarded by default in future.
+AuthorizedKeysFile	.ssh/authorized_keys .ssh/authorized_keys2
+
+#AuthorizedPrincipalsFile none
+
+#AuthorizedKeysCommand none/
+#AuthorizedKeysCommandUser nobody
+
+# For this to work you will also need host keys in /etc/ssh/ssh_known_hosts
+#HostbasedAuthentication no
+# Change to yes if you don't trust ~/.ssh/known_hosts for
+# HostbasedAuthentication
+#IgnoreUserKnownHosts no
+# Don't read the user's ~/.rhosts and ~/.shosts files
+IgnoreRhosts yes
+
+# To disable tunneled clear text passwords, change to no here!
+PasswordAuthentication no
+PermitEmptyPasswords no
+
+# Change to yes to enable challenge-response passwords (beware issues with
+# some PAM modules and threads)
+KbdInteractiveAuthentication no
+
+# Kerberos options
+#KerberosAuthentication no
+#KerberosOrLocalPasswd yes
+#KerberosTicketCleanup yes
+#KerberosGetAFSToken no
+
+# GSSAPI options
+#GSSAPIAuthentication no
+#GSSAPICleanupCredentials yes
+#GSSAPIStrictAcceptorCheck yes
+#GSSAPIKeyExchange no
+
+# Set this to 'yes' to enable PAM authentication, account processing,
+# and session processing. If this is enabled, PAM authentication will
+# be allowed through the KbdInteractiveAuthentication and
+# PasswordAuthentication.  Depending on your PAM configuration,
+# PAM authentication via KbdInteractiveAuthentication may bypass
+# the setting of "PermitRootLogin prohibit-password".
+# If you just want the PAM account and session checks to run without
+# PAM authentication, then enable this but set PasswordAuthentication
+# and KbdInteractiveAuthentication to 'no'.
+UsePAM yes
+
+AllowAgentForwarding no
+#AllowTcpForwarding yes
+#GatewayPorts no
+X11Forwarding no
+#X11DisplayOffset 10
+#X11UseLocalhost yes
+#PermitTTY yes
+PrintMotd no
+#PrintLastLog yes
+TCPKeepAlive no
+#PermitUserEnvironment no
+#Compression delayed
+ClientAliveInterval 300
+ClientAliveCountMax 0
+UseDNS no
+#PidFile /run/sshd.pid
+MaxStartups 10:30:60
+#PermitTunnel no
+#ChrootDirectory none
+#VersionAddendum none
+
+# no default banner path
+#Banner none
+
+# Allow client to pass locale environment variables
+AcceptEnv LANG LC_*
+
+# override default of no subsystems
+Subsystem	sftp	/usr/lib/openssh/sftp-server
+
+# Example of overriding settings on a per-user basis
+#Match User anoncvs
+#	X11Forwarding no
+#	AllowTcpForwarding no
+#	PermitTTY no
+#	ForceCommand cvs server
+#   MaxSessions 4
+
+EOF
+
+    # Apply the new configuration
+    if ! mv "${temp_config}" "${system_config}"; then
+        HARDN_STATUS "error" "Failed to apply new SSH configuration. Check ${temp_config}."
+        return 1
+    fi
+
+    # Set proper permissions
+    chmod 600 "${system_config}"
+
+    # Restart SSH service to apply changes
+    HARDN_STATUS "info" "Restarting SSH service to apply changes..."
+    if systemctl restart ssh || systemctl restart sshd; then
+        HARDN_STATUS "pass" "SSH service restarted successfully."
+    else
+        HARDN_STATUS "error" "Failed to restart SSH service. Manual check required."
+    fi
+
+    HARDN_STATUS "pass" "SSH configuration hardened successfully."
+    HARDN_STATUS "info" "NOTE: Password authentication is disabled. Make sure you have SSH keys set up."
+    return 0
+}
+
+
+
 # Central logging
 setup_central_logging() {
     HARDN_STATUS "error" "Setting up central logging for security tools..."
@@ -2196,6 +2407,7 @@ main() {
     disable_binfmt_misc
     remove_unnecessary_services
     setup_grub_password
+    harden_ssh_config
     setup_central_logging
     pen_test
     cleanup
