@@ -1,4 +1,3 @@
-![GitHub release (latest by date)](https://img.shields.io/github/v/release/OpenSource-For-Freedom/HARDN?include_prereleases)
 
 
 <p align="center">
@@ -6,7 +5,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/HARDN(1).png" alt="HARDN Logo" width="300px" /><br><br>
+  <img src="https://github.com/OpenSource-For-Freedom/HARDN-XDR/blob/main/docs/assets/HARDN%20(1).png" /><br><br>
   <img src="https://img.shields.io/badge/The_Linux_Security_Project-red?style=for-the-badge&labelColor=black" alt="The Linux Security Project"><br><br>
   <code>HARDN-XDR</code>
 </p>
@@ -62,18 +61,16 @@
 
 1.  **One command**
 
-    **A one-liner: curls it, change mod, make executable, then runs it**
-
     ```bash
-    curl -LO https://raw.githubusercontent.com/LinuxUser255/HARDN-XDR/refs/heads/main/install.sh && sudo chmod +x install.sh && sudo ./install.sh
+    curl -LO https://raw.githubusercontent.com/opensource-for-freedom/HARDN-XDR/refs/heads/main/install.sh && sudo chmod +x install.sh && sudo ./install.sh
     ```
 
 <br>
 
 ### Installation Notes
 - HARDN-XDR is currently being developed and tested for **BARE-METAL installs of Debian based distributions and Virtual Machines**.
-- Ensure you have the latest version of **Debian 12** or **Ubuntu 24.04**.
-- By installing HARDN-XDR with the commands listed in the installation process, the following changes will be made to your system:
+- Ensure you have the latest version of **Debian 12**.
+- By installing HARDN-XDR with the command listed in the installation, the following changes will be made to your system:
 > - A collection of security focused packages will be installed.
 > - Security tools and services will be enabled.
 > - System hardening and STIG settings will be applied.
@@ -89,7 +86,6 @@
 
 ## Actions
 - [![Auto Update Dependencies](https://github.com/OpenSource-For-Freedom/HARDN-XDR/actions/workflows/validate.yml/badge.svg)](https://github.com/OpenSource-For-Freedom/HARDN-XDR/actions/workflows/validate.yml)
-- [![Codacy Workflow Status](https://github.com/OpenSource-For-Freedom/HARDN-XDR/actions/workflows/codacy.yml/badge.svg)](https://github.com/OpenSource-For-Freedom/HARDN-XDR/actions/workflows/codacy.yml)
 <br>
 
 ## File Structure
@@ -97,25 +93,25 @@
 
 ```bash
 HARDN-XDR/
-├── changelog.md                 # Documents version history and changes
-├── docs                         # Documentation directory
-│   ├── assets                   # Images and visual resources
-│   │   ├── cybersynapse.png     # Partner logo
-│   │   └── HARDN(1).png         # Project logo
-│   ├── CODE_OF_CONDUCT.md       # Community guidelines and expectations
-│   ├── deb_stig.md              # Debian STIG compliance documentation
-│   ├── hardn-main-sh-review.md  # Review of the main script functionality
-│   ├── HARDN.md                 # Detailed project documentation
-│   ├── hardn-security-tools.md  # Security tools documentation
-│   └── TODO.md                  # Planned features and improvements
-├── install.sh                   # Main installation script
-├── LICENSE                      # MIT License file
-├── progs.csv                    # List of programs and packages to be installed
-├── README.md                    # Project overview and instructions
-└── src                          # Source code directory
-    └── setup                    # Setup scripts
-        ├── hardn-main.sh        # Core hardening implementation script
-        └── hardn-uninstall.sh   # Script to remove HARDN-XDR from system
+├── changelog.md                 
+├── docs                         
+│   ├── assets                   
+│   │   ├── cybersynapse.png     
+│   │   └── HARDN(1).png         
+│   ├── CODE_OF_CONDUCT.md       
+│   ├── deb_stig.md              
+│   ├── hardn-main-sh-review.md  
+│   ├── HARDN.md                 
+│   ├── hardn-security-tools.md  
+│   └── TODO.md                  
+├── install.sh                  
+├── LICENSE                      
+├── progs.csv                    
+├── README.md                    
+└── src                          
+    └── setup                    
+        ├── hardn-main.sh        
+           
 ```
 
 
