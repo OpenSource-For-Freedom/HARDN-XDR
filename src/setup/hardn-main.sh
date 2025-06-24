@@ -38,160 +38,151 @@ HARDN_STATUS() {
     esac
 }
 detect_os_details() {
-    if [[ -r /etc/os-release ]]; then
-        source /etc/os-release
-        CURRENT_DEBIAN_CODENAME="${VERSION_CODENAME}"
-        CURRENT_DEBIAN_VERSION_ID="${VERSION_ID}"
-    fi
+        [[ -r /etc/os-release ]] && {
+            source /etc/os-release
+            CURRENT_DEBIAN_CODENAME="${VERSION_CODENAME}"
+            CURRENT_DEBIAN_VERSION_ID="${VERSION_ID}"
+        }
 }
 
 # calling os_details function
 detect_os_details
 
 show_system_info() {
-    echo "HARDN-XDR v${HARDN_VERSION} - System Information"
-    echo "================================================"
-    echo "Script Version: ${HARDN_VERSION}"
-    echo "Target OS: Debian-based systems (Debian 12+, Ubuntu 24.04+)"
-    if [[ -n "${CURRENT_DEBIAN_VERSION_ID}" && -n "${CURRENT_DEBIAN_CODENAME}" ]]; then
-        echo "Detected OS: ${ID:-Unknown} ${CURRENT_DEBIAN_VERSION_ID} (${CURRENT_DEBIAN_CODENAME})"
-    fi
-    echo "Features: STIG Compliance, Malware Detection, System Hardening"
-    echo "Security Tools: UFW, Fail2Ban, AppArmor, AIDE, rkhunter, and more"
-    echo ""
+        echo "HARDN-XDR v${HARDN_VERSION} - System Information"
+        echo "================================================"
+        echo "Script Version: ${HARDN_VERSION}"
+        echo "Target OS: Debian-based systems (Debian 12+, Ubuntu 24.04+)"
+        [[ -n "${CURRENT_DEBIAN_VERSION_ID}" && -n "${CURRENT_DEBIAN_CODENAME}" ]] && echo "Detected OS: ${ID:-Unknown} ${CURRENT_DEBIAN_VERSION_ID} (${CURRENT_DEBIAN_CODENAME})" || echo "Detected OS: Unknown"
+        echo "Features: STIG Compliance, Malware Detection, System Hardening"
+        echo "Security Tools: UFW, Fail2Ban, AppArmor, AIDE, rkhunter, and more"
+        echo ""
 }
 
 welcomemsg() {
-    echo ""
-    echo ""
-    echo "HARDN-XDR v${HARDN_VERSION} - Linux Security Hardening Sentinel"
-    echo "================================================================"
-    whiptail --title "HARDN-XDR v${HARDN_VERSION}" --msgbox "Welcome to HARDN-XDR v${HARDN_VERSION} - A Debian Security tool for System Hardening\n\nThis will apply STIG compliance, security tools, and comprehensive system hardening." 12 70
-    echo ""
-    echo "This installer will update your system first..."
-    if whiptail --title "HARDN-XDR v${HARDN_VERSION}" --yesno "Do you want to continue with the installation?" 10 60; then
-        true
-    else
-        echo "Installation cancelled by user."
-        exit 1
-    fi
+        echo ""
+        echo ""
+        echo "HARDN-XDR v${HARDN_VERSION} - Linux Security Hardening Sentinel"
+        echo "================================================================"
+        whiptail --title "HARDN-XDR v${HARDN_VERSION}" --msgbox "Welcome to HARDN-XDR v${HARDN_VERSION} - A Debian Security tool for System Hardening\n\nThis will apply STIG compliance, security tools, and comprehensive system hardening." 12 70
+        echo ""
+        echo "This installer will update your system first..."
+        if whiptail --title "HARDN-XDR v${HARDN_VERSION}" --yesno "Do you want to continue with the installation?" 10 60; then
+            true
+        else
+            echo "Installation cancelled by user."
+            exit 1
+        fi
 }
 
 preinstallmsg() {
-    echo ""
-    whiptail --title "HARDN-XDR" --msgbox "Welcome to HARDN-XDR. A Linux Security Hardening program." 10 60
-    echo "The system will be configured to ensure STIG and Security compliance."
+        echo ""
+        whiptail --title "HARDN-XDR" --msgbox "Welcome to HARDN-XDR. A Linux Security Hardening program." 10 60
+        echo "The system will be configured to ensure STIG and Security compliance."
 
 }
 
 update_system_packages() {
-    HARDN_STATUS "pass" "Updating system packages..."
-    if DEBIAN_FRONTEND=noninteractive timeout 10s apt-get -o Acquire::ForceIPv4=true update -y; then
-        HARDN_STATUS "pass" "System package list updated successfully."
-    else
-        HARDN_STATUS "warning" "apt-get update failed or timed out after 60 seconds. Check your network or apt sources, but continuing script."
-    fi
+        HARDN_STATUS "pass" "Updating system packages..."
+        if DEBIAN_FRONTEND=noninteractive timeout 10s apt -o Acquire::ForceIPv4=true update -y; then
+            HARDN_STATUS "pass" "System package list updated successfully."
+        else
+            HARDN_STATUS "warning" "apt update failed or timed out after 60 seconds. Check your network or apt sources, but continuing script."
+        fi
 }
 
 # install_package_dependencies
 install_package_dependencies() {
-    HARDN_STATUS "pass" "Installing package dependencies from ${PROGS_CSV_PATH}..."
+          HARDN_STATUS "pass" "Installing package dependencies from ${PROGS_CSV_PATH}..."
 
-    if ! command -v git >/dev/null 2>&1; then
-        HARDN_STATUS "info" "Git is not installed. Attempting to install git..."
-        if DEBIAN_FRONTEND=noninteractive apt-get install -y git >/dev/null 2>&1; then
-            HARDN_STATUS "pass" "Successfully installed git."
-        else
-            HARDN_STATUS "error" "Failed to install git. Some packages might fail to install if they require git."
-            # Do not exit, allow script to continue if git is not strictly needed by all packages
-        fi
-    else
-        HARDN_STATUS "info" "Git is already installed."
-    fi
+          if ! command -v git >/dev/null 2>&1; then
+              HARDN_STATUS "info" "Git is not installed. Attempting to install git..."
+              if DEBIAN_FRONTEND=noninteractive apt install -y git >/dev/null 2>&1; then
+                  HARDN_STATUS "pass" "Successfully installed git."
+              else
+                  HARDN_STATUS "error" "Failed to install git. Some packages might fail to install if they require git."
+                  # Do not exit, allow script to continue if git is not strictly needed by all packages
+              fi
+          else
+              HARDN_STATUS "info" "Git is already installed."
+          fi
 
-    # Check if the CSV file exists
-    if [[ ! -f "${PROGS_CSV_PATH}" ]]; then
-        HARDN_STATUS "error" "Package list file not found: ${PROGS_CSV_PATH}"
-        return 1
-    fi
+          [ ! file -f "${PROGS_CSV_PATH}" ] && HARDN_STATUS "error" "Package list file not found: ${PROGS_CSV_PATH}" && return 1
 
-    # Read the CSV file, skipping the header
-    while IFS=, read -r name version debian_min_version debian_codenames_str rest || [[ -n "$name" ]]; do
-        # Skip comments and empty lines
-        [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
+          # Read the CSV file, skipping the header
+          while IFS=, read -r name version debian_min_version debian_codenames_str rest || [[ -n "$name" ]]; do
+              # Skip comments and empty lines
+              [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
 
-        name=$(echo "$name" | xargs)
-        version=$(echo "$version" | xargs)
-        debian_min_version=$(echo "$debian_min_version" | xargs)
-        debian_codenames_str=$(echo "$debian_codenames_str" | xargs | tr -d '"') # Remove quotes from codenames string
+              name=$(echo "$name" | xargs)
+              version=$(echo "$version" | xargs)
+              debian_min_version=$(echo "$debian_min_version" | xargs)
+              debian_codenames_str=$(echo "$debian_codenames_str" | xargs | tr -d '"') # Remove quotes from codenames string
 
-        if [[ -z "$name" ]]; then
-            HARDN_STATUS "warning" "Skipping line with empty package name."
-            continue
-        fi
+              [ -z "$version" ] && HARDN_STATUS "warning" "Skipping line with empty package version." && continue
 
-        HARDN_STATUS "info" "Processing package: $name (Version: $version, Min Debian: $debian_min_version, Codenames: '$debian_codenames_str')"
+              HARDN_STATUS "info" "Processing package: $name (Version: $version, Min Debian: $debian_min_version, Codenames: '$debian_codenames_str')"
 
-        # Check OS compatibility
-        os_compatible=false
-        if [[ ",${debian_codenames_str}," == *",${CURRENT_DEBIAN_CODENAME},"* ]]; then
-            if [[ "${debian_min_version}" == "12" ]]; then
-                os_compatible=true
-            else
-                HARDN_STATUS "warning" "Skipping $name: Requires Debian version >= $debian_min_version, but current is $CURRENT_DEBIAN_VERSION_ID."
-            fi
-        else
-            HARDN_STATUS "warning" "Skipping $name: Not compatible with Debian codename $CURRENT_DEBIAN_CODENAME (requires one of: $debian_codenames_str)."
-        fi
+              # Check OS compatibility
+              os_compatible=false
+              if [[ ",${debian_codenames_str}," == *",${CURRENT_DEBIAN_CODENAME},"* ]]; then
+                  if [[ "${debian_min_version}" == "12" ]]; then
+                      os_compatible=true
+                  else
+                      HARDN_STATUS "warning" "Skipping $name: Requires Debian version >= $debian_min_version, but current is $CURRENT_DEBIAN_VERSION_ID."
+                  fi
+              else
+                  HARDN_STATUS "warning" "Skipping $name: Not compatible with Debian codename $CURRENT_DEBIAN_CODENAME (requires one of: $debian_codenames_str)."
+              fi
 
-        if ! $os_compatible; then
-            continue
-        fi
+              if ! $os_compatible; then
+                  continue
+              fi
 
-        # Installation logic based on version
-        case "$version" in
-            "latest")
-                if ! dpkg -s "$name" >/dev/null 2>&1; then
-                    HARDN_STATUS "info" "Attempting to install package: $name (latest from apt)..."
-                    if DEBIAN_FRONTEND=noninteractive apt install -y "$name"; then
-                        HARDN_STATUS "pass" "Successfully installed $name."
-                    else
-                        HARDN_STATUS "warning" "apt install failed for $name, trying apt-get..."
-                        if DEBIAN_FRONTEND=noninteractive apt-get install -y "$name"; then
-                             HARDN_STATUS "pass" "Successfully installed $name with apt-get."
-                        else
-                            HARDN_STATUS "error" "Failed to install $name with both apt and apt-get. Please check manually."
-                        fi
-                    fi
-                else
-                    HARDN_STATUS "info" "Package $name is already installed."
-                fi
-                ;;
-            "source")
-                HARDN_STATUS "warning" "INFO: 'source' installation type for $name. This type requires manual implementation in the script."
-                HARDN_STATUS "warning" "Example steps for a source install (e.g., for a package named 'mytool'):"
-                HARDN_STATUS "warning" "  1. Ensure build dependencies are installed (e.g., build-essential, cmake, etc.)."
-                HARDN_STATUS "warning" "  2. wget https://example.com/mytool-src.tar.gz -O /tmp/mytool-src.tar.gz"
-                HARDN_STATUS "warning" "  3. tar -xzf /tmp/mytool-src.tar.gz -C /tmp"
-                HARDN_STATUS "warning" "  4. cd /tmp/mytool-* || exit 1"
-                HARDN_STATUS "warning" "  5. ./configure && make && sudo make install"
-                HARDN_STATUS "warning" "Skipping $name as its specific source installation steps are not defined."
-                ;;
-            "custom")
-                HARDN_STATUS "warning" "INFO: 'custom' installation type for $name. This type requires manual implementation in the script."
-                HARDN_STATUS "warning" "Example steps for a custom install (e.g., for a package named 'mycustomapp'):"
-                HARDN_STATUS "warning" "  1. Add custom repository: curl -sSL https://example.com/repo/gpg | sudo apt-key add -"
-                HARDN_STATUS "warning" "  2. echo 'deb https://example.com/repo ${CURRENT_DEBIAN_CODENAME} main' | sudo tee /etc/apt/sources.list.d/mycustomapp.list"
-                HARDN_STATUS "warning" "  3. sudo apt update"
-                HARDN_STATUS "warning" "  4. sudo apt install -y mycustomapp"
-                HARDN_STATUS "warning" "Skipping $name as its specific custom installation steps are not defined."
-                ;;
-            *)
-                HARDN_STATUS "error" "Unknown version '$version' for package $name. Skipping..."
-                ;;
-        esac
-    done < <(tail -n +2 "${PROGS_CSV_PATH}")
-    HARDN_STATUS "pass" "Package dependency installation attempt completed."
+              # Installation logic based on version
+              case "$version" in
+                  "latest")
+                      if ! dpkg -s "$name" >/dev/null 2>&1; then
+                          HARDN_STATUS "info" "Attempting to install package: $name (latest from apt)..."
+                          if DEBIAN_FRONTEND=noninteractive apt install -y "$name"; then
+                              HARDN_STATUS "pass" "Successfully installed $name."
+                          else
+                              HARDN_STATUS "warning" "apt install failed for $name, trying apt..."
+                              if DEBIAN_FRONTEND=noninteractive apt install -y "$name"; then
+                                   HARDN_STATUS "pass" "Successfully installed $name with apt."
+                              else
+                                  HARDN_STATUS "error" "Failed to install $name with both apt and apt. Please check manually."
+                              fi
+                          fi
+                      else
+                          HARDN_STATUS "info" "Package $name is already installed."
+                      fi
+                      ;;
+                  "source")
+                      HARDN_STATUS "warning" "INFO: 'source' installation type for $name. This type requires manual implementation in the script."
+                      HARDN_STATUS "warning" "Example steps for a source install (e.g., for a package named 'mytool'):"
+                      HARDN_STATUS "warning" "  1. Ensure build dependencies are installed (e.g., build-essential, cmake, etc.)."
+                      HARDN_STATUS "warning" "  2. wget https://example.com/mytool-src.tar.gz -O /tmp/mytool-src.tar.gz"
+                      HARDN_STATUS "warning" "  3. tar -xzf /tmp/mytool-src.tar.gz -C /tmp"
+                      HARDN_STATUS "warning" "  4. cd /tmp/mytool-* || exit 1"
+                      HARDN_STATUS "warning" "  5. ./configure && make && sudo make install"
+                      HARDN_STATUS "warning" "Skipping $name as its specific source installation steps are not defined."
+                      ;;
+                  "custom")
+                      HARDN_STATUS "warning" "INFO: 'custom' installation type for $name. This type requires manual implementation in the script."
+                      HARDN_STATUS "warning" "Example steps for a custom install (e.g., for a package named 'mycustomapp'):"
+                      HARDN_STATUS "warning" "  1. Add custom repository: curl -sSL https://example.com/repo/gpg | sudo apt-key add -"
+                      HARDN_STATUS "warning" "  2. echo 'deb https://example.com/repo ${CURRENT_DEBIAN_CODENAME} main' | sudo tee /etc/apt/sources.list.d/mycustomapp.list"
+                      HARDN_STATUS "warning" "  3. sudo apt update"
+                      HARDN_STATUS "warning" "  4. sudo apt install -y mycustomapp"
+                      HARDN_STATUS "warning" "Skipping $name as its specific custom installation steps are not defined."
+                      ;;
+                  *)
+                      HARDN_STATUS "error" "Unknown version '$version' for package $name. Skipping..."
+                      ;;
+              esac
+          done < <(tail -n +2 "${PROGS_CSV_PATH}")
+          HARDN_STATUS "pass" "Package dependency installation attempt completed."
 }
 
 print_ascii_banner() {
@@ -232,34 +223,77 @@ EOF
 
 }
 
+# Setup Security
 setup_security(){
-    # OS detection is done by detect_os_details()
-    # global variables CURRENT_DEBIAN_VERSION_ID and CURRENT_DEBIAN_CODENAME are available.
-    HARDN_STATUS "pass" "Using detected system: Debian ${CURRENT_DEBIAN_VERSION_ID} (${CURRENT_DEBIAN_CODENAME}) for security setup."
+        HARDN_STATUS "pass" "Using detected system: Debian ${CURRENT_DEBIAN_VERSION_ID} (${CURRENT_DEBIAN_CODENAME}) for security setup."
 
- ####################### DELETED FILES
-    HARDN_STATUS "info" "Checking for deleted files in use..."
-    if command -v lsof >/dev/null 2>&1; then
-        deleted_files=$(lsof +L1 | awk '{print $9}' | grep -v '^$')
-        if [[ -n "$deleted_files" ]]; then
-            HARDN_STATUS "warning" "Found deleted files in use:"
-            echo "$deleted_files"
-            HARDN_STATUS "warning" "Please consider rebooting the system to release these files."
+        # Calling the individual security setup functions
+        check_deleted_files
+        setup_ntp
+        setup_usb_security
+        disable_network_protocols
+        secure_shared_memory
+        set_secure_file_permissions
+        disable_core_dumps
+        configure_automatic_updates
+        configure_secure_network_parameters
+        setup_rkhunter
+        configure_pam_password_quality
+        setup_chkrootkit
+        setup_auditd
+        setup_suricata
+
+        HARDN_STATUS "pass" "Security setup completed."
+}
+
+# Check for deleted files in use
+check_deleted_files() {
+        HARDN_STATUS "info" "Checking for deleted files in use..."
+        if command -v lsof >/dev/null 2>&1; then
+            deleted_files=$(lsof +L1 | awk '{print $9}' | grep -v '^$')
+            case "$deleted_files" in
+                "")
+                    HARDN_STATUS "pass" "No deleted files in use found."
+                    ;;
+                *)
+                    HARDN_STATUS "warning" "Found deleted files in use:"
+                    echo "$deleted_files"
+                    HARDN_STATUS "warning" "Please consider rebooting the system to release these files."
+                    ;;
+            esac
         else
-            HARDN_STATUS "pass" "No deleted files in use found."
+            HARDN_STATUS "error" "lsof command not found. Cannot check for deleted files in use."
         fi
-    else
-        HARDN_STATUS "error" "lsof command not found. Cannot check for deleted files in use."
-    fi
+}
 
-################################## ntp daemon
-    HARDN_STATUS "info" "Setting up NTP daemon..."
+# Setup NTP daemon
+setup_ntp() {
+        HARDN_STATUS "info" "Setting up NTP daemon..."
+        local ntp_servers="0.debian.pool.ntp.org 1.debian.pool.ntp.org 2.debian.pool.ntp.org 3.debian.pool.ntp.org"
+        local configured=false
 
-    local ntp_servers="0.debian.pool.ntp.org 1.debian.pool.ntp.org 2.debian.pool.ntp.org 3.debian.pool.ntp.org"
-    local configured=false
+        # Check which NTP service to configure
+        case "$(systemctl is-active systemd-timesyncd)" in
+            "active")
+                setup_systemd_timesyncd "$ntp_servers"
+                configured=true
+                ;;
+            *)
+                setup_ntpd "$ntp_servers"
+                configured=$?
+                ;;
+        esac
 
-    # Prefer systemd-timesyncd if active
-    if systemctl is-active --quiet systemd-timesyncd; then
+        if [[ "$configured" = true ]]; then
+            HARDN_STATUS "pass" "NTP configuration attempt completed."
+        else
+            HARDN_STATUS "error" "NTP configuration failed or skipped due to errors."
+        fi
+}
+
+# Setup systemd-timesyncd
+setup_systemd_timesyncd() {
+        local ntp_servers="$1"
         HARDN_STATUS "info" "systemd-timesyncd is active. Configuring..."
         local timesyncd_conf="/etc/systemd/timesyncd.conf"
         local temp_timesyncd_conf
@@ -273,125 +307,65 @@ setup_security(){
 
         cp "$timesyncd_conf" "$temp_timesyncd_conf"
 
-        # Set NTP= explicitly
-        if grep -qE "^\s*NTP=" "$temp_timesyncd_conf"; then
-            sed -i -E "s/^\s*NTP=.*/NTP=$ntp_servers/" "$temp_timesyncd_conf"
-        else
-            if grep -q "\[Time\]" "$temp_timesyncd_conf"; then
-                sed -i "/\[Time\]/a NTP=$ntp_servers" "$temp_timesyncd_conf"
-            else
-                echo -e "\n[Time]\nNTP=$ntp_servers" >> "$temp_timesyncd_conf"
-            fi
-        fi
+        # Set NTP= explicitly using case statement
+        case "$(grep -qE "^\s*NTP=" "$temp_timesyncd_conf"; echo $?)" in
+            0)  # NTP= line exists
+                sed -i -E "s/^\s*NTP=.*/NTP=$ntp_servers/" "$temp_timesyncd_conf"
+                ;;
+            *)  # NTP= line doesn't exist
+                case "$(grep -q "\[Time\]" "$temp_timesyncd_conf"; echo $?)" in
+                    0)  # [Time] section exists
+                        sed -i "/\[Time\]/a NTP=$ntp_servers" "$temp_timesyncd_conf"
+                        ;;
+                    *)  # [Time] section doesn't exist
+                        echo -e "\n[Time]\nNTP=$ntp_servers" >> "$temp_timesyncd_conf"
+                        ;;
+                esac
+                ;;
+        esac
 
         if ! cmp -s "$temp_timesyncd_conf" "$timesyncd_conf"; then
             cp "$temp_timesyncd_conf" "$timesyncd_conf"
             HARDN_STATUS "pass" "Updated $timesyncd_conf. Restarting systemd-timesyncd..."
             if systemctl restart systemd-timesyncd; then
                 HARDN_STATUS "pass" "systemd-timesyncd restarted successfully."
-                configured=true
+                check_ntp_stratum
+                return 0
             else
                 HARDN_STATUS "error" "Failed to restart systemd-timesyncd. Manual check required."
+                return 1
             fi
         else
             HARDN_STATUS "info" "No effective changes to $timesyncd_conf were needed."
-            configured=true # Already configured correctly or no changes needed
+            check_ntp_stratum
+            return 0
         fi
         rm -f "$temp_timesyncd_conf"
+}
 
+# Check NTP stratum
+check_ntp_stratum() {
         # Check NTP peer stratum and warn if not stratum 1 or 2
-        if timedatectl show-timesync --property=ServerAddress,NTP,Synchronized 2>/dev/null | grep -q "Synchronized=yes"; then
+        if command -v ntpq >/dev/null 2>&1 && ntpq -p 2>/dev/null | grep -q '^\*'; then
+            stratum=$(ntpq -c rv 2>/dev/null | grep -o 'stratum=[0-9]*' | cut -d= -f2)
+            if [[ -n "$stratum" && "$stratum" -gt 2 ]]; then
+                HARDN_STATUS "warning" "NTP is synchronized but using a high stratum peer (stratum $stratum). Consider using a lower stratum (closer to 1) for better accuracy."
+            fi
+        elif timedatectl show-timesync --property=ServerAddress,NTP,Synchronized 2>/dev/null | grep -q "Synchronized=yes"; then
             ntpstat_output=$(ntpq -c rv 2>/dev/null)
             stratum=$(echo "$ntpstat_output" | grep -o 'stratum=[0-9]*' | cut -d= -f2)
             if [[ -n "$stratum" && "$stratum" -gt 2 ]]; then
                 HARDN_STATUS "warning" "NTP is synchronized but using a high stratum peer (stratum $stratum). Consider using a lower stratum (closer to 1) for better accuracy."
             fi
         fi
+}
 
-    # Fallback to ntpd if systemd-timesyncd is not active
-    else
-        HARDN_STATUS "info" "systemd-timesyncd is not active. Checking/Configuring ntpd..."
+# Setup USB security
+setup_usb_security() {
+        HARDN_STATUS "info" "Setting up USB security..."
 
-        local ntp_package_installed=false
-        # Ensure ntp package is installed
-        if dpkg -s ntp >/dev/null 2>&1; then
-             HARDN_STATUS "pass" "ntp package is already installed."
-             ntp_package_installed=true
-        else
-             HARDN_STATUS "info" "ntp package not found. Attempting to install..."
-             # Attempt installation, check exit status
-             if apt-get update >/dev/null 2>&1 && apt-get install -y ntp >/dev/null 2>&1; then
-                 HARDN_STATUS "pass" "ntp package installed successfully."
-                 ntp_package_installed=true
-             else
-                 HARDN_STATUS "error" "Failed to install ntp package. Skipping NTP configuration."
-                 configured=false # Ensure configured is false on failure
-                 # Do not return here, allow the rest of setup_security to run
-             fi
-        fi
-
-        # Proceed with configuration ONLY if the package is installed
-        if [[ "$ntp_package_installed" = true ]]; then
-            local ntp_conf="/etc/ntp.conf"
-            # Check if the configuration file exists and is writable
-            if [[ -f "$ntp_conf" ]] && [[ -w "$ntp_conf" ]]; then
-                HARDN_STATUS "info" "Configuring $ntp_conf..."
-                # Backup existing config
-                cp "$ntp_conf" "${ntp_conf}.bak.$(date +%F-%T)" 2>/dev/null || true
-
-                # Remove existing pool/server lines and add the desired ones
-                local temp_ntp_conf
-                temp_ntp_conf=$(mktemp)
-                grep -vE "^\s*(pool|server)\s+" "$ntp_conf" > "$temp_ntp_conf"
-                {
-                    echo "# HARDN-XDR configured NTP servers"
-                    for server in $ntp_servers; do
-                        echo "pool $server iburst"
-                    done
-                } >> "$temp_ntp_conf"
-
-                # Check if changes were made before copying and restarting
-                if ! cmp -s "$temp_ntp_conf" "$ntp_conf"; then
-                    mv "$temp_ntp_conf" "$ntp_conf"
-                    HARDN_STATUS "pass" "Updated $ntp_conf with recommended pool servers."
-
-                    # Restart/Enable ntp service
-                    if systemctl enable --now ntp; then
-                        HARDN_STATUS "pass" "ntp service enabled and started successfully."
-                        configured=true
-                    else
-                        HARDN_STATUS "error" "Failed to enable/start ntp service. Manual check required."
-                        configured=false # Set to false on service failure
-                    fi
-                else
-                    HARDN_STATUS "info" "No effective changes to $ntp_conf were needed."
-                    configured=true # Already configured correctly or no changes needed
-                fi
-                rm -f "$temp_ntp_conf" # Clean up temp file
-
-                # Check NTP peer stratum and warn if not stratum 1 or 2
-                if ntpq -p 2>/dev/null | grep -q '^\*'; then
-                    stratum=$(ntpq -c rv 2>/dev/null | grep -o 'stratum=[0-9]*' | cut -d= -f2)
-                    if [[ -n "$stratum" && "$stratum" -gt 2 ]]; then
-                        HARDN_STATUS "warning" "NTP is synchronized but using a high stratum peer (stratum $stratum). Consider using a lower stratum (closer to 1) for better accuracy."
-                    fi
-                fi
-
-            else
-                # This is the error path the user saw
-                HARDN_STATUS "error" "NTP configuration file $ntp_conf not found or not writable after ntp package check/installation. Skipping NTP configuration."
-                configured=false # Set to false if config file is missing/unwritable
-            fi
-        fi # End if ntp_package_installed
-    fi # End of systemd-timesyncd else block
-
-    if [[ "$configured" = true ]]; then
-        HARDN_STATUS "pass" "NTP configuration attempt completed."
-    else
-        HARDN_STATUS "error" "NTP configuration failed or skipped due to errors."
-    fi
-
-    HARDN_STATUS "info" "Setting up security tools and configurations..."
+        # Block USB storage devices while allowing keyboards and mice
+        cat > /etc/modprobe.d/blacklist-usb-storage.conf << 'EOF'
 # HARDN-XDR USB Security Configuration
 # Block USB storage devices while allowing keyboards and mice
 blacklist usb-storage
@@ -400,62 +374,48 @@ blacklist sd_mod       # Be careful with this - may affect internal storage
 # DO NOT blacklist usbhid - needed for keyboards and mice
 EOF
 
-    HARDN_STATUS "info" "USB security policy configured to allow HID devices but block storage."
+        HARDN_STATUS "info" "USB security policy configured to allow HID devices but block storage."
 
-    # Create udev rules to further control USB devices
-    cat > /etc/udev/rules.d/99-usb-storage.rules << 'EOF'
+        # Create udev rules to further control USB devices
+        cat > /etc/udev/rules.d/99-usb-storage.rules << 'EOF'
 # Block USB storage devices while allowing keyboards and mice
 ACTION=="add", SUBSYSTEMS=="usb", ATTRS{bInterfaceClass}=="08", RUN+="/bin/sh -c 'echo 0 > /sys$DEVPATH/authorized'"
 # Interface class 08 is for mass storage
 # Interface class 03 is for HID devices (keyboards, mice) - these remain allowed
 EOF
 
-    HARDN_STATUS "info" "Additional udev rules created for USB device control."
+        HARDN_STATUS "info" "Additional udev rules created for USB device control."
 
-    # Reload rules
-    if udevadm control --reload-rules && udevadm trigger; then
-        HARDN_STATUS "pass" "Udev rules reloaded successfully."
-    else
-        HARDN_STATUS "error" "Failed to reload udev rules."
-    fi
+        udevadm control --reload-rules && udevadm trigger && HARDN_STATUS "pass" "Udev rules reloaded successfully." || HARDN_STATUS "error" "Failed to reload udev rules."
 
-    # Unload the usb-storage module
-    if lsmod | grep -q "usb_storage"; then
-        HARDN_STATUS "info" "usb-storage module is currently loaded, attempting to unload..."
-        if rmmod usb_storage >/dev/null 2>&1; then
-            HARDN_STATUS "pass" "Successfully unloaded usb-storage module."
-        else
-            HARDN_STATUS "error" "Failed to unload usb-storage module. It may be in use."
-        fi
-    else
-        HARDN_STATUS "pass" "usb-storage module is not loaded, no need to unload."
-    fi
+        lsmod | grep -q "usb_storage" && {
+            HARDN_STATUS "info" "usb-storage module is currently loaded, attempting to unload..."
+            rmmod usb_storage >/dev/null 2>&1 &&
+                HARDN_STATUS "pass" "Successfully unloaded usb-storage module." ||
+                HARDN_STATUS "error" "Failed to unload usb-storage module. It may be in use."
+        } ||
+            HARDN_STATUS "pass" "usb-storage module is not loaded, no need to unload."
 
-    # HID is enabled
-    if lsmod | grep -q "usbhid"; then
-        HARDN_STATUS "pass" "USB HID module is loaded - keyboards and mice will work."
-    else
-        HARDN_STATUS "warning" "USB HID module is not loaded - attempting to load it..."
-        if modprobe usbhid; then
-            HARDN_STATUS "pass" "Successfully loaded USB HID module."
-        else
-            HARDN_STATUS "error" "Failed to load USB HID module."
-        fi
-    fi
+        lsmod | grep -q "usbhid" &&
+            HARDN_STATUS "pass" "USB HID module is loaded - keyboards and mice will work." || {
 
-    HARDN_STATUS "pass" "USB configuration complete: keyboards and mice allowed, storage blocked."
+                  #####
+                HARDN_STATUS "warning" "USB HID module is not loaded - attempting to load it..."
+                modprobe usbhid &&
+                    HARDN_STATUS "pass" "Successfully loaded USB HID module." ||
+                    HARDN_STATUS "error" "Failed to load USB HID module."
+            }
+}
+        # Disable unnecessary network protocols in kernel
+        HARDN_STATUS "error" "Disabling unnecessary network protocols..."
 
-
-    ############################ Disable unnecessary network protocols in kernel
-    HARDN_STATUS "error" "Disabling unnecessary network protocols..."
-
-    # warn network interfaces in promiscuous mode
-    for interface in $(/sbin/ip link show | awk '$0 ~ /: / {print $2}' | sed 's/://g'); do
-        if /sbin/ip link show "$interface" | grep -q "PROMISC"; then
-            HARDN_STATUS "warning" "Interface $interface is in promiscuous mode. Review Interface."
-        fi
-    done
-    # Create comprehensive blacklist file for network protocols
+        # warn network interfaces in promiscuous mode
+        for interface in $(/sbin/ip link show | awk '$0 ~ /: / {print $2}' | sed 's/://g'); do
+            if /sbin/ip link show "$interface" | grep -q "PROMISC"; then
+                HARDN_STATUS "warning" "Interface $interface is in promiscuous mode. Review Interface."
+            fi
+        done
+    # Creating a comprehensive blacklist file for network protocols
     cat > /etc/modprobe.d/blacklist-rare-network.conf << 'EOF'
 # HARDN-XDR Blacklist for Rare/Unused Network Protocols
 # Disabled for compliance and attack surface reduction
@@ -504,47 +464,40 @@ install token-ring /bin/true
 install fddi /bin/true
 EOF
 
-    HARDN_STATUS "pass" "Network protocol hardening complete: Disabled $(grep -c "^install" /etc/modprobe.d/blacklist-rare-network.conf) protocols"
+        HARDN_STATUS "pass" "Network protocol hardening complete: Disabled $(grep -c "^install" /etc/modprobe.d/blacklist-rare-network.conf) protocols"
+        # Apply changes immediately where possible
+        sysctl -p
 
+        # Secure shared memory
+        HARDN_STATUS "info" "Securing shared memory..."
+        if ! grep -q "tmpfs /run/shm" /etc/fstab; then
+            echo "tmpfs /run/shm tmpfs defaults,noexec,nosuid,nodev 0 0" >> /etc/fstab
+        fi
 
-    # Apply changes immediately where possible
-    sysctl -p
+        # Set secure file permissions
+    	HARDN_STATUS "info" "Setting secure file permissions..."
+    	chmod 700 /root                    # root home directory - root
+    	chmod 644 /etc/passwd              # user database - readable (required)
+    	chmod 600 /etc/shadow              # password hashes - root only
+    	chmod 644 /etc/group               # group database - readable
+    	chmod 600 /etc/gshadow             # group passwords - root
+    	chmod 644 /etc/ssh/sshd_config     # SSH daemon config - readable
 
-    ############################ Secure shared memory
-    HARDN_STATUS "info" "Securing shared memory..."
-    if ! grep -q "tmpfs /run/shm" /etc/fstab; then
-        echo "tmpfs /run/shm tmpfs defaults,noexec,nosuid,nodev 0 0" >> /etc/fstab
-    fi
-
-    ########################### Set secure file permissions
-	HARDN_STATUS "info" "Setting secure file permissions..."
-	chmod 700 /root                    # root home directory - root
-	chmod 644 /etc/passwd              # user database - readable (required)
-	chmod 600 /etc/shadow              # password hashes - root only
-	chmod 644 /etc/group               # group database - readable
-	chmod 600 /etc/gshadow             # group passwords - root
-	chmod 644 /etc/ssh/sshd_config     # SSH daemon config - readable
-
-    ########################### Disable core dumps for security
-    HARDN_STATUS "info" "Disabling core dumps..."
-    if ! grep -q "hard core" /etc/security/limits.conf; then
-        echo "* hard core 0" >> /etc/security/limits.conf
-    fi
-    if ! grep -q "fs.suid_dumpable" /etc/sysctl.conf; then
-        echo "fs.suid_dumpable = 0" >> /etc/sysctl.conf
-    fi
-    if ! grep -q "kernel.core_pattern" /etc/sysctl.conf; then
-        echo "kernel.core_pattern = /dev/null" >> /etc/sysctl.conf
-    fi
-    sysctl -p >/dev/null 2>&1
-    HARDN_STATUS "pass" "Core dumps disabled: Limits set to 0, suid_dumpable set to 0, core_pattern set to /dev/null."
-    HARDN_STATUS "info" "Kernel security settings applied successfully."
-    HARDN_STATUS "info" "Starting kernel security hardening..."
+        ########################### Disable core dumps for security
+        HARDN_STATUS "info" "Disabling core dumps..."
+        grep -q "hard core" /etc/security/limits.conf || echo "* hard core 0" >> /etc/security/limits.conf
+        grep -q "fs.suid_dumpable" /etc/sysctl.conf || echo "fs.suid_dumpable = 0" >> /etc/sysctl.conf
+        grep -q "kernel.core_pattern" /etc/sysctl.conf || echo "kernel.core_pattern = /dev/null" >> /etc/sysctl.conf
+        sysctl -p >/dev/null 2>&1
+        HARDN_STATUS "pass" "Core dumps disabled: Limits set to 0, suid_dumpable set to 0, core_pattern set to /dev/null."
+        HARDN_STATUS "pass" "Core dumps disabled: Limits set to 0, suid_dumpable set to 0, core_pattern set to /dev/null."
+        HARDN_STATUS "info" "Kernel security settings applied successfully."
+        HARDN_STATUS "info" "Starting kernel security hardening..."
 
 
 
-    ############################### automatic security updates
-    HARDN_STATUS "info" "Configuring automatic security updates for Debian-based systems..."
+        # automatic security updates
+        HARDN_STATUS "info" "Configuring automatic security updates for Debian-based systems..."
 
     case "${ID}" in # Use ${ID} from /etc/os-release
         "debian")
@@ -583,182 +536,180 @@ EOF
             ;;
     esac
 
-    ########################### Secure network parameters
-    HARDN_STATUS "info" "Configuring secure network parameters..."
-    {
-        echo "net.ipv4.ip_forward = 0"
-        echo "net.ipv4.conf.all.send_redirects = 0"
-        echo "net.ipv4.conf.default.send_redirects = 0"
-        echo "net.ipv4.conf.all.accept_redirects = 0"
-        echo "net.ipv4.conf.default.accept_redirects = 0"
-        echo "net.ipv4.conf.all.secure_redirects = 0"
-        echo "net.ipv4.conf.default.secure_redirects = 0"
-        echo "net.ipv4.conf.all.log_martians = 1"
-        echo "net.ipv4.conf.default.log_martians = 1"
-        echo "net.ipv4.icmp_echo_ignore_broadcasts = 1"
-        echo "net.ipv4.icmp_ignore_bogus_error_responses = 1"
-        echo "net.ipv4.tcp_syncookies = 1"
-        echo "net.ipv6.conf.all.disable_ipv6 = 1"
-        echo "net.ipv6.conf.default.disable_ipv6 = 1"
-    } >> /etc/sysctl.conf
+        # Secure network parameters
+        HARDN_STATUS "info" "Configuring secure network parameters..."
+        {
+            echo "net.ipv4.ip_forward = 0"
+            echo "net.ipv4.conf.all.send_redirects = 0"
+            echo "net.ipv4.conf.default.send_redirects = 0"
+            echo "net.ipv4.conf.all.accept_redirects = 0"
+            echo "net.ipv4.conf.default.accept_redirects = 0"
+            echo "net.ipv4.conf.all.secure_redirects = 0"
+            echo "net.ipv4.conf.default.secure_redirects = 0"
+            echo "net.ipv4.conf.all.log_martians = 1"
+            echo "net.ipv4.conf.default.log_martians = 1"
+            echo "net.ipv4.icmp_echo_ignore_broadcasts = 1"
+            echo "net.ipv4.icmp_ignore_bogus_error_responses = 1"
+            echo "net.ipv4.tcp_syncookies = 1"
+            echo "net.ipv6.conf.all.disable_ipv6 = 1"
+            echo "net.ipv6.conf.default.disable_ipv6 = 1"
+        } >> /etc/sysctl.conf
 
 
-    #################################### rkhunter
-    HARDN_STATUS "info" "Configuring rkhunter..."
-    if ! dpkg -s rkhunter >/dev/null 2>&1; then
-        HARDN_STATUS "info" "rkhunter package not found. Attempting to install via apt..."
-        if apt-get install -y rkhunter >/dev/null 2>&1; then
-            HARDN_STATUS "pass" "rkhunter installed successfully via apt."
-        else
-            HARDN_STATUS "warning" "Warning: Failed to install rkhunter via apt. Attempting to download and install from GitHub as a fallback..."
-            # Ensure git is installed for GitHub clone
-            if ! command -v git >/dev/null 2>&1; then
-                HARDN_STATUS "info" "Installing git..."
-                apt-get install -y git >/dev/null 2>&1 || {
-                    HARDN_STATUS "error" "Error: Failed to install git. Cannot proceed with GitHub install."
-                    # Skip GitHub install if git fails
-                    return
+        # rkhunter
+        HARDN_STATUS "info" "Configuring rkhunter..."
+        if ! dpkg -s rkhunter >/dev/null 2>&1; then
+            HARDN_STATUS "info" "rkhunter package not found. Attempting to install via apt..."
+            apt install -y rkhunter >/dev/null 2>&1 && {
+                HARDN_STATUS "pass" "rkhunter installed successfully via apt."
+            } || {
+                HARDN_STATUS "warning" "Warning: Failed to install rkhunter via apt. Attempting to download and install from GitHub as a fallback..."
+                # Ensure git is installed for GitHub clone
+                command -v git >/dev/null 2>&1 || {
+                    HARDN_STATUS "info" "Installing git..."
+                    apt install -y git >/dev/null 2>&1 || {
+                        HARDN_STATUS "error" "Error: Failed to install git. Cannot proceed with GitHub install."
+                        # Skip GitHub install if git fails
+                        return
+                    }
                 }
-            fi
+              }
 
-            cd /tmp || { HARDN_STATUS "error" "Error: Cannot change directory to /tmp."; return 1; }
-            HARDN_STATUS "info" "Cloning rkhunter from GitHub..."
-            if git clone https://github.com/rootkitHunter/rkhunter.git rkhunter_github_clone >/dev/null 2>&1; then
-                cd rkhunter_github_clone || { HARDN_STATUS "error" "Error: Cannot change directory to rkhunter_github_clone."; return 1; }
-                HARDN_STATUS "info" "Running rkhunter installer..."
-                if ./installer.sh --install >/dev/null 2>&1; then
-                    HARDN_STATUS "pass" "rkhunter installed successfully from GitHub."
-                else
-                    HARDN_STATUS "error" "Error: rkhunter installer failed."
-                fi
-                cd .. && rm -rf rkhunter_github_clone
-            else
-                HARDN_STATUS "error" "Error: Failed to clone rkhunter from GitHub."
-            fi
+                cd /tmp || { HARDN_STATUS "error" "Error: Cannot change directory to /tmp."; return 1; }
+                HARDN_STATUS "info" "Cloning rkhunter from GitHub..."
+        HARDN_STATUS "info" "Running rkhunter installer..."
+        ./installer.sh --install >/dev/null 2>&1 &&
+            HARDN_STATUS "pass" "rkhunter installed successfully from GitHub." ||
+            HARDN_STATUS "error" "Error: rkhunter installer failed."
+        cd .. && rm -rf rkhunter_github_clone
+            HARDN_STATUS "pass" "rkhunter package is already installed."
         fi
-    else
-        HARDN_STATUS "pass" "rkhunter package is already installed."
-    fi
 
-    if command -v rkhunter >/dev/null 2>&1; then
+        if command -v rkhunter >/dev/null 2>&1; then
 
-        sed -i 's/#CRON_DAILY_RUN=""/CRON_DAILY_RUN="true"/' /etc/default/rkhunter 2>/dev/null || true
+            sed -i 's/#CRON_DAILY_RUN=""/CRON_DAILY_RUN="true"/' /etc/default/rkhunter 2>/dev/null || true
 
 
-        rkhunter --configcheck >/dev/null 2>&1 || true
-        rkhunter --update --nocolors >/dev/null 2>&1 || {
-            HARDN_STATUS "warning" "Warning: Failed to update rkhunter database."
-        }
-        rkhunter --propupd --nocolors >/dev/null 2>&1 || {
-            HARDN_STATUS "warning" "Warning: Failed to update rkhunter properties."
-        }
-    else
-        HARDN_STATUS "warning" "Warning: rkhunter not found, skipping configuration."
-    fi
+            rkhunter --configcheck >/dev/null 2>&1 || true
+            rkhunter --update --nocolors >/dev/null 2>&1 || {
+                HARDN_STATUS "warning" "Warning: Failed to update rkhunter database."
+            }
+            rkhunter --propupd --nocolors >/dev/null 2>&1 || {
+                HARDN_STATUS "warning" "Warning: Failed to update rkhunter properties."
+            }
+        else
+            HARDN_STATUS "warning" "Warning: rkhunter not found, skipping configuration."
+        fi
 
-    ######################## STIG-PAM Password Quality
-    HARDN_STATUS "info" "Configuring PAM password quality..."
-    if [ -f /etc/pam.d/common-password ]; then
-        if ! grep -q "pam_pwquality.so" /etc/pam.d/common-password; then
+        # STIG-PAM Password Quality
+        HARDN_STATUS "info" "Configuring PAM password quality..."
+        if [ -f /etc/pam.d/common-password ]; then
             echo "password requisite pam_pwquality.so retry=3 minlen=8 difok=3 ucredit=-1 lcredit=-1 dcredit=-1 ocredit=-1" >> /etc/pam.d/common-password
+            HARDN_STATUS "pass" "PAM password quality configured successfully."
+        else
+            HARDN_STATUS "warning" "Warning: /etc/pam.d/common-password not found, skipping PAM configuration..."
         fi
-    else
-        HARDN_STATUS "warning" "Warning: /etc/pam.d/common-password not found, skipping PAM configuration..."
-    fi
 
-    ####################################### chkrootkit
-    HARDN_STATUS "info" "Configuring chkrootkit..."
-    if ! command -v chkrootkit >/dev/null 2>&1; then
-        HARDN_STATUS "info" "chkrootkit package not found. Attempting to download and install from chkrootkit.org..."
-        download_url="https://www.chkrootkit.org/dl/chkrootkit.tar.gz"
-        download_dir="/tmp/chkrootkit_install"
-        tar_file="$download_dir/chkrootkit.tar.gz"
+        # chkrootkit
+        HARDN_STATUS "info" "Configuring chkrootkit..."
+        if ! command -v chkrootkit >/dev/null 2>&1; then
+            HARDN_STATUS "info" "chkrootkit package not found. Attempting to download and install from chkrootkit.org..."
+            download_url="https://www.chkrootkit.org/dl/chkrootkit.tar.gz"
+            download_dir="/tmp/chkrootkit_install"
+            tar_file="$download_dir/chkrootkit.tar.gz"
 
-        mkdir -p "$download_dir"
-        cd "$download_dir" || { HARDN_STATUS "error" "Error: Cannot change directory to $download_dir."; return 1; }
+            mkdir -p "$download_dir"
+            cd "$download_dir" || { HARDN_STATUS "error" "Error: Cannot change directory to $download_dir."; return 1; }
 
-        HARDN_STATUS "info" "Downloading $download_url..."
-        if wget -q "$download_url" -O "$tar_file"; then
-            HARDN_STATUS "pass" "Download successful."
-            HARDN_STATUS "info" "Extracting..."
-            if tar -xzf "$tar_file" -C "$download_dir"; then
-                HARDN_STATUS "pass" "Extraction successful."
-                extracted_dir=$(tar -tf "$tar_file" | head -1 | cut -f1 -d/)
-                if [[ -d "$download_dir/$extracted_dir" ]]; then
-                    cd "$download_dir/$extracted_dir" || { HARDN_STATUS "error" "Error: Cannot change directory to extracted folder."; return 1; }
-                    HARDN_STATUS "info" "Running chkrootkit installer..."
-                    if [[ -f "chkrootkit" ]]; then
-                        cp chkrootkit /usr/local/sbin/
-                        chmod +x /usr/local/sbin/chkrootkit
-                        if [[ -f "chkrootkit.8" ]]; then
-                            cp chkrootkit.8 /usr/local/share/man/man8/
-                            mandb >/dev/null 2>&1 || true
-                        fi
-                        HARDN_STATUS "pass" "chkrootkit installed to /usr/local/sbin."
-                    else
-                        HARDN_STATUS "error" "Error: chkrootkit script not found in extracted directory."
-                    fi
+            HARDN_STATUS "info" "Downloading $download_url..."
+            if wget -q "$download_url" -O "$tar_file"; then
+                HARDN_STATUS "pass" "Download successful."
+                HARDN_STATUS "info" "Extracting..."
+                if tar -xzf "$tar_file" -C "$download_dir"; then
+                    HARDN_STATUS "pass" "Extraction successful."
+                    extracted_dir=$(tar -tf "$tar_file" | head -1 | cut -f1 -d/)
+
+                    case true in
+                        $([ -d "$download_dir/$extracted_dir" ])*)
+                            cd "$download_dir/$extracted_dir" || { HARDN_STATUS "error" "Error: Cannot change directory to extracted folder."; return 1; }
+                            HARDN_STATUS "info" "Running chkrootkit installer..."
+
+                            case true in
+                                $([ -f "chkrootkit" ])*)
+                                    cp chkrootkit /usr/local/sbin/
+                                    chmod +x /usr/local/sbin/chkrootkit
+                                    if [[ -f "chkrootkit.8" ]]; then
+                                        cp chkrootkit.8 /usr/local/share/man/man8/
+                                        mandb >/dev/null 2>&1 || true
+                                    fi
+                                    HARDN_STATUS "pass" "chkrootkit installed to /usr/local/sbin."
+                                    ;;
+                                *)
+                                    HARDN_STATUS "error" "Error: chkrootkit script not found in extracted directory."
+                                    ;;
+                            esac
+                            ;;
+                        *)
+                            HARDN_STATUS "error" "Error: Extracted directory not found."
+                            ;;
+                    esac
                 else
-                    HARDN_STATUS "error" "Error: Extracted directory not found."
+                    HARDN_STATUS "error" "Error: Failed to extract $tar_file."
                 fi
             else
-                HARDN_STATUS "error" "Error: Failed to extract $tar_file."
+                HARDN_STATUS "error" "Error: Failed to download $download_url."
             fi
+            cd /tmp || true
+            rm -rf "$download_dir"
         else
-            HARDN_STATUS "error" "Error: Failed to download $download_url."
+            HARDN_STATUS "pass" "chkrootkit package is already installed."
         fi
-        cd /tmp || true
-        rm -rf "$download_dir"
-    else
-        HARDN_STATUS "pass" "chkrootkit package is already installed."
-    fi
-
-    if command -v chkrootkit >/dev/null 2>&1; then
-        if ! grep -q "/usr/local/sbin/chkrootkit" /etc/crontab; then
-            echo "0 3 * * * root /usr/local/sbin/chkrootkit 2>&1 | logger -t chkrootkit" >> /etc/crontab
-            HARDN_STATUS "pass" "chkrootkit daily check added to crontab."
-        else
-            HARDN_STATUS "info" "chkrootkit already in crontab."
-        fi
-    else
-        HARDN_STATUS "error" "chkrootkit command not found after installation attempt, skipping cron configuration."
-    fi
-
-    ###################################### auditd
-    HARDN_STATUS "info" "Configuring auditd..."
-    if dpkg -s auditd >/dev/null 2>&1; then
-        HARDN_STATUS "pass" "auditd package is installed."
-        if systemctl list-unit-files --type=service | grep -q '^auditd\.service'; then
-            HARDN_STATUS "info" "Enabling and starting auditd service..."
-            systemctl enable auditd >/dev/null 2>&1
-            systemctl start auditd >/dev/null 2>&1
-            if systemctl is-active --quiet auditd; then
-                HARDN_STATUS "pass" "auditd service enabled and started."
+        if command -v chkrootkit >/dev/null 2>&1; then
+            if ! grep -q "/usr/local/sbin/chkrootkit" /etc/crontab; then
+                echo "0 3 * * * root /usr/local/sbin/chkrootkit 2>&1 | logger -t chkrootkit" >> /etc/crontab
+                HARDN_STATUS "pass" "chkrootkit daily check added to crontab."
             else
-                HARDN_STATUS "warning" "Warning: Failed to start auditd service."
+                HARDN_STATUS "info" "chkrootkit already in crontab."
             fi
         else
-            HARDN_STATUS "warning" "Warning: auditd.service not found, skipping service enable/start."
+            HARDN_STATUS "error" "chkrootkit command not found after installation attempt, skipping cron configuration."
         fi
+
+        # Auditd
+                HARDN_STATUS "info" "Configuring auditd..."
+                if systemctl list-unit-files | grep -q auditd.service; then
+                    [ -f /etc/audit/auditd.conf ] &&  echo "max_log_file=100" >> /etc/audit/auditd.conf; echo "max_log_files=5" >> /etc/audit/audit || { HARDN_STATUS "warning" "Warning: /etc/audit/auditd.conf not found, skipping auditd configuration..."; }
+                    systemctl enable auditd >/dev/null 2>&1
+                    systemctl start auditd >/dev/null 2>&1
+
+                    case "$(systemctl is-active auditd)" in
+                        "active")
+                            HARDN_STATUS "pass" "auditd service enabled and started."
+                            ;;
+                        *)
+                            HARDN_STATUS "warning" "Warning: Failed to start auditd service."
+                            ;;
+                    esac
+                else
+                    HARDN_STATUS "warning" "Warning: auditd.service not found, skipping service enable/start."
+                fi
+
         # Enable auditing via auditctl
         if command -v auditctl >/dev/null 2>&1; then
             HARDN_STATUS "info" "Attempting to enable auditd system via auditctl..."
-            if auditctl -e 1 >/dev/null 2>&1; then
-                HARDN_STATUS "pass" "auditd system enabled successfully via auditctl."
-            else
-                HARDN_STATUS "error" "Failed to enable auditd system via auditctl. Check auditd status and configuration."
-            fi
+
+            case "$(auditctl -e 1 >/dev/null 2>&1; echo $?)" in
+                0)
+                    HARDN_STATUS "pass" "auditd system enabled successfully via auditctl."
+                    ;;
+                *)
+                    HARDN_STATUS "error" "Failed to enable auditd system via auditctl. Check auditd status and configuration."
+                    ;;
+            esac
         else
             HARDN_STATUS "warning" "Warning: auditctl command not found. Cannot verify/enable audit system status."
         fi
-        # Configure specific audit rules (/etc/audit/audit.rules) based on STIG
-        HARDN_STATUS "info" "Configuring optimized auditd rules based on STIG..."
-        audit_rules_file="/etc/audit/audit.rules"
-        if [ -f "$audit_rules_file" ]; then
-            cp "$audit_rules_file" "${audit_rules_file}.bak.$(date +%F-%T)" 2>/dev/null || true
-            HARDN_STATUS "pass" "Backed up existing audit rules to $audit_rules_file.bak."
-        fi
-        cat > "$audit_rules_file" << 'EOF'
+        cat > "$audit_rules" <<EOF
 # This file is automatically generated by HARDN-XDR for STIG compliance.
 # Any manual changes may be overwritten.
 #
@@ -894,9 +845,7 @@ EOF
 # Audit final immutable rule
 -e 2
 EOF
-        # END OF RULESET
-
-        # Load the new rules
+        # Loading new rules to auditd
         HARDN_STATUS "info" "Loading new auditd rules..."
         if auditctl -R "$audit_rules_file" >/dev/null 2>&1; then
             HARDN_STATUS "pass" "New auditd rules loaded successfully."
@@ -910,9 +859,7 @@ EOF
     fi
     HARDN_STATUS "pass" "auditd configuration attempt completed."
 
-
-
-    ####################################### Suricata
+    # Suricata
     HARDN_STATUS "error" "Checking and configuring Suricata..."
 
     if dpkg -s suricata >/dev/null 2>&1; then
@@ -928,7 +875,7 @@ EOF
 
 
         HARDN_STATUS "info" "Installing Suricata build dependencies..."
-        if ! apt-get update >/dev/null 2>&1 || ! apt-get install -y \
+        if ! apt update >/dev/null 2>&1 || ! apt install -y \
             build-essential libpcap-dev libnet1-dev libyaml-0-2 libyaml-dev zlib1g zlib1g-dev \
             libcap-ng-dev libmagic-dev libjansson-dev libnss3-dev liblz4-dev libtool \
             libnfnetlink-dev libevent-dev pkg-config libhiredis-dev libczmq-dev \
@@ -1116,72 +1063,65 @@ EOF
     HARDN_STATUS "error" "Setting up YARA rules..."
 
     # Check if YARA command exists (implies installation)
-    if ! command -v yara >/dev/null 2>&1; then
-        HARDN_STATUS "warning" "Warning: YARA command not found. Skipping rule setup."
+        if ! command -v yara >/dev/null 2>&1; then
+            HARDN_STATUS "warning" "Warning: YARA command not found. Skipping rule setup."
+        else
+            HARDN_STATUS "pass" "YARA command found."
+            HARDN_STATUS "info" "Creating YARA rules directory..."
+            mkdir -p /etc/yara/rules
+            chmod 755 /etc/yara/rules # Ensure directory is accessible
 
-
-    else
-        HARDN_STATUS "pass" "YARA command found."
-        HARDN_STATUS "info" "Creating YARA rules directory..."
-        mkdir -p /etc/yara/rules
-        chmod 755 /etc/yara/rules # Ensure directory is accessible
-
-        HARDN_STATUS "info" "Checking for git..."
-        if ! command -v git >/dev/null 2>&1; then
-            HARDN_STATUS "info" "git not found. Attempting to install..."
-            if apt-get update >/dev/null 2>&1 && apt-get install -y git >/dev/null 2>&1; then
-                HARDN_STATUS "pass" "git installed successfully."
+            HARDN_STATUS "info" "Checking for git..."
+            if ! command -v git >/dev/null 2>&1; then
+                HARDN_STATUS "info" "git not found. Attempting to install..."
+                if apt update >/dev/null 2>&1 && apt install -y git >/dev/null 2>&1; then
+                    HARDN_STATUS "pass" "git installed successfully."
+                else
+                    HARDN_STATUS "error" "Error: Failed to install git. Cannot download YARA rules."
+                    return 1 # Exit this section
+                fi
             else
-                HARDN_STATUS "error" "Error: Failed to install git. Cannot download YARA rules."
+                HARDN_STATUS "pass" "git command found."
+            fi
+
+            local rules_repo_url="https://github.com/Yara-Rules/rules.git"
+            local temp_dir
+            temp_dir=$(mktemp -d -t yara-rules-XXXXXXXX)
+
+            if [[ ! -d "$temp_dir" ]]; then
+                HARDN_STATUS "error" "Error: Failed to create temporary directory for YARA rules."
                 return 1 # Exit this section
             fi
-        else
-            HARDN_STATUS "pass" "git command found."
-        fi
 
-        local rules_repo_url="https://github.com/Yara-Rules/rules.git"
-        local temp_dir
-        temp_dir=$(mktemp -d -t yara-rules-XXXXXXXX)
+            HARDN_STATUS "info" "Cloning YARA rules from $rules_repo_url to $temp_dir..."
+            if git clone --depth 1 "$rules_repo_url" "$temp_dir" >/dev/null 2>&1; then
+                HARDN_STATUS "pass" "YARA rules cloned successfully."
 
-        if [[ ! -d "$temp_dir" ]]; then
-            HARDN_STATUS "error" "Error: Failed to create temporary directory for YARA rules."
-            return 1 # Exit this section
-        fi
+                HARDN_STATUS "info" "Copying .yar rules to /etc/yara/rules/..."
+                local copied_count=0
+                # Find all .yar files in the cloned repo and copy them
+                while IFS= read -r -d $'\0' yar_file; do
+                    if cp "$yar_file" /etc/yara/rules/; then
+                        ((copied_count++))
+                    else
+                        HARDN_STATUS "warning" "Warning: Failed to copy rule file: $yar_file"
+                    fi
+                done < <(find "$temp_dir" -name "*.yar" -print0)
 
-        HARDN_STATUS "info" "Cloning YARA rules from $rules_repo_url to $temp_dir..."
-        if git clone --depth 1 "$rules_repo_url" "$temp_dir" >/dev/null 2>&1; then
-            HARDN_STATUS "pass" "YARA rules cloned successfully."
+              [ "$copied_count" -gt 0 ] && HARDN_STATUS "pass" "Copied $copied_count YARA rule files to /etc/yara/rules/." || HARDN_STATUS "warning" "Warning: No.yar files found or copied from the repository."
 
-            HARDN_STATUS "info" "Copying .yar rules to /etc/yara/rules/..."
-            local copied_count=0
-            # Find all .yar files in the cloned repo and copy them
-            while IFS= read -r -d $'\0' yar_file; do
-                if cp "$yar_file" /etc/yara/rules/; then
-                    ((copied_count++))
-                else
-                    HARDN_STATUS "warning" "Warning: Failed to copy rule file: $yar_file"
-                fi
-            done < <(find "$temp_dir" -name "*.yar" -print0)
-
-            if [[ "$copied_count" -gt 0 ]]; then
-                HARDN_STATUS "pass" "Copied $copied_count YARA rule files to /etc/yara/rules/."
             else
-                 HARDN_STATUS "warning" "Warning: No .yar files found or copied from the repository."
+                HARDN_STATUS "error" "Error: Failed to clone YARA rules repository."
             fi
 
-        else
-            HARDN_STATUS "error" "Error: Failed to clone YARA rules repository."
+            HARDN_STATUS "info" "Cleaning up temporary directory $temp_dir..."
+            rm -rf "$temp_dir"
+            HARDN_STATUS "pass" "Cleanup complete."
+
+            HARDN_STATUS "pass" "YARA rules setup attempt completed."
         fi
 
-        HARDN_STATUS "info" "Cleaning up temporary directory $temp_dir..."
-        rm -rf "$temp_dir"
-        HARDN_STATUS "pass" "Cleanup complete."
-
-        HARDN_STATUS "pass" "YARA rules setup attempt completed."
-    fi
-
-
-    ######################### STIG banner (/etc/issue.net)
+    # STIG banner (/etc/issue.net)
     HARDN_STATUS "error" "Configuring STIG compliant banner for remote logins (/etc/issue.net)..."
     local banner_net_file="/etc/issue.net"
     if [ -f "$banner_net_file" ]; then
@@ -1207,422 +1147,387 @@ EOF
 }
 
 restrict_compilers() {
-    HARDN_STATUS "error" "Restricting compiler access to root only (HRDN-7222)..."
+        HARDN_STATUS "error" "Restricting compiler access to root only (HRDN-7222)..."
+        local compilers=("/usr/bin/gcc" "/usr/bin/g++" "/usr/bin/make" "/usr/bin/cc" "/usr/bin/c++" "/usr/bin/as" "/usr/bin/ld")
+        local num_compilers=${#compilers[@]}
 
-    local compilers
-    compilers="/usr/bin/gcc /usr/bin/g++ /usr/bin/make /usr/bin/cc /usr/bin/c++ /usr/bin/as /usr/bin/ld"
-    for bin in $compilers; do
-        if [[ -f "$bin" ]]; then
-            chmod 755 "$bin"
-            chown root:root "$bin"
-            HARDN_STATUS "pass" "Set $bin to 755 root:root (default for compilers)."
-        fi
-    done
-
+        for((i=0;i<num_compilers;i++)); do
+            [[ -f "${compilers[i]}" ]] && {
+                chmod 755 "${compilers[i]}"
+                chown root:root "${compilers[i]}"
+                HARDN_STATUS "pass" "Set ${compilers[i]} to 755 root:root (default for compilers)."
+            }
+        done
 }
 
 grub_security() {
+        GRUB_CFG="/etc/grub.d/41_custom"
+        GRUB_DEFAULT="/etc/default/grub"
+        GRUB_USER="hardnxdr"
+        CUSTOM_CFG="/boot/grub/custom.cfg"
+        GRUB_MAIN_CFG="/boot/grub/grub.cfg"
+        PASSWORD_FILE="/root/.hardn-grub-password"
 
-    GRUB_CFG="/etc/grub.d/41_custom"
-    GRUB_DEFAULT="/etc/default/grub"
-    GRUB_USER="hardnxdr"
-    CUSTOM_CFG="/boot/grub/custom.cfg"
-    GRUB_MAIN_CFG="/boot/grub/grub.cfg"
-    PASSWORD_FILE="/root/.hardn-grub-password"
+        echo "=== GRUB Security Dry-Run Test ==="
+        echo "[INFO] This will test GRUB security configuration WITHOUT making changes"
+        echo
 
-    echo "=== GRUB Security Dry-Run Test ==="
-    echo "[INFO] This will test GRUB security configuration WITHOUT making changes"
-    echo
+        # Check if running in a VM
+        if grep -q "VMware Virtual" /proc/version; then
+            echo "[INFO] Detected VMware Virtual Machine"
+            echo "[INFO] GRUB security configuration is not required for VMware VMs."
+            return 0
+        fi
 
-    # Check if running in a VM
-    if systemd-detect-virt --quiet --vm; then
-        echo "[INFO] Running in a VM, skipping GRUB security configuration."
-        echo "[INFO] This script is not intended to be run inside a VM."
+        # Check system type
+        if [ -d /sys/firmware/efi ];
+            SYSTEM_TYPE="EFI"
+            echo "[INFO] Detected EFI boot system"
+            echo "[INFO] GRUB security configuration is not required for EFI systems."
+            return 0
+        else
+            SYSTEM_TYPE="BIOS"
+            echo "[INFO] Detected BIOS boot system"
+        fi
+
+        # Test password generation
+        echo "[TEST] Testing GRUB password generation..."
+        TEST_PASS=$(openssl rand -base64 12 | tr -d '\n')
+        HASH=$(echo -e "$TEST_PASS\n$TEST_PASS" | grub-mkpasswd-pbkdf2 | grep "PBKDF2 hash of your password is" | sed 's/PBKDF2 hash of your password is //')
+
+          if [ -z "$HASH" ]; then
+              echo "[ERROR] Failed to generate password hash"
+              return 1
+          fi
+              echo "[SUCCESS] Password hash generated: ${HASH:0:50}..."
+
+          # Test file access
+          echo "[TEST] Checking file permissions and access..."
+          [ -w "$GRUB_CFG" ] && echo "[SUCCESS] Can write to custom GRUB config: $GRUB_CFG" || echo "[ERROR] Cannot write to custom GRUB config: $GRUB_CFG"
+          [ -w "$GRUB_MAIN_CFG" ] && echo "[SUCCESS] Can write to main GRUB config: $GRUB_MAIN_CFG" || echo "[ERROR] Cannot write to main GRUB config: $GRUB_MAIN_CFG"
+
+
+        # Test update-grub
+        echo "[TEST] Testing GRUB update capability..."
+        [ command -v update-grub >/dev/null 2>&1 ] && echo "[SUCCESS] update-grub available" || echo "[ERROR] update-grub not available"
+
+        # Show what would be created
+        echo
+        echo "=== Configuration Preview ==="
+        echo "[INFO] Custom config would be created at: $CUSTOM_CFG"
+        echo "[INFO] Content would be:"
+        echo "---"
+        echo "set superusers=\"$GRUB_USER\""
+        echo "password_pbkdf2 $GRUB_USER $HASH"
+        echo "---"
+
+        echo
+        echo "[INFO] Custom GRUB script would be updated at: $GRUB_CFG"
+        echo "[INFO] Files would be backed up with .backup extension"
+        echo "[INFO] Permissions would be set to 600 (root only)"
+
+        echo
+        echo "[INFO] Password would be saved (in real script) to: $PASSWORD_FILE"
+
+        echo
+        echo "=== Summary ==="
+        echo "[SUCCESS] All tests passed! GRUB security configuration is ready."
+        echo "[INFO] To apply the configuration, run:"
+        echo "  sudo /usr/share/hardn/tools/stig/grub.sh"
+        echo "[WARNING] Make sure to remember the password you set!"
+        echo "[INFO] GRUB Username: $GRUB_USER"
+        echo "[INFO] GRUB Password saved to: $PASSWORD_FILE"
+
         return 0
-    fi
-
-    # Check system type
-    if [ -d /sys/firmware/efi ]; then
-        SYSTEM_TYPE="EFI"
-        echo "[INFO] Detected EFI boot system"
-        echo "[INFO] GRUB security configuration is not required for EFI systems."
-        return 0
-    else
-        SYSTEM_TYPE="BIOS"
-        echo "[INFO] Detected BIOS boot system"
-    fi
-
-    # Test password generation
-    echo "[TEST] Testing GRUB password generation..."
-    TEST_PASS=$(openssl rand -base64 12 | tr -d '\n')
-    HASH=$(echo -e "$TEST_PASS\n$TEST_PASS" | grub-mkpasswd-pbkdf2 | grep "PBKDF2 hash of your password is" | sed 's/PBKDF2 hash of your password is //')
-
-    if [ -z "$HASH" ]; then
-        echo "[ERROR] Failed to generate password hash"
-        return 1
-    else
-        echo "[SUCCESS] Password hash generated: ${HASH:0:50}..."
-    fi
-
-    # Test file access
-    echo "[TEST] Checking file permissions and access..."
-    if [ -w "$GRUB_CFG" ]; then
-        echo "[SUCCESS] Can write to custom GRUB config: $GRUB_CFG"
-    else
-        echo "[ERROR] Cannot write to custom GRUB config: $GRUB_CFG"
-    fi
-
-    if [ -w "$GRUB_MAIN_CFG" ]; then
-        echo "[SUCCESS] Can write to main GRUB config: $GRUB_MAIN_CFG"
-    else
-        echo "[ERROR] Cannot write to main GRUB config: $GRUB_MAIN_CFG"
-    fi
-
-    # Test update-grub
-    echo "[TEST] Testing GRUB update capability..."
-    if command -v update-grub >/dev/null 2>&1; then
-        echo "[SUCCESS] update-grub available"
-    else
-        echo "[ERROR] update-grub not available"
-    fi
-
-    # Show what would be created
-    echo
-    echo "=== Configuration Preview ==="
-    echo "[INFO] Custom config would be created at: $CUSTOM_CFG"
-    echo "[INFO] Content would be:"
-    echo "---"
-    echo "set superusers=\"$GRUB_USER\""
-    echo "password_pbkdf2 $GRUB_USER $HASH"
-    echo "---"
-
-    echo
-    echo "[INFO] Custom GRUB script would be updated at: $GRUB_CFG"
-    echo "[INFO] Files would be backed up with .backup extension"
-    echo "[INFO] Permissions would be set to 600 (root only)"
-
-    echo
-    echo "[INFO] Password would be saved (in real script) to: $PASSWORD_FILE"
-
-    echo
-    echo "=== Summary ==="
-    echo "[SUCCESS] All tests passed! GRUB security configuration is ready."
-    echo "[INFO] To apply the configuration, run:"
-    echo "  sudo /usr/share/hardn/tools/stig/grub.sh"
-    echo "[WARNING] Make sure to remember the password you set!"
-    echo "[INFO] GRUB Username: $GRUB_USER"
-    echo "[INFO] GRUB Password saved to: $PASSWORD_FILE"
-
-    return 0
 }
-
-# End of setup_grub_password
 
 # Binary Format Support (binfmt). Disable running non-native binaries
 disable_binfmt_misc() {
-    HARDN_STATUS "error" "Checking/Disabling non-native binary format support (binfmt_misc)..."
-    if mount | grep -q 'binfmt_misc'; then
-        HARDN_STATUS "info" "binfmt_misc is mounted. Attempting to unmount..."
-        if umount /proc/sys/fs/binfmt_misc; then
-            HARDN_STATUS "pass" "binfmt_misc unmounted successfully."
-        else
-            HARDN_STATUS "error" "Failed to unmount binfmt_misc. It might be busy or not a separate mount."
+        HARDN_STATUS "error" "Checking/Disabling non-native binary format support (binfmt_misc)..."
+        if mount | grep -q 'binfmt_misc'; then
+            HARDN_STATUS "info" "binfmt_misc is mounted. Attempting to unmount..."
+            if umount /proc/sys/fs/binfmt_misc; then
+                HARDN_STATUS "pass" "binfmt_misc unmounted successfully."
+            else
+                HARDN_STATUS "error" "Failed to unmount binfmt_misc. It might be busy or not a separate mount."
+            fi
         fi
-    fi
 
-    if lsmod | grep -q "^binfmt_misc"; then
-        HARDN_STATUS "info" "binfmt_misc module is loaded. Attempting to unload..."
-        if rmmod binfmt_misc; then
-            HARDN_STATUS "pass" "binfmt_misc module unloaded successfully."
+        if lsmod | grep -q "^binfmt_misc"; then
+            HARDN_STATUS "info" "binfmt_misc module is loaded. Attempting to unload..."
+            if rmmod binfmt_misc; then
+                HARDN_STATUS "pass" "binfmt_misc module unloaded successfully."
+            else
+                HARDN_STATUS "error" "Failed to unload binfmt_misc module. It might be in use or built-in."
+            fi
         else
-            HARDN_STATUS "error" "Failed to unload binfmt_misc module. It might be in use or built-in."
+            HARDN_STATUS "pass" "binfmt_misc module is not currently loaded."
         fi
-    else
-        HARDN_STATUS "pass" "binfmt_misc module is not currently loaded."
-    fi
 
-    # Prevent module from loading on boot
-    local modprobe_conf="/etc/modprobe.d/disable-binfmt_misc.conf"
+        # Prevent module from loading on boot
+        local modprobe_conf="/etc/modprobe.d/disable-binfmt_misc.conf"
 
-    if [[ ! -f "$modprobe_conf" ]]; then
-        echo "install binfmt_misc /bin/true" > "$modprobe_conf"
-        HARDN_STATUS "pass" "Added modprobe rule to prevent binfmt_misc from loading on boot: $modprobe_conf"
+        if [[ ! -f "$modprobe_conf" ]]; then
+            echo "install binfmt_misc /bin/true" > "$modprobe_conf"
+            HARDN_STATUS "pass" "Added modprobe rule to prevent binfmt_misc from loading on boot: $modprobe_conf"
 
-    else
-        if ! grep -q "install binfmt_misc /bin/true" "$modprobe_conf"; then
-            echo "install binfmt_misc /bin/true" >> "$modprobe_conf"
-            HARDN_STATUS "pass" "Appended modprobe rule to prevent binfmt_misc from loading to $modprobe_conf"
         else
-            HARDN_STATUS "info" "Modprobe rule to disable binfmt_misc already exists in $modprobe_conf."
+            if ! grep -q "install binfmt_misc /bin/true" "$modprobe_conf"; then
+                echo "install binfmt_misc /bin/true" >> "$modprobe_conf"
+                HARDN_STATUS "pass" "Appended modprobe rule to prevent binfmt_misc from loading to $modprobe_conf"
+            else
+                HARDN_STATUS "info" "Modprobe rule to disable binfmt_misc already exists in $modprobe_conf."
+            fi
         fi
-    fi
-    whiptail --infobox "Non-native binary format support (binfmt_misc) checked/disabled." 7 70
+        whiptail --infobox "Non-native binary format support (binfmt_misc) checked/disabled." 7 70
 }
 
 disable_firewire_drivers() {
-    HARDN_STATUS "error" "Checking/Disabling FireWire (IEEE 1394) drivers..."
-    local firewire_modules changed blacklist_file
-	firewire_modules="firewire_core firewire_ohci firewire_sbp2"
-    changed=0
+        HARDN_STATUS "error" "Checking/Disabling FireWire (IEEE 1394) drivers..."
+        local firewire_modules_array=("firewire_core" "firewire_ohci" "firewire_sbp2")
+        local num_modules=${#firewire_modules_array[@]}
+        local changed=0
+        local blacklist_file="/etc/modprobe.d/blacklist-firewire.conf"
 
-    for module_name in $firewire_modules; do
-        if lsmod | grep -q "^${module_name}"; then
-            HARDN_STATUS "info" "FireWire module $module_name is loaded. Attempting to unload..."
-            if rmmod "$module_name"; then
-                HARDN_STATUS "pass" "FireWire module $module_name unloaded successfully."
+        [ ! -f "$blacklist_file" ] && {touch "$blacklist_file" || HARDN_STATUS "pass" "Created FireWire blacklist file: $blacklist_file"}
+
+        for((i=0;i<num_modules;i++)); do
+            module_name=${firewire_modules_array[i]}
+
+            grep -q "blacklist $module_name" "$blacklist_file" || {
+                echo "blacklist $module_name" >> "$blacklist_file"
+                HARDN_STATUS "pass" "Blacklisted FireWire module $module_name in $blacklist_file"
                 changed=1
-            else
-                HARDN_STATUS "error" "Failed to unload FireWire module $module_name. It might be in use or built-in."
-            fi
-        else
-            HARDN_STATUS "info" "FireWire module $module_name is not currently loaded."
-        fi
-    done
+            } && {
+                HARDN_STATUS "info" "FireWire module $module_name already blacklisted in $blacklist_file."
+            }
+        done
 
-    blacklist_file="/etc/modprobe.d/blacklist-firewire.conf"
-    if [[ ! -f "$blacklist_file" ]]; then
-        touch "$blacklist_file"
-        HARDN_STATUS "pass" "Created FireWire blacklist file: $blacklist_file"
-    fi
-
-    for module_name in $firewire_modules; do
-        if ! grep -q "blacklist $module_name" "$blacklist_file"; then
-            echo "blacklist $module_name" >> "$blacklist_file"
-            HARDN_STATUS "pass" "Blacklisted FireWire module $module_name in $blacklist_file"
-            changed=1
-        else
-            HARDN_STATUS "info" "FireWire module $module_name already blacklisted in $blacklist_file."
-        fi
-    done
-
-    if [[ "$changed" -eq 1 ]]; then
-        whiptail --infobox "FireWire drivers checked. Unloaded and/or blacklisted where applicable." 7 70
-    else
-        whiptail --infobox "FireWire drivers checked. No changes made (likely already disabled/not present)." 8 70
-    fi
-
+        [[ "$changed" -eq 1 ]] && {
+            whiptail --infobox "FireWire drivers checked. Unloaded and/or blacklisted where applicable." 7 70
+        } || {
+            whiptail --infobox "FireWire drivers checked. No changes made (likely already disabled/not present)." 8 70
+        }
 }
 
 purge_old_packages() {
-    HARDN_STATUS "error" "Purging configuration files of old/removed packages..."
-    local packages_to_purge
-    packages_to_purge=$(dpkg -l | grep '^rc' | awk '{print $2}')
+        HARDN_STATUS "error" "Purging configuration files of old/removed packages..."
+        local packages_to_purge
+        packages_to_purge=$(dpkg -l | grep '^rc' | awk '{print $2}')
 
-    if [[ "$packages_to_purge" ]]; then
-        HARDN_STATUS "info" "Found the following packages with leftover configuration files to purge:"
-        echo "$packages_to_purge"
+        if [[ "$packages_to_purge" ]]; then
+            HARDN_STATUS "info" "Found the following packages with leftover configuration files to purge:"
+            echo "$packages_to_purge"
 
-        if command -v whiptail >/dev/null; then
-            whiptail --title "Packages to Purge" --msgbox "The following packages have leftover configuration files that will be purged:\n\n$packages_to_purge" 15 70
+            command -v whiptail >/dev/null && whiptail --title "Packages to Purge" --msgbox "The following packages have leftover configuration files that will be purged:\n\n$packages_to_purge" 15 70
+
+            for pkg in $packages_to_purge; do
+                HARDN_STATUS "error" "Purging $pkg..."
+                if apt purge -y "$pkg"; then
+                    HARDN_STATUS "pass" "Successfully purged $pkg."
+                else
+                    HARDN_STATUS "error" "Failed to purge $pkg. Trying dpkg --purge..."
+                    if dpkg --purge "$pkg"; then
+                        HARDN_STATUS "pass" "Successfully purged $pkg with dpkg."
+                    else
+                        HARDN_STATUS "error" "Failed to purge $pkg with dpkg as well."
+                    fi
+                fi
+            done
+            whiptail --infobox "Purged configuration files for removed packages." 7 70
+        else
+            HARDN_STATUS "pass" "No old/removed packages with leftover configuration files found to purge."
+            whiptail --infobox "No leftover package configurations to purge." 7 70
         fi
 
-        for pkg in $packages_to_purge; do
-            HARDN_STATUS "error" "Purging $pkg..."
-            if apt-get purge -y "$pkg"; then
-                HARDN_STATUS "pass" "Successfully purged $pkg."
-            else
-                HARDN_STATUS "error" "Failed to purge $pkg. Trying dpkg --purge..."
-                if dpkg --purge "$pkg"; then
-                    HARDN_STATUS "pass" "Successfully purged $pkg with dpkg."
-                else
-                    HARDN_STATUS "error" "Failed to purge $pkg with dpkg as well."
-                fi
-            fi
-        done
-        whiptail --infobox "Purged configuration files for removed packages." 7 70
-    else
-        HARDN_STATUS "pass" "No old/removed packages with leftover configuration files found to purge."
-        whiptail --infobox "No leftover package configurations to purge." 7 70
-    fi
-
-    HARDN_STATUS "error" "Running apt-get autoremove and clean to free up space..."
-    apt-get autoremove -y
-    apt-get clean
-    whiptail --infobox "Apt cache cleaned." 7 70
+        HARDN_STATUS "error" "Running apt autoremove and clean to free up space..."
+        apt autoremove -y
+        apt clean
+        whiptail --infobox "Apt cache cleaned." 7 70
 }
 
 # ENABLE NAME SERVERS FUNCTION: Let user decide DNS, but place recommendation. ADD TO /DOCS
 enable_nameservers() {
-    HARDN_STATUS "info" "Configuring DNS nameservers..."
+        HARDN_STATUS "info" "Configuring DNS nameservers..."
 
-    # Define DNS providers with their primary and secondary servers
-    declare -A dns_providers=(
-        ["Quad9"]="9.9.9.9 149.112.112.112"
-        ["Cloudflare"]="1.1.1.1 1.0.0.1"
-        ["Google"]="8.8.8.8 8.8.4.4"
-        ["OpenDNS"]="208.67.222.222 208.67.220.220"
-        ["CleanBrowsing"]="185.228.168.9 185.228.169.9"
-        ["UncensoredDNS"]="91.239.100.100 89.233.43.71"
-    )
+        # Define DNS providers with their primary and secondary servers
+        declare -A dns_providers=(
+            ["Quad9"]="9.9.9.9 149.112.112.112"
+            ["Cloudflare"]="1.1.1.1 1.0.0.1"
+            ["Google"]="8.8.8.8 8.8.4.4"
+            ["OpenDNS"]="208.67.222.222 208.67.220.220"
+            ["CleanBrowsing"]="185.228.168.9 185.228.169.9"
+            ["UncensoredDNS"]="91.239.100.100 89.233.43.71"
+        )
 
-    # Create menu options for whiptail
+        # Create menu options for whiptail
 
-    # A through selection of recommended Secured DNS provider
-    local selected_provider
-    selected_provider=$(whiptail --title "DNS Provider Selection" --menu \
-        "Select a DNS provider for enhanced security and privacy:" 18 78 6 \
-        "Quad9" "DNSSEC, Malware Blocking, No Logging (Recommended)" \
-        "Cloudflare" "DNSSEC, Privacy-First, No Logging" \
-        "Google" "DNSSEC, Fast, Reliable (some logging)" \
-        "OpenDNS" "DNSSEC, Custom Filtering, Logging (opt-in)" \
-        "CleanBrowsing" "Family-safe, Malware Block, DNSSEC" \
-        "UncensoredDNS" "DNSSEC, No Logging, Europe-based, Privacy Focus" \
-        3>&1 1>&2 2>&3)
+        # A through selection of recommended Secured DNS provider
+        local selected_provider
+        selected_provider=$(whiptail --title "DNS Provider Selection" --menu \
+            "Select a DNS provider for enhanced security and privacy:" 18 78 6 \
+            "Quad9" "DNSSEC, Malware Blocking, No Logging (Recommended)" \
+            "Cloudflare" "DNSSEC, Privacy-First, No Logging" \
+            "Google" "DNSSEC, Fast, Reliable (some logging)" \
+            "OpenDNS" "DNSSEC, Custom Filtering, Logging (opt-in)" \
+            "CleanBrowsing" "Family-safe, Malware Block, DNSSEC" \
+            "UncensoredDNS" "DNSSEC, No Logging, Europe-based, Privacy Focus" \
+            3>&1 1>&2 2>&3)
 
-    # Exit if user cancels
-    if [[ -z "$selected_provider" ]]; then
-        HARDN_STATUS "warning" "DNS configuration cancelled by user. Using system defaults."
-        return 0
-    fi
-
-    # Get the selected DNS servers
-    read -r primary_dns secondary_dns <<< "${dns_providers[$selected_provider]}"
-    HARDN_STATUS "info" "Selected $selected_provider DNS: Primary $primary_dns, Secondary $secondary_dns"
-
-    local resolv_conf="/etc/resolv.conf"
-    local configured_persistently=false
-    local changes_made=false
-
-    # Check for systemd-resolved
-    if systemctl is-active --quiet systemd-resolved && \
-       [[ -L "$resolv_conf" ]] && \
-       (readlink "$resolv_conf" | grep -qE "systemd/resolve/(stub-resolv.conf|resolv.conf)"); then
-        HARDN_STATUS "info" "systemd-resolved is active and manages $resolv_conf."
-        local resolved_conf_systemd="/etc/systemd/resolved.conf"
-        local temp_resolved_conf=$(mktemp)
-
-        if [[ ! -f "$resolved_conf_systemd" ]]; then
-            HARDN_STATUS "info" "Creating $resolved_conf_systemd as it does not exist."
-            echo "[Resolve]" > "$resolved_conf_systemd"
-            chmod 644 "$resolved_conf_systemd"
+        # Exit if user cancels
+        if [[ -z "$selected_provider" ]]; then
+            HARDN_STATUS "warning" "DNS configuration cancelled by user. Using system defaults."
+            return 0
         fi
 
-        cp "$resolved_conf_systemd" "$temp_resolved_conf"
+        # Get the selected DNS servers
+        read -r primary_dns secondary_dns <<< "${dns_providers[$selected_provider]}"
+        HARDN_STATUS "info" "Selected $selected_provider DNS: Primary $primary_dns, Secondary $secondary_dns"
 
-        # Set DNS= and FallbackDNS= explicitly
-        if grep -qE "^\s*DNS=" "$temp_resolved_conf"; then
-            sed -i -E "s/^\s*DNS=.*/DNS=$primary_dns $secondary_dns/" "$temp_resolved_conf"
-        else
-            if grep -q "\[Resolve\]" "$temp_resolved_conf"; then
-                sed -i "/\[Resolve\]/a DNS=$primary_dns $secondary_dns" "$temp_resolved_conf"
-            else
-                echo -e "\n[Resolve]\nDNS=$primary_dns $secondary_dns" >> "$temp_resolved_conf"
+        local resolv_conf="/etc/resolv.conf"
+        local configured_persistently=false
+        local changes_made=false
+
+        # Check for systemd-resolved
+        if systemctl is-active --quiet systemd-resolved && \
+           [[ -L "$resolv_conf" ]] && \
+           (readlink "$resolv_conf" | grep -qE "systemd/resolve/(stub-resolv.conf|resolv.conf)"); then
+            HARDN_STATUS "info" "systemd-resolved is active and manages $resolv_conf."
+            local resolved_conf_systemd="/etc/systemd/resolved.conf"
+            local temp_resolved_conf=$(mktemp)
+
+            if [[ ! -f "$resolved_conf_systemd" ]]; then
+                HARDN_STATUS "info" "Creating $resolved_conf_systemd as it does not exist."
+                echo "[Resolve]" > "$resolved_conf_systemd"
+                chmod 644 "$resolved_conf_systemd"
             fi
-        fi
 
-        # Set FallbackDNS as well (optional, for redundancy)
-        if grep -qE "^\s*FallbackDNS=" "$temp_resolved_conf"; then
-            sed -i -E "s/^\s*FallbackDNS=.*/FallbackDNS=$secondary_dns $primary_dns/" "$temp_resolved_conf"
-        else
-            if grep -q "\[Resolve\]" "$temp_resolved_conf"; then
-                sed -i "/\[Resolve\]/a FallbackDNS=$secondary_dns $primary_dns" "$temp_resolved_conf"
+            cp "$resolved_conf_systemd" "$temp_resolved_conf"
+
+            # Set DNS= and FallbackDNS= explicitly
+            if grep -qE "^\s*DNS=" "$temp_resolved_conf"; then
+                sed -i -E "s/^\s*DNS=.*/DNS=$primary_dns $secondary_dns/" "$temp_resolved_conf"
             else
-                echo -e "\n[Resolve]\nFallbackDNS=$secondary_dns $primary_dns" >> "$temp_resolved_conf"
+                if grep -q "\[Resolve\]" "$temp_resolved_conf"; then
+                    sed -i "/\[Resolve\]/a DNS=$primary_dns $secondary_dns" "$temp_resolved_conf"
+                else
+                    echo -e "\n[Resolve]\nDNS=$primary_dns $secondary_dns" >> "$temp_resolved_conf"
+                fi
             fi
-        fi
 
-        # Add DNSSEC support if available
-        if grep -qE "^\s*DNSSEC=" "$temp_resolved_conf"; then
-            sed -i -E "s/^\s*DNSSEC=.*/DNSSEC=allow-downgrade/" "$temp_resolved_conf"
-        else
-            if grep -q "\[Resolve\]" "$temp_resolved_conf"; then
-                sed -i "/\[Resolve\]/a DNSSEC=allow-downgrade" "$temp_resolved_conf"
+            # Set FallbackDNS as well (optional, for redundancy)
+            if grep -qE "^\s*FallbackDNS=" "$temp_resolved_conf"; then
+                sed -i -E "s/^\s*FallbackDNS=.*/FallbackDNS=$secondary_dns $primary_dns/" "$temp_resolved_conf"
             else
-                echo -e "\n[Resolve]\nDNSSEC=allow-downgrade" >> "$temp_resolved_conf"
+                if grep -q "\[Resolve\]" "$temp_resolved_conf"; then
+                    sed -i "/\[Resolve\]/a FallbackDNS=$secondary_dns $primary_dns" "$temp_resolved_conf"
+                else
+                    echo -e "\n[Resolve]\nFallbackDNS=$secondary_dns $primary_dns" >> "$temp_resolved_conf"
+                fi
             fi
-        fi
 
-        if ! cmp -s "$temp_resolved_conf" "$resolved_conf_systemd"; then
-            cp "$temp_resolved_conf" "$resolved_conf_systemd"
-            HARDN_STATUS "pass" "Updated $resolved_conf_systemd. Restarting systemd-resolved..."
-            if systemctl restart systemd-resolved; then
-                HARDN_STATUS "pass" "systemd-resolved restarted successfully."
-                configured_persistently=true
-                changes_made=true
+            # Add DNSSEC support if available
+            if grep -qE "^\s*DNSSEC=" "$temp_resolved_conf"; then
+                sed -i -E "s/^\s*DNSSEC=.*/DNSSEC=allow-downgrade/" "$temp_resolved_conf"
             else
-                HARDN_STATUS "error" "Failed to restart systemd-resolved. Manual check required."
+                if grep -q "\[Resolve\]" "$temp_resolved_conf"; then
+                    sed -i "/\[Resolve\]/a DNSSEC=allow-downgrade" "$temp_resolved_conf"
+                else
+                    echo -e "\n[Resolve]\nDNSSEC=allow-downgrade" >> "$temp_resolved_conf"
+                fi
             fi
-        else
-            HARDN_STATUS "info" "No effective changes to $resolved_conf_systemd were needed."
-        fi
-        rm -f "$temp_resolved_conf"
-    fi
 
-    # Check for NetworkManager
-    if [[ "$configured_persistently" = false ]] && command -v nmcli >/dev/null 2>&1; then
-        HARDN_STATUS "info" "NetworkManager detected. Attempting to configure DNS via NetworkManager..."
-
-        # Get the current active connection
-        local active_conn
-        active_conn=$(nmcli -t -f NAME,TYPE,DEVICE,STATE c show --active | grep -E ':(ethernet|wifi):.+:activated' | head -1 | cut -d: -f1)
-
-        if [[ -n "$active_conn" ]]; then
-            HARDN_STATUS "info" "Configuring DNS for active connection: $active_conn"
-            if nmcli c modify "$active_conn" ipv4.dns "$primary_dns,$secondary_dns" ipv4.ignore-auto-dns yes; then
-                HARDN_STATUS "pass" "NetworkManager DNS configuration updated."
-
-                # Restart the connection to apply changes
-                if nmcli c down "$active_conn" && nmcli c up "$active_conn"; then
-                    HARDN_STATUS "pass" "NetworkManager connection restarted successfully."
+            if ! cmp -s "$temp_resolved_conf" "$resolved_conf_systemd"; then
+                cp "$temp_resolved_conf" "$resolved_conf_systemd"
+                HARDN_STATUS "pass" "Updated $resolved_conf_systemd. Restarting systemd-resolved..."
+                if systemctl restart systemd-resolved; then
+                    HARDN_STATUS "pass" "systemd-resolved restarted successfully."
                     configured_persistently=true
                     changes_made=true
                 else
-                    HARDN_STATUS "error" "Failed to restart NetworkManager connection. Changes may not be applied."
+                    HARDN_STATUS "error" "Failed to restart systemd-resolved. Manual check required."
                 fi
             else
-                HARDN_STATUS "error" "Failed to update NetworkManager DNS configuration."
+                HARDN_STATUS "info" "No effective changes to $resolved_conf_systemd were needed."
             fi
-        else
-            HARDN_STATUS "warning" "No active NetworkManager connection found."
+            rm -f "$temp_resolved_conf"
         fi
-    fi
 
-    # If not using systemd-resolved or NetworkManager, try to set directly in /etc/resolv.conf
-    if [[ "$configured_persistently" = false ]]; then
-        HARDN_STATUS "info" "Attempting direct modification of $resolv_conf."
-        if [[ -f "$resolv_conf" ]] && [[ -w "$resolv_conf" ]]; then
-            # Backup the original file
-            cp "$resolv_conf" "${resolv_conf}.bak.$(date +%Y%m%d%H%M%S)"
+        # Check for NetworkManager
+        if [[ "$configured_persistently" = false ]] && command -v nmcli >/dev/null 2>&1; then
+            HARDN_STATUS "info" "NetworkManager detected. Attempting to configure DNS via NetworkManager..."
 
-            # Create a new resolv.conf with our DNS servers
-            {
-                echo "# Generated by HARDN-XDR"
-                echo "# DNS Provider: $selected_provider"
-                echo "nameserver $primary_dns"
-                echo "nameserver $secondary_dns"
-                # Preserve any options or search domains from the original file
-                grep -E "^\s*(options|search|domain)" "$resolv_conf" || true
-            } > "${resolv_conf}.new"
+            # Get the current active connection
+            local active_conn
+            active_conn=$(nmcli -t -f NAME,TYPE,DEVICE,STATE c show --active | grep -E ':(ethernet|wifi):.+:activated' | head -1 | cut -d: -f1)
 
-            # Replace the original file
-            mv "${resolv_conf}.new" "$resolv_conf"
-            chmod 644 "$resolv_conf"
+            if [[ -n "$active_conn" ]]; then
+                HARDN_STATUS "info" "Configuring DNS for active connection: $active_conn"
+                if nmcli c modify "$active_conn" ipv4.dns "$primary_dns,$secondary_dns" ipv4.ignore-auto-dns yes; then
+                    HARDN_STATUS "pass" "NetworkManager DNS configuration updated."
 
-            HARDN_STATUS "pass" "Set $selected_provider DNS servers in $resolv_conf."
-            HARDN_STATUS "warning" "Warning: Direct changes to $resolv_conf might be overwritten by network management tools."
-            changes_made=true
-
-            # Make resolv.conf immutable to prevent overwriting
-            if whiptail --title "Protect DNS Configuration" --yesno "Would you like to make $resolv_conf immutable to prevent other services from changing it?\n\nNote: This may interfere with DHCP or VPN services." 10 78; then
-                if chattr +i "$resolv_conf" 2>/dev/null; then
-                    HARDN_STATUS "pass" "Made $resolv_conf immutable to prevent changes."
+                    # Restart the connection to apply changes
+                    if nmcli c down "$active_conn" && nmcli c up "$active_conn"; then
+                        HARDN_STATUS "pass" "NetworkManager connection restarted successfully."
+                        configured_persistently=true
+                        changes_made=true
+                    else
+                        HARDN_STATUS "error" "Failed to restart NetworkManager connection. Changes may not be applied."
+                    fi
                 else
-                    HARDN_STATUS "error" "Failed to make $resolv_conf immutable. Manual protection may be needed."
+                    HARDN_STATUS "error" "Failed to update NetworkManager DNS configuration."
                 fi
+            else
+                HARDN_STATUS "warning" "No active NetworkManager connection found."
             fi
-        else
-            HARDN_STATUS "error" "Could not modify $resolv_conf (file not found or not writable)."
         fi
-    fi
 
-    # Create a persistent hook for dhclient if it exists
-    if command -v dhclient >/dev/null 2>&1; then
-        local dhclient_dir="/etc/dhcp/dhclient-enter-hooks.d"
-        local hook_file="$dhclient_dir/hardn-dns"
+        # If not using systemd-resolved or NetworkManager, try to set directly in /etc/resolv.conf
+        if [[ "$configured_persistently" = false ]]; then
+            HARDN_STATUS "info" "Attempting direct modification of $resolv_conf."
+            if [[ -f "$resolv_conf" ]] && [[ -w "$resolv_conf" ]]; then
+                # Backup the original file
+                cp "$resolv_conf" "${resolv_conf}.bak.$(date +%Y%m%d%H%M%S)"
 
-        if [[ ! -d "$dhclient_dir" ]]; then
-            mkdir -p "$dhclient_dir"
+                # Create a new resolv.conf with our DNS servers
+                {
+                    echo "# Generated by HARDN-XDR"
+                    echo "# DNS Provider: $selected_provider"
+                    echo "nameserver $primary_dns"
+                    echo "nameserver $secondary_dns"
+                    # Preserve any options or search domains from the original file
+                    grep -E "^\s*(options|search|domain)" "$resolv_conf" || true
+                } > "${resolv_conf}.new"
+
+                # Replace the original file
+                mv "${resolv_conf}.new" "$resolv_conf"
+                chmod 644 "$resolv_conf"
+
+                HARDN_STATUS "pass" "Set $selected_provider DNS servers in $resolv_conf."
+                HARDN_STATUS "warning" "Warning: Direct changes to $resolv_conf might be overwritten by network management tools."
+                changes_made=true
+
+                # Make resolv.conf immutable to prevent overwriting
+                if whiptail --title "Protect DNS Configuration" --yesno "Would you like to make $resolv_conf immutable to prevent other services from changing it?\n\nNote: This may interfere with DHCP or VPN services." 10 78; then
+                    if chattr +i "$resolv_conf" 2>/dev/null; then
+                        HARDN_STATUS "pass" "Made $resolv_conf immutable to prevent changes."
+                    else
+                        HARDN_STATUS "error" "Failed to make $resolv_conf immutable. Manual protection may be needed."
+                    fi
+                fi
+            else
+                HARDN_STATUS "error" "Could not modify $resolv_conf (file not found or not writable)."
+            fi
         fi
+
+        # Create a persistent hook for dhclient if it exists
+        if command -v dhclient >/dev/null 2>&1; then
+            local dhclient_dir="/etc/dhcp/dhclient-enter-hooks.d"
+            local hook_file="$dhclient_dir/hardn-dns"
+
+            if [[ ! -d "$dhclient_dir" ]]; then
+                mkdir -p "$dhclient_dir"
+            fi
 
         cat > "$hook_file" << EOF
 #!/bin/sh
@@ -1672,7 +1577,7 @@ enable_process_accounting_and_sysstat() {
         HARDN_STATUS "info" "Checking and installing acct (process accounting)..."
         if ! dpkg -s acct >/dev/null 2>&1 && ! dpkg -s psacct >/dev/null 2>&1; then
             whiptail --infobox "Installing acct (process accounting)..." 7 60
-            if apt-get install -y acct; then
+            if apt install -y acct; then
                 HARDN_STATUS "pass" "acct installed successfully."
                 changed_acct=true
             else
@@ -1697,7 +1602,7 @@ enable_process_accounting_and_sysstat() {
         HARDN_STATUS "info" "Checking and installing sysstat..."
         if ! dpkg -s sysstat >/dev/null 2>&1; then
             whiptail --infobox "Installing sysstat..." 7 60
-            if apt-get install -y sysstat; then
+            if apt install -y sysstat; then
                 HARDN_STATUS "pass" "sysstat installed successfully."
                 changed_sysstat=true
             else
@@ -1747,130 +1652,126 @@ enable_process_accounting_and_sysstat() {
     }
 
 apply_kernel_security() {
-    HARDN_STATUS "info" "Applying kernel security settings..."
+        HARDN_STATUS "info" "Applying kernel security settings..."
 
-    declare -A kernel_params=(
-        # === Console and Memory Protections ===
-        ["dev.tty.ldisc_autoload"]="0"
-        ["fs.protected_fifos"]="2"
-        ["fs.protected_hardlinks"]="1"
-        ["fs.protected_regular"]="2"
-        ["fs.protected_symlinks"]="1"
-        ["fs.suid_dumpable"]="0"
+        declare -A kernel_params=(
+            # === Console and Memory Protections ===
+            ["dev.tty.ldisc_autoload"]="0"
+            ["fs.protected_fifos"]="2"
+            ["fs.protected_hardlinks"]="1"
+            ["fs.protected_regular"]="2"
+            ["fs.protected_symlinks"]="1"
+            ["fs.suid_dumpable"]="0"
 
-        # === Kernel Info Leak Prevention ===
-        ["kernel.core_uses_pid"]="1"
-        ["kernel.ctrl-alt-del"]="0"
-        ["kernel.dmesg_restrict"]="1"
-        ["kernel.kptr_restrict"]="2"
+            # === Kernel Info Leak Prevention ===
+            ["kernel.core_uses_pid"]="1"
+            ["kernel.ctrl-alt-del"]="0"
+            ["kernel.dmesg_restrict"]="1"
+            ["kernel.kptr_restrict"]="2"
 
-        # === Performance & BPF ===
-        ["kernel.perf_event_paranoid"]="2"
-        ["kernel.randomize_va_space"]="2"
-        ["kernel.unprivileged_bpf_disabled"]="1"
+            # === Performance & BPF ===
+            ["kernel.perf_event_paranoid"]="2"
+            ["kernel.randomize_va_space"]="2"
+            ["kernel.unprivileged_bpf_disabled"]="1"
 
-        # === BPF JIT Hardening ===
-        ["net.core.bpf_jit_harden"]="2"
+            # === BPF JIT Hardening ===
+            ["net.core.bpf_jit_harden"]="2"
 
-        # === IPv4 Hardening ===
-        ["net.ipv4.conf.all.accept_redirects"]="0"
-        ["net.ipv4.conf.default.accept_redirects"]="0"
-        ["net.ipv4.conf.all.accept_source_route"]="0"
-        ["net.ipv4.conf.default.accept_source_route"]="0"
-        ["net.ipv4.conf.all.bootp_relay"]="0"
-        ["net.ipv4.conf.all.forwarding"]="0"
-        ["net.ipv4.conf.all.log_martians"]="1"
-        ["net.ipv4.conf.default.log_martians"]="1"
-        ["net.ipv4.conf.all.mc_forwarding"]="0"
-        ["net.ipv4.conf.all.proxy_arp"]="0"
-        ["net.ipv4.conf.all.rp_filter"]="1"
-        ["net.ipv4.conf.all.send_redirects"]="0"
-        ["net.ipv4.conf.default.send_redirects"]="0"
-        ["net.ipv4.icmp_echo_ignore_broadcasts"]="1"
-        ["net.ipv4.icmp_ignore_bogus_error_responses"]="1"
-        ["net.ipv4.tcp_syncookies"]="1"
-        ["net.ipv4.tcp_timestamps"]="1"
+            # === IPv4 Hardening ===
+            ["net.ipv4.conf.all.accept_redirects"]="0"
+            ["net.ipv4.conf.default.accept_redirects"]="0"
+            ["net.ipv4.conf.all.accept_source_route"]="0"
+            ["net.ipv4.conf.default.accept_source_route"]="0"
+            ["net.ipv4.conf.all.bootp_relay"]="0"
+            ["net.ipv4.conf.all.forwarding"]="0"
+            ["net.ipv4.conf.all.log_martians"]="1"
+            ["net.ipv4.conf.default.log_martians"]="1"
+            ["net.ipv4.conf.all.mc_forwarding"]="0"
+            ["net.ipv4.conf.all.proxy_arp"]="0"
+            ["net.ipv4.conf.all.rp_filter"]="1"
+            ["net.ipv4.conf.all.send_redirects"]="0"
+            ["net.ipv4.conf.default.send_redirects"]="0"
+            ["net.ipv4.icmp_echo_ignore_broadcasts"]="1"
+            ["net.ipv4.icmp_ignore_bogus_error_responses"]="1"
+            ["net.ipv4.tcp_syncookies"]="1"
+            ["net.ipv4.tcp_timestamps"]="1"
 
-        # === IPv6 Hardening ===
-        ["net.ipv6.conf.all.accept_redirects"]="0"
-        ["net.ipv6.conf.default.accept_redirects"]="0"
-        ["net.ipv6.conf.all.accept_source_route"]="0"
-        ["net.ipv6.conf.default.accept_source_route"]="0"
-    )
+            # === IPv6 Hardening ===
+            ["net.ipv6.conf.all.accept_redirects"]="0"
+            ["net.ipv6.conf.default.accept_redirects"]="0"
+            ["net.ipv6.conf.all.accept_source_route"]="0"
+            ["net.ipv6.conf.default.accept_source_route"]="0"
+        )
 
-    for param in "${!kernel_params[@]}"; do
-        expected_value="${kernel_params[$param]}"
-        current_value=$(sysctl -n "$param" 2>/dev/null)
+        for param in "${!kernel_params[@]}"; do
+            expected_value="${kernel_params[$param]}"
+            current_value=$(sysctl -n "$param" 2>/dev/null)
 
-        if [[ -z "$current_value" ]]; then
-            HARDN_STATUS "warning" "Kernel parameter '$param' not found. Skipping."
-            continue
-        fi
+            if [[ -z "$current_value" ]]; then
+                HARDN_STATUS "warning" "Kernel parameter '$param' not found. Skipping."
+                continue
+            fi
 
-        if [[ "$current_value" != "$expected_value" ]]; then
-            HARDN_STATUS "info" "Setting '$param' to '$expected_value' (was '$current_value')..."
-            sed -i "/^$param\s*=/d" /etc/sysctl.conf
-            echo "$param = $expected_value" >> /etc/sysctl.conf
-            sysctl -w "$param=$expected_value" >/dev/null 2>&1
-            HARDN_STATUS "pass" "'$param' set to '$expected_value'."
-        else
-            HARDN_STATUS "info" "'$param' is already set to '$expected_value'."
-        fi
-    done
+            if [[ "$current_value" != "$expected_value" ]]; then
+                HARDN_STATUS "info" "Setting '$param' to '$expected_value' (was '$current_value')..."
+                sed -i "/^$param\s*=/d" /etc/sysctl.conf
+                echo "$param = $expected_value" >> /etc/sysctl.conf
+                sysctl -w "$param=$expected_value" >/dev/null 2>&1
+                HARDN_STATUS "pass" "'$param' set to '$expected_value'."
+            else
+                HARDN_STATUS "info" "'$param' is already set to '$expected_value'."
+            fi
+        done
 
-    sysctl --system >/dev/null 2>&1
-    HARDN_STATUS "pass" "Kernel hardening applied successfully."
+        sysctl --system >/dev/null 2>&1
+        HARDN_STATUS "pass" "Kernel hardening applied successfully."
 }
 
 # Function to ensure SSH prerequisites are met
 ensure_ssh_prerequisites() {
-    HARDN_STATUS "info" "Checking SSH prerequisites..."
+        HARDN_STATUS "info" "Checking SSH prerequisites..."
 
-    # Check if sshd directory exists, create if not
-    if [ ! -d "/run/sshd" ]; then
-        HARDN_STATUS "info" "Creating missing privilege separation directory: /run/sshd"
-        mkdir -p /run/sshd
-        chmod 0755 /run/sshd
-    fi
-
-    # Check if OpenSSH server is installed
-    if ! command -v sshd >/dev/null 2>&1; then
-        HARDN_STATUS "info" "OpenSSH server is not installed. Installing..."
-        apt update && apt install -y openssh-server
-        if [ ! $? -eq 0 ]; then
-            HARDN_STATUS "error" "Failed to install OpenSSH server. Aborting SSH hardening."
-            return 1
+        # Check if sshd directory exists, create if not
+        if [ ! -d "/run/sshd" ]; then
+            HARDN_STATUS "info" "Creating missing privilege separation directory: /run/sshd"
+            mkdir -p /run/sshd
+            chmod 0755 /run/sshd
         fi
-    fi
 
-    return 0
+        # Check if OpenSSH server is installed
+        if ! command -v sshd >/dev/null 2>&1; then
+            HARDN_STATUS "info" "OpenSSH server is not installed. Installing..."
+            apt update && apt install -y openssh-server
+            if [ ! $? -eq 0 ]; then
+                HARDN_STATUS "error" "Failed to install OpenSSH server. Aborting SSH hardening."
+                return 1
+            fi
+        fi
+
+        return 0
 }
 
 # Function to harden SSH configuration
 harden_ssh_config() {
-    HARDN_STATUS "section" "Hardening SSH Configuration"
+        HARDN_STATUS "section" "Hardening SSH Configuration"
 
-    # Ensure SSH prerequisites are met
-    ensure_ssh_prerequisites
-    if [ $? -ne 0 ]; then
-        HARDN_STATUS "error" "Failed to meet SSH prerequisites. Skipping SSH hardening."
-        return 1
-    fi
+        ensure_ssh_prerequisites
+        if [ $? -ne 0 ]; then
+            HARDN_STATUS "error" "Failed to meet SSH prerequisites. Skipping SSH hardening."
+            return 1
+        fi
 
-    # Define paths
-    local system_config="/etc/ssh/sshd_config"
-    local backup_config
-    backup_config="/etc/ssh/sshd_config.bak.$(date +%Y%m%d%H%M%S)"
-    local temp_config="/tmp/sshd_config.new"
+        local system_config="/etc/ssh/sshd_config"
+        local backup_config
+        backup_config="/etc/ssh/sshd_config.bak.$(date +%Y%m%d%H%M%S)"
+        local temp_config="/tmp/sshd_config.new"
 
-    # Backup original config sshd_config
-    if ! cp "${system_config}" "${backup_config}"; then
-        HARDN_STATUS "error" "Failed to create backup of SSH config. Aborting SSH hardening."
-        return 1
-    fi
-    HARDN_STATUS "pass" "Backup created at ${backup_config}"
+        if ! cp "${system_config}" "${backup_config}"; then
+            HARDN_STATUS "error" "Failed to create backup of SSH config. Aborting SSH hardening."
+            return 1
+        fi
+        HARDN_STATUS "pass" "Backup created at ${backup_config}"
 
-    # Create custom config in a temporary file first
     cat > "${temp_config}" << 'EOF'
 ###################################################
 # THIS IS THE SECURITY HARDNED CUSTOM SSHD_CONFIG #
@@ -2008,64 +1909,57 @@ Subsystem	sftp	/usr/lib/openssh/sftp-server
 
 EOF
 
-    # Apply the new configuration
-    if ! mv "${temp_config}" "${system_config}"; then
-        HARDN_STATUS "error" "Failed to apply new SSH configuration. Check ${temp_config}."
-        return 1
-    fi
+        # Apply the new config
+        if ! mv "${temp_config}" "${system_config}"; then
+            HARDN_STATUS "error" "Failed to apply new SSH configuration. Check ${temp_config}."
+            return 1
+        fi
 
-    # Set proper permissions
-    chmod 600 "${system_config}"
+        # Set proper permissions
+        chmod 600 "${system_config}"
 
-    # Restart SSH service to apply changes
-    HARDN_STATUS "info" "Restarting SSH service to apply changes..."
-    if systemctl restart ssh || systemctl restart sshd; then
-        HARDN_STATUS "pass" "SSH service restarted successfully."
-    else
-        HARDN_STATUS "error" "Failed to restart SSH service. Manual check required."
-    fi
+        HARDN_STATUS "info" "Restarting SSH service to apply changes..."
+        if systemctl restart ssh || systemctl restart sshd; then
+            HARDN_STATUS "pass" "SSH service restarted successfully."
+        else
+            HARDN_STATUS "error" "Failed to restart SSH service. Manual check required."
+        fi
 
-    HARDN_STATUS "pass" "SSH configuration hardened successfully."
-    HARDN_STATUS "info" "NOTE: Password authentication is disabled. Make sure you have SSH keys set up."
-    return 0
+        HARDN_STATUS "pass" "SSH configuration hardened successfully."
+        HARDN_STATUS "info" "NOTE: Password authentication is disabled. Make sure you have SSH keys set up."
+        return 0
 }
-
-
 
 # Central logging
 setup_central_logging() {
-    HARDN_STATUS "error" "Setting up central logging for security tools..."
+        HARDN_STATUS "error" "Setting up central logging for security tools..."
 
-    # Check and install rsyslog and logrotate if necessary
-    local logging_packages="rsyslog logrotate"
-    HARDN_STATUS "info" "Checking and installing logging packages ($logging_packages)..."
-    # shellcheck disable=SC2086
-    if ! dpkg -s $logging_packages >/dev/null 2>&1; then
+        # Check and install rsyslog and logrotate if necessary
+        local logging_packages="rsyslog logrotate"
+        HARDN_STATUS "info" "Checking and installing logging packages ($logging_packages)..."
         # shellcheck disable=SC2086
-        if apt-get update >/dev/null 2>&1 && apt-get install -y $logging_packages >/dev/null 2>&1; then
-            HARDN_STATUS "pass" "Logging packages installed successfully."
+        if ! dpkg -s $logging_packages >/dev/null 2>&1; then
+            # shellcheck disable=SC2086
+            if apt update >/dev/null 2>&1 && apt install -y $logging_packages >/dev/null 2>&1; then
+                HARDN_STATUS "pass" "Logging packages installed successfully."
+            else
+                HARDN_STATUS "error" "Error: Failed to install logging packages. Skipping central logging configuration."
+                return 1 # Exit this section if packages fail to install
+            fi
         else
-            HARDN_STATUS "error" "Error: Failed to install logging packages. Skipping central logging configuration."
-            return 1 # Exit this section if packages fail to install
+            HARDN_STATUS "pass" "Logging packages are already installed."
         fi
-    else
-        HARDN_STATUS "pass" "Logging packages are already installed."
-    fi
 
+        HARDN_STATUS "info" "Creating log directories and files..."
+        mkdir -p /usr/local/var/log/suricata
+        # Note: /var/log/suricata is often created by the suricata package itself
+        touch /usr/local/var/log/suricata/hardn-xdr.log
+        chmod 640 /usr/local/var/log/suricata/hardn-xdr.log
+        chown root:adm /usr/local/var/log/suricata/hardn-xdr.log
+        HARDN_STATUS "pass" "Log directory /usr/local/var/log/suricata created and permissions set."
 
-    # Create necessary directories
-    # ADD ALL DIR's fo monitoring
-    HARDN_STATUS "info" "Creating log directories and files..."
-    mkdir -p /usr/local/var/log/suricata
-    # Note: /var/log/suricata is often created by the suricata package itself
-    touch /usr/local/var/log/suricata/hardn-xdr.log
-    chmod 640 /usr/local/var/log/suricata/hardn-xdr.log
-    chown root:adm /usr/local/var/log/suricata/hardn-xdr.log
-    HARDN_STATUS "pass" "Log directory /usr/local/var/log/suricata created and permissions set."
-
-
-    # Create rsyslog configuration for centralized logging
-    HARDN_STATUS "info" "Creating rsyslog configuration file /etc/rsyslog.d/30-hardn-xdr.conf..."
+        # Create rsyslog configuration for centralized logging
+        HARDN_STATUS "info" "Creating rsyslog configuration file /etc/rsyslog.d/30-hardn-xdr.conf..."
     cat > /etc/rsyslog.d/30-hardn-xdr.conf << 'EOF'
 # HARDN-XDR Central Logging Configuration
 # This file is automatically generated by HARDN-XDR.
@@ -2101,7 +1995,6 @@ EOF
     chmod 644 /etc/rsyslog.d/30-hardn-xdr.conf
     HARDN_STATUS "pass" "Rsyslog configuration created/updated."
 
-
     # Create logrotate configuration for the central log
     HARDN_STATUS "info" "Creating logrotate configuration file /etc/logrotate.d/hardn-xdr..."
     cat > /etc/logrotate.d/hardn-xdr << 'EOF'
@@ -2133,111 +2026,109 @@ EOF
     endscript
 }
 EOF
-    chmod 644 /etc/logrotate.d/hardn-xdr
-    HARDN_STATUS "pass" "Logrotate configuration created/updated."
+        chmod 644 /etc/logrotate.d/hardn-xdr
+        HARDN_STATUS "pass" "Logrotate configuration created/updated."
 
 
 
-    # Restart rsyslog to apply changes
-    HARDN_STATUS "info" "Restarting rsyslog service to apply configuration changes..."
-    if systemctl restart rsyslog; then
-        HARDN_STATUS "pass" "Rsyslog service restarted successfully."
-    else
-        HARDN_STATUS "error" "Failed to restart rsyslog service. Manual check required."
-    fi
+        # Restart rsyslog to apply changes
+        HARDN_STATUS "info" "Restarting rsyslog service to apply configuration changes..."
+        if systemctl restart rsyslog; then
+            HARDN_STATUS "pass" "Rsyslog service restarted successfully."
+        else
+            HARDN_STATUS "error" "Failed to restart rsyslog service. Manual check required."
+        fi
 
-    # Create a symlink in /var/log for easier access
-    HARDN_STATUS "info" "Creating symlink /var/log/hardn-xdr.log..."
-    ln -sf /usr/local/var/log/suricata/hardn-xdr.log /var/log/hardn-xdr.log
-    HARDN_STATUS "pass" "Symlink created at /var/log/hardn-xdr.log."
+        # Create a symlink in /var/log for easier access
+        HARDN_STATUS "info" "Creating symlink /var/log/hardn-xdr.log..."
+        ln -sf /usr/local/var/log/suricata/hardn-xdr.log /var/log/hardn-xdr.log
+        HARDN_STATUS "pass" "Symlink created at /var/log/hardn-xdr.log."
 
 
-    HARDN_STATUS "pass" "Central logging setup complete. All security logs will be collected in /usr/local/var/log/suricata/hardn-xdr.log"
+        HARDN_STATUS "pass" "Central logging setup complete. All security logs will be collected in /usr/local/var/log/suricata/hardn-xdr.log"
 }
 
 disable_service_if_active() {
-    local service_name
-    service_name="$1"
-    if systemctl is-active --quiet "$service_name"; then
-        HARDN_STATUS "error" "Disabling active service: $service_name..."
-        systemctl disable --now "$service_name" || HARDN_STATUS "warning" "Failed to disable service: $service_name (may not be installed or already disabled)."
-    elif systemctl list-unit-files --type=service | grep -qw "^$service_name.service"; then
-        HARDN_STATUS "error" "Service $service_name is not active, ensuring it is disabled..."
-        systemctl disable "$service_name" || HARDN_STATUS "warning" "Failed to disable service: $service_name (may not be installed or already disabled)."
-    else
-        HARDN_STATUS "info" "Service $service_name not found or not installed. Skipping."
-    fi
+        local service_name
+        service_name="$1"
+        if systemctl is-active --quiet "$service_name"; then
+            HARDN_STATUS "error" "Disabling active service: $service_name..."
+            systemctl disable --now "$service_name" || HARDN_STATUS "warning" "Failed to disable service: $service_name (may not be installed or already disabled)."
+        elif systemctl list-unit-files --type=service | grep -qw "^$service_name.service"; then
+            HARDN_STATUS "error" "Service $service_name is not active, ensuring it is disabled..."
+            systemctl disable "$service_name" || HARDN_STATUS "warning" "Failed to disable service: $service_name (may not be installed or already disabled)."
+        else
+            HARDN_STATUS "info" "Service $service_name not found or not installed. Skipping."
+        fi
 }
 
 remove_unnecessary_services() {
-    HARDN_STATUS "pass" "Disabling unnecessary services..."
+        HARDN_STATUS "pass" "Disabling unnecessary services..."
+        disable_service_if_active avahi-daemon
+        disable_service_if_active cups
+        disable_service_if_active rpcbind
+        disable_service_if_active nfs-server
+        disable_service_if_active smbd
+        disable_service_if_active snmpd
+        disable_service_if_active apache2
+        disable_service_if_active mysql
+        disable_service_if_active bind9
 
-    disable_service_if_active avahi-daemon
-    disable_service_if_active cups
-    disable_service_if_active rpcbind
-    disable_service_if_active nfs-server
-    disable_service_if_active smbd
-    disable_service_if_active snmpd
-    disable_service_if_active apache2
-    disable_service_if_active mysql
-    disable_service_if_active bind9
+        packages_to_remove="telnet vsftpd proftpd tftpd postfix exim4"
+        for pkg in $packages_to_remove; do
+            if dpkg -s "$pkg" >/dev/null 2>&1; then
+                HARDN_STATUS "error" "Removing package: $pkg..."
+                apt remove -y "$pkg"
+            else
+                HARDN_STATUS "info" "Package $pkg not installed. Skipping removal."
+            fi
+        done
 
-
-    packages_to_remove="telnet vsftpd proftpd tftpd postfix exim4"
-    for pkg in $packages_to_remove; do
-        if dpkg -s "$pkg" >/dev/null 2>&1; then
-            HARDN_STATUS "error" "Removing package: $pkg..."
-            apt remove -y "$pkg"
-        else
-            HARDN_STATUS "info" "Package $pkg not installed. Skipping removal."
-        fi
-    done
-
-    HARDN_STATUS "pass" "Unnecessary services checked and disabled/removed where applicable."
+        HARDN_STATUS "pass" "Unnecessary services checked and disabled/removed where applicable."
 }
 
 improve_lynis_score() {
-    HARDN_STATUS "info" "Applying Lynis score improvements..."
+        HARDN_STATUS "info" "Applying Lynis score improvements..."
 
-    # Create /tmp with proper permissions (Lynis check FILE-6310)
-    HARDN_STATUS "info" "Setting secure permissions on /tmp directory..."
-    chmod 1777 /tmp
+        # Create /tmp with proper permissions (Lynis check FILE-6310)
+        HARDN_STATUS "info" "Setting secure permissions on /tmp directory..."
+        chmod 1777 /tmp
 
-    # Secure /var/tmp permissions (Lynis check FILE-6311)
-    if [[ -d /var/tmp ]]; then
-        chmod 1777 /var/tmp
-    fi
-
-    # Set proper permissions on log files (Lynis checks FILE-6374, FILE-6376)
-    HARDN_STATUS "info" "Securing log file permissions..."
-    find /var/log -type f -exec chmod 640 {} \; 2>/dev/null || true
-    find /var/log -type d -exec chmod 750 {} \; 2>/dev/null || true
-
-    # Secure SSH configuration improvements (Lynis SSH checks)
-    local ssh_config="/etc/ssh/sshd_config"
-    if [[ -f "$ssh_config" ]]; then
-        HARDN_STATUS "info" "Enhancing SSH configuration for better Lynis scores..."
-
-        # Backup SSH config
-        cp "$ssh_config" "${ssh_config}.bak.hardn" 2>/dev/null || true
-
-        # Apply additional SSH hardening for Lynis
-        sed -i 's/^#*ClientAliveInterval.*/ClientAliveInterval 300/' "$ssh_config"
-        sed -i 's/^#*ClientAliveCountMax.*/ClientAliveCountMax 0/' "$ssh_config"
-        sed -i 's/^#*MaxStartups.*/MaxStartups 10:30:60/' "$ssh_config"
-        sed -i 's/^#*LoginGraceTime.*/LoginGraceTime 60/' "$ssh_config"
-
-        # Add SSH hardening if not present
-        if ! grep -q "^MaxSessions" "$ssh_config"; then
-            echo "MaxSessions 4" >> "$ssh_config"
+        # Secure /var/tmp permissions (Lynis check FILE-6311)
+        if [[ -d /var/tmp ]]; then
+            chmod 1777 /var/tmp
         fi
 
-        systemctl reload ssh 2>/dev/null || true
-    fi
+        # Set proper permissions on log files (Lynis checks FILE-6374, FILE-6376)
+        HARDN_STATUS "info" "Securing log file permissions..."
+        find /var/log -type f -exec chmod 640 {} \; 2>/dev/null || true
+        find /var/log -type d -exec chmod 750 {} \; 2>/dev/null || true
 
-    # Kernel parameter improvements for Lynis (KRNL checks)
-    HARDN_STATUS "info" "Applying additional kernel parameters for Lynis score improvement..."
-    local sysctl_lynis="/etc/sysctl.d/99-lynis-hardening.conf"
+        # Secure SSH configuration improvements (Lynis SSH checks)
+        local ssh_config="/etc/ssh/sshd_config"
+        if [[ -f "$ssh_config" ]]; then
+            HARDN_STATUS "info" "Enhancing SSH configuration for better Lynis scores..."
+
+            # Backup SSH config
+            cp "$ssh_config" "${ssh_config}.bak.hardn" 2>/dev/null || true
+
+            # Apply additional SSH hardening for Lynis
+            sed -i 's/^#*ClientAliveInterval.*/ClientAliveInterval 300/' "$ssh_config"
+            sed -i 's/^#*ClientAliveCountMax.*/ClientAliveCountMax 0/' "$ssh_config"
+            sed -i 's/^#*MaxStartups.*/MaxStartups 10:30:60/' "$ssh_config"
+            sed -i 's/^#*LoginGraceTime.*/LoginGraceTime 60/' "$ssh_config"
+
+            # Add SSH hardening if not present
+            if ! grep -q "^MaxSessions" "$ssh_config"; then
+                echo "MaxSessions 4" >> "$ssh_config"
+            fi
+
+            systemctl reload ssh 2>/dev/null || true
+        fi
+
+        # Kernel parameter improvements for Lynis (KRNL checks)
+        HARDN_STATUS "info" "Applying additional kernel parameters for Lynis score improvement..."
+        local sysctl_lynis="/etc/sysctl.d/99-lynis-hardening.conf"
 
     cat > "$sysctl_lynis" << 'EOF'
 # Additional kernel parameters for Lynis score improvement
@@ -2263,159 +2154,158 @@ net.core.bpf_jit_harden = 2
 fs.protected_hardlinks = 1
 fs.protected_symlinks = 1
 EOF
+        sysctl -p "$sysctl_lynis" >/dev/null 2>&1 || true
 
-    sysctl -p "$sysctl_lynis" >/dev/null 2>&1 || true
+        # PAM configuration improvements (Plugable Authentication Module)
+        HARDN_STATUS "info" "Enhancing PAM configuration for Lynis scores..."
+        local pam_login="/etc/pam.d/login"
+        if [[ -f "$pam_login" ]] && ! grep -q "pam_limits.so" "$pam_login"; then
+            echo "session required pam_limits.so" >> "$pam_login"
+        fi
 
-    # PAM configuration improvements (Plugable Authentication Module)
-    HARDN_STATUS "info" "Enhancing PAM configuration for Lynis scores..."
-    local pam_login="/etc/pam.d/login"
-    if [[ -f "$pam_login" ]] && ! grep -q "pam_limits.so" "$pam_login"; then
-        echo "session required pam_limits.so" >> "$pam_login"
-    fi
+        # Set proper file permissions that Lynis checks
+        HARDN_STATUS "info" "Setting secure file permissions for Lynis checks..."
 
-    # Set proper file permissions that Lynis checks
-    HARDN_STATUS "info" "Setting secure file permissions for Lynis checks..."
+        # Secure crontab permissions
+        chmod 600 /etc/crontab 2>/dev/null || true
+        chmod -R 600 /etc/cron.d/* 2>/dev/null || true
+        chmod -R 700 /etc/cron.daily /etc/cron.hourly /etc/cron.monthly /etc/cron.weekly 2>/dev/null || true
 
-    # Secure crontab permissions
-    chmod 600 /etc/crontab 2>/dev/null || true
-    chmod -R 600 /etc/cron.d/* 2>/dev/null || true
-    chmod -R 700 /etc/cron.daily /etc/cron.hourly /etc/cron.monthly /etc/cron.weekly 2>/dev/null || true
+        # Secure system configuration files
+        chmod 644 /etc/passwd 2>/dev/null || true
+        chmod 640 /etc/shadow 2>/dev/null || true
+        chmod 644 /etc/group 2>/dev/null || true
+        chmod 640 /etc/gshadow 2>/dev/null || true
 
-    # Secure system configuration files
-    chmod 644 /etc/passwd 2>/dev/null || true
-    chmod 640 /etc/shadow 2>/dev/null || true
-    chmod 644 /etc/group 2>/dev/null || true
-    chmod 640 /etc/gshadow 2>/dev/null || true
+        # Remove world-writable files (Lynis check FILE-6362)
+        HARDN_STATUS "info" "Removing world-writable permissions from system files..."
+        find /etc -type f -perm -002 -exec chmod o-w {} \; 2>/dev/null || true
 
-    # Remove world-writable files (Lynis check FILE-6362)
-    HARDN_STATUS "info" "Removing world-writable permissions from system files..."
-    find /etc -type f -perm -002 -exec chmod o-w {} \; 2>/dev/null || true
+        # Set umask in system profiles
+        if ! grep -q "umask 027" /etc/profile; then
+            echo "umask 027" >> /etc/profile
+        fi
 
-    # Set umask in system profiles
-    if ! grep -q "umask 027" /etc/profile; then
-        echo "umask 027" >> /etc/profile
-    fi
+        # Secure mail queue permissions if postfix is installed
+        if command -v postfix >/dev/null 2>&1; then
+            chmod 700 /var/spool/postfix/maildrop 2>/dev/null || true
+        fi
 
-    # Secure mail queue permissions if postfix is installed
-    if command -v postfix >/dev/null 2>&1; then
-        chmod 700 /var/spool/postfix/maildrop 2>/dev/null || true
-    fi
-
-    HARDN_STATUS "pass" "Lynis score improvements applied successfully."
+        HARDN_STATUS "pass" "Lynis score improvements applied successfully."
 }
 
 pen_test() {
-    HARDN_STATUS "info" "Running comprehensive security audit with Lynis and nmap..."
+        HARDN_STATUS "info" "Running comprehensive security audit with Lynis and nmap..."
 
-    # Ensure Lynis is installed (it should be from progs.csv)
-    if ! command -v lynis >/dev/null 2>&1; then
-        HARDN_STATUS "info" "Installing Lynis..."
-        apt-get install lynis -y >/dev/null 2>&1
-    fi
-
-    # Create Lynis log directory
-    mkdir -p /var/log/lynis
-    chmod 750 /var/log/lynis
-
-    # Apply Lynis score improvements first
-    improve_lynis_score
-
-    # Run comprehensive Lynis audit
-    HARDN_STATUS "info" "Running comprehensive Lynis system audit..."
-    lynis audit system --verbose --log-file /var/log/lynis/hardn-audit.log --report-file /var/log/lynis/hardn-report.dat 2>/dev/null
-
-    # Run Lynis with pentest profile for additional checks
-    HARDN_STATUS "info" "Running Lynis penetration testing profile..."
-    lynis audit system --pentest --verbose --log-file /var/log/lynis/hardn-pentest.log 2>/dev/null
-
-    # Generate Lynis report
-    if [[ -f /var/log/lynis/hardn-report.dat ]]; then
-        HARDN_STATUS "pass" "Lynis audit completed. Report saved to /var/log/lynis/hardn-report.dat"
-
-        # Extract and display hardening index if available
-        local hardening_index
-        hardening_index=$(grep "hardening_index=" /var/log/lynis/hardn-report.dat 2>/dev/null | cut -d'=' -f2)
-        if [[ -n "$hardening_index" ]]; then
-            HARDN_STATUS "info" "Lynis Hardening Index: ${hardening_index}%"
+        # Ensure Lynis is installed (it should be from progs.csv)
+        if ! command -v lynis >/dev/null 2>&1; then
+            HARDN_STATUS "info" "Installing Lynis..."
+            apt install lynis -y >/dev/null 2>&1
         fi
-    else
-        HARDN_STATUS "warning" "Lynis report file not found. Check /var/log/lynis/ for details."
-    fi
 
-    # Run nmap scan for network security assessment
-    HARDN_STATUS "info" "Starting network security assessment with nmap..."
+        # Create Lynis log directory
+        mkdir -p /var/log/lynis
+        chmod 750 /var/log/lynis
 
-    # Install nmap if not present
-    if ! command -v nmap >/dev/null 2>&1; then
-        apt install nmap -y >/dev/null 2>&1
-    fi
+        # Apply Lynis score improvements first
+        improve_lynis_score
 
-    # Create nmap log directory
-    mkdir -p /var/log/nmap
-    chmod 750 /var/log/nmap
+        # Run comprehensive Lynis audit
+        HARDN_STATUS "info" "Running comprehensive Lynis system audit..."
+        lynis audit system --verbose --log-file /var/log/lynis/hardn-audit.log --report-file /var/log/lynis/hardn-report.dat 2>/dev/null
 
-    # Run comprehensive nmap scan
-    nmap -sS -sV -O -p- localhost > /var/log/nmap/hardn-localhost-scan.log 2>&1 &
-    local nmap_pid=$!
+        # Run Lynis with pentest profile for additional checks
+        HARDN_STATUS "info" "Running Lynis penetration testing profile..."
+        lynis audit system --pentest --verbose --log-file /var/log/lynis/hardn-pentest.log 2>/dev/null
 
-    # Run network interface scan
-    local interface_ip
-    interface_ip=$(ip route get 1.1.1.1 2>/dev/null | grep -oP 'src \K\S+' | head -1)
-    if [[ -n "$interface_ip" ]]; then
-        nmap -sn "${interface_ip%.*}.0/24" > /var/log/nmap/hardn-network-discovery.log 2>&1 &
-    fi
+        # Generate Lynis report
+        if [[ -f /var/log/lynis/hardn-report.dat ]]; then
+            HARDN_STATUS "pass" "Lynis audit completed. Report saved to /var/log/lynis/hardn-report.dat"
 
-    # Wait for localhost scan to complete
-    wait $nmap_pid
-    if wait $nmap_pid; then
-        HARDN_STATUS "pass" "Network security scan completed. Results saved to /var/log/nmap/"
-    else
-        HARDN_STATUS "error" "Network scan encountered issues. Check /var/log/nmap/ for details."
-    fi
+            # Extract and display hardening index if available
+            local hardening_index
+            hardening_index=$(grep "hardening_index=" /var/log/lynis/hardn-report.dat 2>/dev/null | cut -d'=' -f2)
+            if [[ -n "$hardening_index" ]]; then
+                HARDN_STATUS "info" "Lynis Hardening Index: ${hardening_index}%"
+            fi
+        else
+            HARDN_STATUS "warning" "Lynis report file not found. Check /var/log/lynis/ for details."
+        fi
 
-    # Summary of security audit
-    HARDN_STATUS "info" "Security audit summary:"
-    HARDN_STATUS "info" "- Lynis reports: /var/log/lynis/"
-    HARDN_STATUS "info" "- Network scans: /var/log/nmap/"
-    HARDN_STATUS "info" "- Review these files for security recommendations"
+        # Run nmap scan for network security assessment
+        HARDN_STATUS "info" "Starting network security assessment with nmap..."
+
+        # Install nmap if not present
+        if ! command -v nmap >/dev/null 2>&1; then
+            apt install nmap -y >/dev/null 2>&1
+        fi
+
+        # Create nmap log directory
+        mkdir -p /var/log/nmap
+        chmod 750 /var/log/nmap
+
+        # Run comprehensive nmap scan
+        nmap -sS -sV -O -p- localhost > /var/log/nmap/hardn-localhost-scan.log 2>&1 &
+        local nmap_pid=$!
+
+        # Run network interface scan
+        local interface_ip
+        interface_ip=$(ip route get 1.1.1.1 2>/dev/null | grep -oP 'src \K\S+' | head -1)
+        if [[ -n "$interface_ip" ]]; then
+            nmap -sn "${interface_ip%.*}.0/24" > /var/log/nmap/hardn-network-discovery.log 2>&1 &
+        fi
+
+        # Wait for localhost scan to complete
+        wait $nmap_pid
+        if wait $nmap_pid; then
+            HARDN_STATUS "pass" "Network security scan completed. Results saved to /var/log/nmap/"
+        else
+            HARDN_STATUS "error" "Network scan encountered issues. Check /var/log/nmap/ for details."
+        fi
+
+        # Summary of security audit
+        HARDN_STATUS "info" "Security audit summary:"
+        HARDN_STATUS "info" "- Lynis reports: /var/log/lynis/"
+        HARDN_STATUS "info" "- Network scans: /var/log/nmap/"
+        HARDN_STATUS "info" "- Review these files for security recommendations"
 }
 
 cleanup() {
-    HARDN_STATUS "info" "Performing final system cleanup..."
-    apt-get autoremove -y >/dev/null 2>&1
-    apt-get clean >/dev/null 2>&1
-    apt-get autoclean >/dev/null 2>&1
-    HARDN_STATUS "pass" "System cleanup completed. Unused packages and cache cleared."
-    whiptail --infobox "HARDN-XDR v${HARDN_VERSION} setup complete! Please reboot your system." 8 75
-    sleep 3
+        HARDN_STATUS "info" "Performing final system cleanup..."
+        apt autoremove -y >/dev/null 2>&1
+        apt clean >/dev/null 2>&1
+        apt autoclean >/dev/null 2>&1
+        HARDN_STATUS "pass" "System cleanup completed. Unused packages and cache cleared."
+        whiptail --infobox "HARDN-XDR v${HARDN_VERSION} setup complete! Please reboot your system." 8 75
+        sleep 3
 
 }
 
 main() {
-    print_ascii_banner
-    show_system_info
-    welcomemsg
-    update_system_packages
-    install_package_dependencies "../../progs.csv"
-    setup_security
-    apply_kernel_security
-    enable_nameservers
-    enable_process_accounting_and_sysstat
-    purge_old_packages
-    disable_firewire_drivers
-    restrict_compilers
-    disable_binfmt_misc
-    remove_unnecessary_services
-    setup_grub_password
-    harden_ssh_config
-    setup_central_logging
-    pen_test
-    cleanup
-    print_ascii_banner
+        print_ascii_banner
+        show_system_info
+        welcomemsg
+        update_system_packages
+        install_package_dependencies "../../progs.csv"
+        setup_security
+        apply_kernel_security
+        enable_nameservers
+        enable_process_accounting_and_sysstat
+        purge_old_packages
+        disable_firewire_drivers
+        restrict_compilers
+        disable_binfmt_misc
+        remove_unnecessary_services
+        setup_grub_password
+        harden_ssh_config
+        setup_central_logging
+        pen_test
+        cleanup
+        print_ascii_banner
 
-    HARDN_STATUS "pass" "HARDN-XDR v${HARDN_VERSION} installation completed successfully!"
-    HARDN_STATUS "info" "Your system has been hardened with STIG compliance and security tools."
-    HARDN_STATUS "warning" "Please reboot your system to complete the configuration."
+        HARDN_STATUS "pass" "HARDN-XDR v${HARDN_VERSION} installation completed successfully!"
+        HARDN_STATUS "info" "Your system has been hardened with STIG compliance and security tools."
+        HARDN_STATUS "warning" "Please reboot your system to complete the configuration."
 }
 
 # Command line argument handling
