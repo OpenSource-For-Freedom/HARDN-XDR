@@ -63,6 +63,7 @@
 
     ```bash
     curl -LO https://raw.githubusercontent.com/opensource-for-freedom/HARDN-XDR/refs/heads/main/install.sh && sudo chmod +x install.sh && sudo ./install.sh
+    git clone https://github.com/opensource-for-freedom/HARDN-XDR && cd HARDEN-XDR && sudo chmod +x install.sh && sudo ./install.sh
     ```
 
 <br>
@@ -124,7 +125,11 @@ HARDN-XDR/
 
 
 <p align="center">
-  <img src="docs/assets/cybersynapse.png" alt="cybersynapse Logo" />
+  <img src="docs/assets/cybersynapse.png" alt="CyberSynapse Logo" />
+</p>
+
+<p align="center">
+  <img src="docs/assets/securejump.jpg" alt="SecureJump Logo" />
 </p>
 
 <br>
@@ -140,6 +145,7 @@ This project is licensed under the MIT License.
 <p align="center">
   <img src="https://img.shields.io/badge/CONTACT-white?style=for-the-badge&labelColor=black" alt="CONTACT"><br><br>
 office@cybersynapse.ro
+contacto@securejump.cl
 </p>
 
 
