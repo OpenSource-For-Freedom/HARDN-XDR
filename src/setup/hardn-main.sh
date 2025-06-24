@@ -254,6 +254,7 @@ setup_security(){
 	source ./modules/banner.sh
 	source ./modules/compilers.sh
 	source ./modules/grub.sh
+        source ./modules/unhide.sh
 	source ./modules/binfmt.sh
 	source ./modules/purge_old_pkgs.sh
 	source ./modules/dns_config.sh
