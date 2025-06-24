@@ -1,5 +1,6 @@
 ########################### UFW
 HARDN_STATUS "info" "UFW Setup"
+apt install ufw
 ufw --force reset
 ufw default deny incoming
 ufw default allow outgoing
