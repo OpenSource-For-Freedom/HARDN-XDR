@@ -62,7 +62,6 @@
 1.  **One command**
 
     ```bash
-    curl -LO https://raw.githubusercontent.com/opensource-for-freedom/HARDN-XDR/refs/heads/main/install.sh && sudo chmod +x install.sh && sudo ./install.sh
     git clone https://github.com/opensource-for-freedom/HARDN-XDR && cd HARDEN-XDR && sudo chmod +x install.sh && sudo ./install.sh
     ```
 
