@@ -59,3 +59,22 @@ jobs:
         uses: github/codeql-action/analyze@v3
         with:
           category: "/language:actions"
+
+  semgrep:
+    name: Semgrep SAST Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Run Semgrep and save report
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: "auto"
+          output: "semgrep-report.sarif"
+          format: "sarif"
+      - name: Upload Semgrep Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-report
+          path: semgrep-report.sarif
+
