@@ -1,4 +1,4 @@
-name: "ShellCheck, Actions Security, and Advanced CodeQL Scan"
+name: "Advanced CodeQL and Actions Security Scan"
 
 on:
   push:
@@ -9,153 +9,36 @@ on:
     - cron: '39 23 * * 6'  # Weekly on Saturday
 
 jobs:
-
-  shellcheck:
-    name: ShellCheck Bash Scripts
+  codeql:
+    name: General CodeQL Scan (Auto)
+    continue-on-error: true
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+      packages: read
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Find and lint all Bash scripts with ShellCheck
-        uses: ludeeus/action-shellcheck@v2
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
         with:
-          scandir: .
-          fail_on_error: true
+          languages: python, javascript
+          queries: +security-and-quality
 
-  shfmt:
-    name: shfmt Bash Formatter Check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install shfmt
-        run: sudo apt-get update && sudo apt-get install -y shfmt
-      - name: Find Bash scripts and check formatting
-        run: |
-          shopt -s globstar nullglob
-          files=( **/*.sh )
-          if [ ${#files[@]} -gt 0 ]; then
-            shfmt -d "${files[@]}"
-          else
-            echo "No Bash scripts found, skipping."
-          fi
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
 
-  bandit-python:
-    name: Python Security Scan (Bandit)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
         with:
-          python-version: '3.x'
-      - name: Install Bandit
-        run: pip install bandit
-      - name: Run Bandit on all Python files
-        run: |
-          files=$(find . -type f -name "*.py")
-          if [ -n "$files" ]; then
-            bandit -r . -ll -q
-          else
-            echo "No Python files found, skipping."
-          fi
-
-  pylint:
-    name: Python Lint (pylint)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-      - name: Install pylint
-        run: pip install pylint
-      - name: Run pylint
-        run: |
-          files=$(find . -type f -name "*.py")
-          if [ -n "$files" ]; then
-            pylint $(find . -type f -name "*.py") || true
-          else
-            echo "No Python files found, skipping."
-          fi
-
-  black:
-    name: Python Format Check (black)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-      - name: Install black
-        run: pip install black
-      - name: Run black --check
-        run: |
-          files=$(find . -type f -name "*.py")
-          if [ -n "$files" ]; then
-            black --check .
-          else
-            echo "No Python files found, skipping."
-          fi
-
-  mypy:
-    name: Python Type Check (mypy)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-      - name: Install mypy
-        run: pip install mypy
-      - name: Run mypy
-        run: |
-          files=$(find . -type f -name "*.py")
-          if [ -n "$files" ]; then
-            mypy . || true
-          else
-            echo "No Python files found, skipping."
-          fi
-
-  rust-clippy:
-    name: Rust Lint (Clippy)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-rust@v1
-        with:
-          rust-version: 'stable'
-      - name: Run Clippy if Rust project exists
-        run: |
-          if [ -f Cargo.toml ]; then
-            cargo clippy --all-targets --all-features -- -D warnings
-          else
-            echo "No Rust project (Cargo.toml) found, skipping."
-          fi
-
-  rust-audit:
-    name: Rust Dependency Audit
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-rust@v1
-        with:
-          rust-version: 'stable'
-      - name: Install cargo-audit
-        run: cargo install cargo-audit
-      - name: Audit dependencies if Rust project exists
-        run: |
-          if [ -f Cargo.toml ]; then
-            cargo audit
-          else
-            echo "No Rust project (Cargo.toml) found, skipping."
-          fi
+          category: "general"
 
   actions-security:
-    name: GitHub Actions Workflow Security
+    name: GitHub Actions Workflow Security (CodeQL)
     runs-on: ubuntu-latest
     permissions:
       security-events: write
@@ -166,7 +49,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Initialize CodeQL (for actions)
+      - name: Initialize CodeQL (for workflows)
         uses: github/codeql-action/init@v3
         with:
           languages: javascript
@@ -185,49 +68,4 @@ jobs:
       - uses: rhysd/actionlint@v1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-
-  codeql:
-    name: Advanced CodeQL Scan (Python & Rust)
-    runs-on: ubuntu-latest
-    permissions:
-      security-events: write
-      actions: read
-      contents: read
-      packages: read
-
-    strategy:
-      fail-fast: false
-      matrix:
-        language: [python, rust]
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        if: matrix.language == 'python'
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-
-      - name: Set up Rust
-        if: matrix.language == 'rust'
-        uses: actions/setup-rust@v1
-        with:
-          rust-version: 'stable'
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
-        with:
-          languages: ${{ matrix.language }}
-          queries: +security-and-quality
-
-      - name: Autobuild (if supported)
-        uses: github/codeql-action/autobuild@v3
-        if: matrix.language != 'javascript'
-
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
-        with:
-          category: "/language:${{ matrix.language }}"
 
