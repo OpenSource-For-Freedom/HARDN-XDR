@@ -1244,22 +1244,22 @@ grub_security() {
 # Binary Format Support (binfmt). Disable running non-native binaries
 disable_binfmt_misc() {
         HARDN_STATUS "error" "Checking/Disabling non-native binary format support (binfmt_misc)..."
+
+        # use ternary-like Bash if statement
         if mount | grep -q 'binfmt_misc'; then
             HARDN_STATUS "info" "binfmt_misc is mounted. Attempting to unmount..."
-            if umount /proc/sys/fs/binfmt_misc; then
-                HARDN_STATUS "pass" "binfmt_misc unmounted successfully."
-            else
+            umount /proc/sys/fs/binfmt_misc && \
+                HARDN_STATUS "pass" "binfmt_misc unmounted successfully." || \
                 HARDN_STATUS "error" "Failed to unmount binfmt_misc. It might be busy or not a separate mount."
-            fi
         fi
 
+        # Refactored to use case statement
         if lsmod | grep -q "^binfmt_misc"; then
             HARDN_STATUS "info" "binfmt_misc module is loaded. Attempting to unload..."
-            if rmmod binfmt_misc; then
-                HARDN_STATUS "pass" "binfmt_misc module unloaded successfully."
-            else
-                HARDN_STATUS "error" "Failed to unload binfmt_misc module. It might be in use or built-in."
-            fi
+            case "$(rmmod binfmt_misc 2>&1 > /dev/null; echo $?)" in
+                0) HARDN_STATUS "pass" "binfmt_misc module unloaded successfully." ;;
+                *) HARDN_STATUS "error" "Failed to unload binfmt_misc module. It might be in use or built-in." ;;
+            esac
         else
             HARDN_STATUS "pass" "binfmt_misc module is not currently loaded."
         fi
@@ -1267,10 +1267,18 @@ disable_binfmt_misc() {
         # Prevent module from loading on boot
         local modprobe_conf="/etc/modprobe.d/disable-binfmt_misc.conf"
 
+        # C-style for loop to check for other potential binfmt modules
+        local binfmt_related_modules=("binfmt_misc" "binfmt_aout" "binfmt_elf" "binfmt_script")
+        for((i=0; i<${#binfmt_related_modules[@]}; i++)); do
+            local module="${binfmt_related_modules[i]}"
+            if lsmod | grep -q "^$module"; then
+                HARDN_STATUS "info" "Found related module: $module. Consider blacklisting it as well."
+            fi
+        done
+
         if [[ ! -f "$modprobe_conf" ]]; then
             echo "install binfmt_misc /bin/true" > "$modprobe_conf"
             HARDN_STATUS "pass" "Added modprobe rule to prevent binfmt_misc from loading on boot: $modprobe_conf"
-
         else
             if ! grep -q "install binfmt_misc /bin/true" "$modprobe_conf"; then
                 echo "install binfmt_misc /bin/true" >> "$modprobe_conf"
@@ -1281,6 +1289,7 @@ disable_binfmt_misc() {
         fi
         whiptail --infobox "Non-native binary format support (binfmt_misc) checked/disabled." 7 70
 }
+
 
 disable_firewire_drivers() {
         HARDN_STATUS "error" "Checking/Disabling FireWire (IEEE 1394) drivers..."
@@ -1453,34 +1462,58 @@ enable_nameservers() {
             rm -f "$temp_resolved_conf"
         fi
 
-        # Check for NetworkManager
-        if [[ "$configured_persistently" = false ]] && command -v nmcli >/dev/null 2>&1; then
-            HARDN_STATUS "info" "NetworkManager detected. Attempting to configure DNS via NetworkManager..."
+configure_dns_via_networkmanager() {
+        local primary_dns="$1"
+        local secondary_dns="$2"
+        local configured_persistently="$3"
+        local changes_made="$4"
+        local result=("$configured_persistently" "$changes_made")
 
-            # Get the current active connection
-            local active_conn
-            active_conn=$(nmcli -t -f NAME,TYPE,DEVICE,STATE c show --active | grep -E ':(ethernet|wifi):.+:activated' | head -1 | cut -d: -f1)
+        HARDN_STATUS "info" "NetworkManager detected. Attempting to configure DNS via NetworkManager..."
 
-            if [[ -n "$active_conn" ]]; then
-                HARDN_STATUS "info" "Configuring DNS for active connection: $active_conn"
-                if nmcli c modify "$active_conn" ipv4.dns "$primary_dns,$secondary_dns" ipv4.ignore-auto-dns yes; then
-                    HARDN_STATUS "pass" "NetworkManager DNS configuration updated."
+        # Get the current active connection using C-style for loop to process multiple connections if needed
+        local connections
+        local conn_count=0
+        mapfile -t connections < <(nmcli -t -f NAME,TYPE,DEVICE,STATE c show --active | grep -E ':(ethernet|wifi):.+:activated')
+        conn_count=${#connections[@]}
 
-                    # Restart the connection to apply changes
-                    if nmcli c down "$active_conn" && nmcli c up "$active_conn"; then
-                        HARDN_STATUS "pass" "NetworkManager connection restarted successfully."
-                        configured_persistently=true
-                        changes_made=true
-                    else
-                        HARDN_STATUS "error" "Failed to restart NetworkManager connection. Changes may not be applied."
-                    fi
-                else
-                    HARDN_STATUS "error" "Failed to update NetworkManager DNS configuration."
-                fi
-            else
-                HARDN_STATUS "warning" "No active NetworkManager connection found."
-            fi
+        # No active connections found
+        if ((conn_count == 0)); then
+            HARDN_STATUS "warning" "No active NetworkManager connection found."
+            return 1
         fi
+
+        # Process the first active connection (could be extended to handle multiple)
+        local active_conn
+        active_conn=$(echo "${connections[0]}" | cut -d: -f1)
+        HARDN_STATUS "info" "Configuring DNS for active connection: $active_conn"
+
+        # Try to modify the connection - use && and || for cleaner conditional execution
+        nmcli c modify "$active_conn" ipv4.dns "$primary_dns,$secondary_dns" ipv4.ignore-auto-dns yes && \
+            HARDN_STATUS "pass" "NetworkManager DNS configuration updated." || \
+            { HARDN_STATUS "error" "Failed to update NetworkManager DNS configuration."; return 1; }
+
+        # Restart the connection to apply changes - use case statement for clearer flow control
+        HARDN_STATUS "info" "Restarting connection to apply changes..."
+        if nmcli c down "$active_conn" && nmcli c up "$active_conn"; then
+            HARDN_STATUS "pass" "NetworkManager connection restarted successfully."
+            result[0]=true  # configured_persistently
+            result[1]=true  # changes_made
+        else
+            HARDN_STATUS "error" "Failed to restart NetworkManager connection. Changes may not be applied."
+        fi
+
+        # Return the updated values
+        configured_persistently=${result[0]}
+        changes_made=${result[1]}
+        echo "$configured_persistently $changes_made"
+}
+
+# Main DNS configuration code
+    if [[ "$configured_persistently" = false ]] && command -v nmcli >/dev/null 2>&1; then
+        # Call the function and capture the returned values
+        read -r configured_persistently changes_made <<< "$(configure_dns_via_networkmanager "$primary_dns" "$secondary_dns" "$configured_persistently" "$changes_made")"
+    fi
 
         # If not using systemd-resolved or NetworkManager, try to set directly in /etc/resolv.conf
         if [[ "$configured_persistently" = false ]]; then
@@ -1567,150 +1600,217 @@ EOF
     HARDN_STATUS "info"
 }
 
+# Enable process accounting and sysstat
 enable_process_accounting_and_sysstat() {
-        HARDN_STATUS "error" "Enabling process accounting (acct) and system statistics (sysstat)..."
-        local changed_acct changed_sysstat
-        changed_acct=false
-        changed_sysstat=false
+    HARDN_STATUS "error" "Enabling process accounting (acct) and system statistics (sysstat)..."
+    local changed=false
+    install_and_configure_acct && changed=true
+    install_and_configure_sysstat && changed=true
 
-        # Enable Process Accounting (acct/psacct)
-        HARDN_STATUS "info" "Checking and installing acct (process accounting)..."
-        if ! dpkg -s acct >/dev/null 2>&1 && ! dpkg -s psacct >/dev/null 2>&1; then
-            whiptail --infobox "Installing acct (process accounting)..." 7 60
-            if apt install -y acct; then
-                HARDN_STATUS "pass" "acct installed successfully."
-                changed_acct=true
-            else
-                HARDN_STATUS "error" "Failed to install acct. Please check manually."
-            fi
-        else
-            HARDN_STATUS "info" "acct/psacct is already installed."
-        fi
+    # Final status report
+    $changed && HARDN_STATUS "pass" "Process accounting and sysstat configured successfully." || \
+               HARDN_STATUS "pass" "Process accounting and sysstat already configured or no changes needed."
+}
 
+# Helper function for acct installation and configuration
+install_and_configure_acct() {
+        local changed=false
+
+        # Check if acct/psacct is already installed
         if dpkg -s acct >/dev/null 2>&1 || dpkg -s psacct >/dev/null 2>&1; then
-            if ! systemctl is-active --quiet acct && ! systemctl is-active --quiet psacct; then
-                HARDN_STATUS "info" "Attempting to enable and start acct/psacct service..."
-                systemctl enable --now acct 2>/dev/null || systemctl enable --now psacct 2>/dev/null
-                HARDN_STATUS "pass" "acct/psacct service enabled and started."
-                changed_acct=true
-            else
-                HARDN_STATUS "pass" "acct/psacct service is already active."
-            fi
-        fi
-
-        # Enable Sysstat
-        HARDN_STATUS "info" "Checking and installing sysstat..."
-        if ! dpkg -s sysstat >/dev/null 2>&1; then
-            whiptail --infobox "Installing sysstat..." 7 60
-            if apt install -y sysstat; then
-                HARDN_STATUS "pass" "sysstat installed successfully."
-                changed_sysstat=true
-            else
-                HARDN_STATUS "error" "Failed to install sysstat. Please check manually."
-            fi
+            HARDN_STATUS "info" "acct/psacct is already installed."
         else
-            HARDN_STATUS "info" "sysstat is already installed."
+            HARDN_STATUS "info" "Installing acct (process accounting)..."
+            whiptail --infobox "Installing acct (process accounting)..." 7 60
+
+            apt install -y acct && {
+                HARDN_STATUS "pass" "acct installed successfully."
+                changed=true
+            } || HARDN_STATUS "error" "Failed to install acct. Please check manually."
         fi
 
+        # Enable service if installed (only proceed if installation check passed)
+        if dpkg -s acct >/dev/null 2>&1 || dpkg -s psacct >/dev/null 2>&1; then
+            # Check if service is already active
+            systemctl is-active --quiet acct || systemctl is-active --quiet psacct || {
+                HARDN_STATUS "info" "Enabling and starting acct/psacct service..."
+                systemctl enable --now acct 2>/dev/null || systemctl enable --now psacct 2>/dev/null && {
+                    HARDN_STATUS "pass" "acct/psacct service enabled and started."
+                    changed=true
+                }
+            } && HARDN_STATUS "pass" "acct/psacct service is already active."
+        fi
+
+        $changed && return 0 || return 1
+}
+
+# Helper function for sysstat installation and configuration
+install_and_configure_sysstat() {
+        local changed=false
+        # Check if sysstat is already installed
         if dpkg -s sysstat >/dev/null 2>&1; then
-            local sysstat_conf
-            sysstat_conf="/etc/default/sysstat"
-            if [[ -f "$sysstat_conf" ]]; then
-                if ! grep -qE '^\s*ENABLED="true"' "$sysstat_conf"; then
-                    HARDN_STATUS "info" "Enabling sysstat data collection in $sysstat_conf..."
-                    sed -i 's/^\s*ENABLED="false"/ENABLED="true"/' "$sysstat_conf"
-                    if ! grep -qE '^\s*ENABLED=' "$sysstat_conf"; then
-                        echo 'ENABLED="true"' >> "$sysstat_conf"
-                    fi
-                    changed_sysstat=true
-                    HARDN_STATUS "pass" "sysstat data collection enabled."
-                else
-                    HARDN_STATUS "pass" "sysstat data collection is already enabled in $sysstat_conf."
-                fi
-            else
-                HARDN_STATUS "warning" "sysstat configuration file $sysstat_conf not found. Manual check might be needed."
-            fi
-
-            if ! systemctl is-active --quiet sysstat; then
-                HARDN_STATUS "info" "Attempting to enable and start sysstat service..."
-                if systemctl enable --now sysstat; then
-                    HARDN_STATUS "pass" "sysstat service enabled and started."
-                    changed_sysstat=true
-                else
-                    HARDN_STATUS "error" "Failed to enable/start sysstat service."
-                fi
-            else
-                HARDN_STATUS "pass" "sysstat service is already active."
-            fi
-        fi
-
-        if [[ "$changed_acct" = true || "$changed_sysstat" = true ]]; then
-            HARDN_STATUS "pass" "Process accounting (acct) and sysstat configured successfully."
+            HARDN_STATUS "info" "sysstat is already installed."
         else
-            HARDN_STATUS "pass" "Process accounting (acct) and sysstat already configured or no changes needed."
-        fi
-    }
+            HARDN_STATUS "info" "Installing sysstat..."
+            whiptail --infobox "Installing sysstat..." 7 60
 
+            apt install -y sysstat && {
+                HARDN_STATUS "pass" "sysstat installed successfully."
+                changed=true
+            } || HARDN_STATUS "error" "Failed to install sysstat. Please check manually."
+    fi
+
+        # Configure sysstat if installed
+        if dpkg -s sysstat >/dev/null 2>&1; then
+            local sysstat_conf="/etc/default/sysstat"
+
+            # Configure sysstat if config file exists
+            [[ -f "$sysstat_conf" ]] && {
+                grep -qE '^\s*ENABLED="true"' "$sysstat_conf" || {
+                    HARDN_STATUS "info" "Enabling sysstat data collection..."
+                    sed -i 's/^\s*ENABLED="false"/ENABLED="true"/' "$sysstat_conf"
+                    grep -qE '^\s*ENABLED=' "$sysstat_conf" || echo 'ENABLED="true"' >> "$sysstat_conf"
+                    changed=true
+                    HARDN_STATUS "pass" "sysstat data collection enabled."
+                } && HARDN_STATUS "pass" "sysstat data collection is already enabled."
+            } || HARDN_STATUS "warning" "sysstat configuration file not found. Manual check needed."
+
+            # Enable sysstat service
+            systemctl is-active --quiet sysstat || {
+                HARDN_STATUS "info" "Enabling and starting sysstat service..."
+                systemctl enable --now sysstat && {
+                    HARDN_STATUS "pass" "sysstat service enabled and started."
+                    changed=true
+                } || HARDN_STATUS "error" "Failed to enable/start sysstat service."
+            } && HARDN_STATUS "pass" "sysstat service is already active."
+        fi
+
+    $changed && return 0 || return 1
+}
+
+# Apply kernel security settings
 apply_kernel_security() {
         HARDN_STATUS "info" "Applying kernel security settings..."
 
-        declare -A kernel_params=(
+        # Create arrays for parameter names and values
+        declare -a param_names
+        declare -a param_values
+
+        # Initialize arrays with kernel parameters and their values
+        param_names=(
             # === Console and Memory Protections ===
-            ["dev.tty.ldisc_autoload"]="0"
-            ["fs.protected_fifos"]="2"
-            ["fs.protected_hardlinks"]="1"
-            ["fs.protected_regular"]="2"
-            ["fs.protected_symlinks"]="1"
-            ["fs.suid_dumpable"]="0"
+            "dev.tty.ldisc_autoload"
+            "fs.protected_fifos"
+            "fs.protected_hardlinks"
+            "fs.protected_regular"
+            "fs.protected_symlinks"
+            "fs.suid_dumpable"
 
             # === Kernel Info Leak Prevention ===
-            ["kernel.core_uses_pid"]="1"
-            ["kernel.ctrl-alt-del"]="0"
-            ["kernel.dmesg_restrict"]="1"
-            ["kernel.kptr_restrict"]="2"
+            "kernel.core_uses_pid"
+            "kernel.ctrl-alt-del"
+            "kernel.dmesg_restrict"
+            "kernel.kptr_restrict"
 
             # === Performance & BPF ===
-            ["kernel.perf_event_paranoid"]="2"
-            ["kernel.randomize_va_space"]="2"
-            ["kernel.unprivileged_bpf_disabled"]="1"
+            "kernel.perf_event_paranoid"
+            "kernel.randomize_va_space"
+            "kernel.unprivileged_bpf_disabled"
 
             # === BPF JIT Hardening ===
-            ["net.core.bpf_jit_harden"]="2"
+            "net.core.bpf_jit_harden"
 
             # === IPv4 Hardening ===
-            ["net.ipv4.conf.all.accept_redirects"]="0"
-            ["net.ipv4.conf.default.accept_redirects"]="0"
-            ["net.ipv4.conf.all.accept_source_route"]="0"
-            ["net.ipv4.conf.default.accept_source_route"]="0"
-            ["net.ipv4.conf.all.bootp_relay"]="0"
-            ["net.ipv4.conf.all.forwarding"]="0"
-            ["net.ipv4.conf.all.log_martians"]="1"
-            ["net.ipv4.conf.default.log_martians"]="1"
-            ["net.ipv4.conf.all.mc_forwarding"]="0"
-            ["net.ipv4.conf.all.proxy_arp"]="0"
-            ["net.ipv4.conf.all.rp_filter"]="1"
-            ["net.ipv4.conf.all.send_redirects"]="0"
-            ["net.ipv4.conf.default.send_redirects"]="0"
-            ["net.ipv4.icmp_echo_ignore_broadcasts"]="1"
-            ["net.ipv4.icmp_ignore_bogus_error_responses"]="1"
-            ["net.ipv4.tcp_syncookies"]="1"
-            ["net.ipv4.tcp_timestamps"]="1"
+            "net.ipv4.conf.all.accept_redirects"
+            "net.ipv4.conf.default.accept_redirects"
+            "net.ipv4.conf.all.accept_source_route"
+            "net.ipv4.conf.default.accept_source_route"
+            "net.ipv4.conf.all.bootp_relay"
+            "net.ipv4.conf.all.forwarding"
+            "net.ipv4.conf.all.log_martians"
+            "net.ipv4.conf.default.log_martians"
+            "net.ipv4.conf.all.mc_forwarding"
+            "net.ipv4.conf.all.proxy_arp"
+            "net.ipv4.conf.all.rp_filter"
+            "net.ipv4.conf.all.send_redirects"
+            "net.ipv4.conf.default.send_redirects"
+            "net.ipv4.icmp_echo_ignore_broadcasts"
+            "net.ipv4.icmp_ignore_bogus_error_responses"
+            "net.ipv4.tcp_syncookies"
+            "net.ipv4.tcp_timestamps"
 
             # === IPv6 Hardening ===
-            ["net.ipv6.conf.all.accept_redirects"]="0"
-            ["net.ipv6.conf.default.accept_redirects"]="0"
-            ["net.ipv6.conf.all.accept_source_route"]="0"
-            ["net.ipv6.conf.default.accept_source_route"]="0"
+            "net.ipv6.conf.all.accept_redirects"
+            "net.ipv6.conf.default.accept_redirects"
+            "net.ipv6.conf.all.accept_source_route"
+            "net.ipv6.conf.default.accept_source_route"
         )
 
-        for param in "${!kernel_params[@]}"; do
-            expected_value="${kernel_params[$param]}"
-            current_value=$(sysctl -n "$param" 2>/dev/null)
+        param_values=(
+            # === Console and Memory Protections ===
+            "0"
+            "2"
+            "1"
+            "2"
+            "1"
+            "0"
 
-            if [[ -z "$current_value" ]]; then
+            # === Kernel Info Leak Prevention ===
+            "1"
+            "0"
+            "1"
+            "2"
+
+            # === Performance & BPF ===
+            "2"
+            "2"
+            "1"
+
+            # === BPF JIT Hardening ===
+            "2"
+
+            # === IPv4 Hardening ===
+            "0"
+            "0"
+            "0"
+            "0"
+            "0"
+            "0"
+            "1"
+            "1"
+            "0"
+            "0"
+            "1"
+            "0"
+            "0"
+            "1"
+            "1"
+            "1"
+            "1"
+
+            # === IPv6 Hardening ===
+            "0"
+            "0"
+            "0"
+            "0"
+        )
+
+        # Track changes
+        local changes_made=0
+        local total_params=${#param_names[@]}
+
+        # Process each parameter
+        process_param() {
+            local i=$1
+            local param="${param_names[$i]}"
+            local expected_value="${param_values[$i]}"
+            local current_value=$(sysctl -n "$param" 2>/dev/null)
+
+            # Using ternary-style operation with && and || for cleaner conditional execution
+            [[ -z "$current_value" ]] && {
                 HARDN_STATUS "warning" "Kernel parameter '$param' not found. Skipping."
-                continue
-            fi
+                return
+            } || true
 
             if [[ "$current_value" != "$expected_value" ]]; then
                 HARDN_STATUS "info" "Setting '$param' to '$expected_value' (was '$current_value')..."
@@ -1718,13 +1818,27 @@ apply_kernel_security() {
                 echo "$param = $expected_value" >> /etc/sysctl.conf
                 sysctl -w "$param=$expected_value" >/dev/null 2>&1
                 HARDN_STATUS "pass" "'$param' set to '$expected_value'."
+                ((changes_made++))
             else
                 HARDN_STATUS "info" "'$param' is already set to '$expected_value'."
             fi
+        }
+
+        # Cycle through all parameters
+        for ((i=0; i<total_params; i++)); do
+            process_param $i
         done
 
+        # Apply all changes
         sysctl --system >/dev/null 2>&1
-        HARDN_STATUS "pass" "Kernel hardening applied successfully."
+
+        # Final status report
+        [[ $changes_made -gt 0 ]] && {
+            HARDN_STATUS "pass" "Kernel hardening applied successfully. Modified $changes_made parameters."
+        } || {
+            HARDN_STATUS "pass" "Kernel hardening verified. All parameters already set correctly."
+        }
+
 }
 
 # Function to ensure SSH prerequisites are met
