@@ -1,5 +1,16 @@
 # Changelog
 
+## Version 2.1.0
+
+#### Improved
+- **Modular system**: Restructured the security setup function into a modular system.
+
+#### Fixed
+- **Rkhunter**: Changed repository to the real, existing one.
+
+---
+
+## Version 2.0.0
 
 #### Added
 - **Version Tracking**: Added explicit version identifier (v2.0.0) throughout the script and user interface
