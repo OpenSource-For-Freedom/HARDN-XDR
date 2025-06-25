@@ -223,11 +223,10 @@ EOF
 
 }
 
-# Setup Security
 setup_security(){
+        # Calling individual security setup functions
         HARDN_STATUS "pass" "Using detected system: Debian ${CURRENT_DEBIAN_VERSION_ID} (${CURRENT_DEBIAN_CODENAME}) for security setup."
 
-        # Calling the individual security setup functions
         check_deleted_files
         setup_ntp
         setup_usb_security
@@ -246,7 +245,6 @@ setup_security(){
         HARDN_STATUS "pass" "Security setup completed."
 }
 
-# Check for deleted files in use
 check_deleted_files() {
         HARDN_STATUS "info" "Checking for deleted files in use..."
         if command -v lsof >/dev/null 2>&1; then
@@ -266,13 +264,11 @@ check_deleted_files() {
         fi
 }
 
-# Setup NTP daemon
 setup_ntp() {
         HARDN_STATUS "info" "Setting up NTP daemon..."
         local ntp_servers="0.debian.pool.ntp.org 1.debian.pool.ntp.org 2.debian.pool.ntp.org 3.debian.pool.ntp.org"
         local configured=false
 
-        # Check which NTP service to configure
         case "$(systemctl is-active systemd-timesyncd)" in
             "active")
                 setup_systemd_timesyncd "$ntp_servers"
@@ -291,7 +287,6 @@ setup_ntp() {
         fi
 }
 
-# Setup systemd-timesyncd
 setup_systemd_timesyncd() {
         local ntp_servers="$1"
         HARDN_STATUS "info" "systemd-timesyncd is active. Configuring..."
@@ -343,7 +338,6 @@ setup_systemd_timesyncd() {
         rm -f "$temp_timesyncd_conf"
 }
 
-# Check NTP stratum
 check_ntp_stratum() {
         # Check NTP peer stratum and warn if not stratum 1 or 2
         if command -v ntpq >/dev/null 2>&1 && ntpq -p 2>/dev/null | grep -q '^\*'; then
@@ -360,7 +354,6 @@ check_ntp_stratum() {
         fi
 }
 
-# Setup USB security
 setup_usb_security() {
         HARDN_STATUS "info" "Setting up USB security..."
 
@@ -376,7 +369,6 @@ EOF
 
         HARDN_STATUS "info" "USB security policy configured to allow HID devices but block storage."
 
-        # Create udev rules to further control USB devices
         cat > /etc/udev/rules.d/99-usb-storage.rules << 'EOF'
 # Block USB storage devices while allowing keyboards and mice
 ACTION=="add", SUBSYSTEMS=="usb", ATTRS{bInterfaceClass}=="08", RUN+="/bin/sh -c 'echo 0 > /sys$DEVPATH/authorized'"
@@ -406,7 +398,6 @@ EOF
                     HARDN_STATUS "error" "Failed to load USB HID module."
             }
 }
-        # Disable unnecessary network protocols in kernel
         HARDN_STATUS "error" "Disabling unnecessary network protocols..."
 
         # warn network interfaces in promiscuous mode
@@ -415,6 +406,7 @@ EOF
                 HARDN_STATUS "warning" "Interface $interface is in promiscuous mode. Review Interface."
             fi
         done
+
     # Creating a comprehensive blacklist file for network protocols
     cat > /etc/modprobe.d/blacklist-rare-network.conf << 'EOF'
 # HARDN-XDR Blacklist for Rare/Unused Network Protocols
@@ -468,13 +460,11 @@ EOF
         # Apply changes immediately where possible
         sysctl -p
 
-        # Secure shared memory
         HARDN_STATUS "info" "Securing shared memory..."
         if ! grep -q "tmpfs /run/shm" /etc/fstab; then
             echo "tmpfs /run/shm tmpfs defaults,noexec,nosuid,nodev 0 0" >> /etc/fstab
         fi
 
-        # Set secure file permissions
     	HARDN_STATUS "info" "Setting secure file permissions..."
     	chmod 700 /root                    # root home directory - root
     	chmod 644 /etc/passwd              # user database - readable (required)
@@ -483,7 +473,6 @@ EOF
     	chmod 600 /etc/gshadow             # group passwords - root
     	chmod 644 /etc/ssh/sshd_config     # SSH daemon config - readable
 
-        ########################### Disable core dumps for security
         HARDN_STATUS "info" "Disabling core dumps..."
         grep -q "hard core" /etc/security/limits.conf || echo "* hard core 0" >> /etc/security/limits.conf
         grep -q "fs.suid_dumpable" /etc/sysctl.conf || echo "fs.suid_dumpable = 0" >> /etc/sysctl.conf
@@ -496,7 +485,6 @@ EOF
 
 
 
-        # automatic security updates
         HARDN_STATUS "info" "Configuring automatic security updates for Debian-based systems..."
 
     case "${ID}" in # Use ${ID} from /etc/os-release
@@ -536,7 +524,6 @@ EOF
             ;;
     esac
 
-        # Secure network parameters
         HARDN_STATUS "info" "Configuring secure network parameters..."
         {
             echo "net.ipv4.ip_forward = 0"
@@ -555,8 +542,6 @@ EOF
             echo "net.ipv6.conf.default.disable_ipv6 = 1"
         } >> /etc/sysctl.conf
 
-
-        # rkhunter
         HARDN_STATUS "info" "Configuring rkhunter..."
         if ! dpkg -s rkhunter >/dev/null 2>&1; then
             HARDN_STATUS "info" "rkhunter package not found. Attempting to install via apt..."
@@ -675,7 +660,6 @@ EOF
             HARDN_STATUS "error" "chkrootkit command not found after installation attempt, skipping cron configuration."
         fi
 
-        # Auditd
                 HARDN_STATUS "info" "Configuring auditd..."
                 if systemctl list-unit-files | grep -q auditd.service; then
                     [ -f /etc/audit/auditd.conf ] &&  echo "max_log_file=100" >> /etc/audit/auditd.conf; echo "max_log_files=5" >> /etc/audit/audit || { HARDN_STATUS "warning" "Warning: /etc/audit/auditd.conf not found, skipping auditd configuration..."; }
@@ -845,7 +829,7 @@ EOF
 # Audit final immutable rule
 -e 2
 EOF
-        # Loading new rules to auditd
+        # New audit rules
         HARDN_STATUS "info" "Loading new auditd rules..."
         if auditctl -R "$audit_rules_file" >/dev/null 2>&1; then
             HARDN_STATUS "pass" "New auditd rules loaded successfully."
@@ -962,7 +946,7 @@ EOF
         rm -rf "$download_dir"
     fi
 
-    # If Suricata is installed
+    # Check if Suricata is installed and running
     if command -v suricata >/dev/null 2>&1; then
         HARDN_STATUS "info" "Configuring Suricata..."
 
@@ -977,7 +961,7 @@ EOF
             fi
         fi
 
-        # Enable the service
+        # Enable suricata
         if systemctl enable suricata >/dev/null 2>&1; then
             HARDN_STATUS "pass" "Suricata service enabled successfully."
         else
@@ -1006,7 +990,7 @@ EOF
              HARDN_STATUS "error" "suricata-update command not available, skipping rule update."
         fi
 
-        # Start the service
+        # Start suricata
         if systemctl start suricata >/dev/null 2>&1; then
             HARDN_STATUS "pass" "Suricata service started successfully."
         else
@@ -1016,7 +1000,7 @@ EOF
         HARDN_STATUS "error" "Suricata command not found after installation attempt, skipping configuration."
     fi
 
-    ########################### debsums
+    # debsums
     HARDN_STATUS "info" "Configuring debsums..."
     if command -v debsums >/dev/null 2>&1; then
         if debsums_init >/dev/null 2>&1; then
@@ -1044,7 +1028,7 @@ EOF
         HARDN_STATUS "error" "debsums command not found, skipping configuration"
     fi
 
-    ############################## AIDE (Advanced Intrusion Detection Environment)
+    # AIDE (Advanced Intrusion Detection Environment)
     if ! dpkg -s aide >/dev/null 2>&1; then
         HARDN_STATUS "info" "Installing and configuring AIDE..."
         apt install -y aide >/dev/null 2>&1
@@ -1059,10 +1043,9 @@ EOF
     else
         HARDN_STATUS "warning" "AIDE already installed, skipping configuration..."
     fi
-    #################################### YARA
+
     HARDN_STATUS "error" "Setting up YARA rules..."
 
-    # Check if YARA command exists (implies installation)
         if ! command -v yara >/dev/null 2>&1; then
             HARDN_STATUS "warning" "Warning: YARA command not found. Skipping rule setup."
         else
@@ -1125,12 +1108,11 @@ EOF
     HARDN_STATUS "error" "Configuring STIG compliant banner for remote logins (/etc/issue.net)..."
     local banner_net_file="/etc/issue.net"
     if [ -f "$banner_net_file" ]; then
-        # Backup existing banner file
         cp "$banner_net_file" "${banner_net_file}.bak.$(date +%F-%T)" 2>/dev/null || true
     else
         touch "$banner_net_file"
     fi
-    # Write the STIG compliant banner
+
     {
         echo "*************************************************************"
         echo "*     ############# H A R D N - X D R ##############        *"
@@ -1180,7 +1162,7 @@ grub_security() {
         fi
 
         # Check system type
-        if [ -d /sys/firmware/efi ];
+        if [ -d /sys/firmware/efi ]; then
             SYSTEM_TYPE="EFI"
             echo "[INFO] Detected EFI boot system"
             echo "[INFO] GRUB security configuration is not required for EFI systems."
@@ -1206,12 +1188,9 @@ grub_security() {
           [ -w "$GRUB_CFG" ] && echo "[SUCCESS] Can write to custom GRUB config: $GRUB_CFG" || echo "[ERROR] Cannot write to custom GRUB config: $GRUB_CFG"
           [ -w "$GRUB_MAIN_CFG" ] && echo "[SUCCESS] Can write to main GRUB config: $GRUB_MAIN_CFG" || echo "[ERROR] Cannot write to main GRUB config: $GRUB_MAIN_CFG"
 
-
-        # Test update-grub
         echo "[TEST] Testing GRUB update capability..."
         [ command -v update-grub >/dev/null 2>&1 ] && echo "[SUCCESS] update-grub available" || echo "[ERROR] update-grub not available"
 
-        # Show what would be created
         echo
         echo "=== Configuration Preview ==="
         echo "[INFO] Custom config would be created at: $CUSTOM_CFG"
@@ -1241,11 +1220,9 @@ grub_security() {
         return 0
 }
 
-# Binary Format Support (binfmt). Disable running non-native binaries
 disable_binfmt_misc() {
         HARDN_STATUS "error" "Checking/Disabling non-native binary format support (binfmt_misc)..."
 
-        # use ternary-like Bash if statement
         if mount | grep -q 'binfmt_misc'; then
             HARDN_STATUS "info" "binfmt_misc is mounted. Attempting to unmount..."
             umount /proc/sys/fs/binfmt_misc && \
@@ -1253,7 +1230,6 @@ disable_binfmt_misc() {
                 HARDN_STATUS "error" "Failed to unmount binfmt_misc. It might be busy or not a separate mount."
         fi
 
-        # Refactored to use case statement
         if lsmod | grep -q "^binfmt_misc"; then
             HARDN_STATUS "info" "binfmt_misc module is loaded. Attempting to unload..."
             case "$(rmmod binfmt_misc 2>&1 > /dev/null; echo $?)" in
@@ -1266,9 +1242,8 @@ disable_binfmt_misc() {
 
         # Prevent module from loading on boot
         local modprobe_conf="/etc/modprobe.d/disable-binfmt_misc.conf"
-
-        # C-style for loop to check for other potential binfmt modules
         local binfmt_related_modules=("binfmt_misc" "binfmt_aout" "binfmt_elf" "binfmt_script")
+
         for((i=0; i<${#binfmt_related_modules[@]}; i++)); do
             local module="${binfmt_related_modules[i]}"
             if lsmod | grep -q "^$module"; then
@@ -1289,7 +1264,6 @@ disable_binfmt_misc() {
         fi
         whiptail --infobox "Non-native binary format support (binfmt_misc) checked/disabled." 7 70
 }
-
 
 disable_firewire_drivers() {
         HARDN_STATUS "error" "Checking/Disabling FireWire (IEEE 1394) drivers..."
@@ -1324,30 +1298,38 @@ purge_old_packages() {
         local packages_to_purge
         packages_to_purge=$(dpkg -l | grep '^rc' | awk '{print $2}')
 
-        if [[ "$packages_to_purge" ]]; then
-            HARDN_STATUS "info" "Found the following packages with leftover configuration files to purge:"
-            echo "$packages_to_purge"
-
-            command -v whiptail >/dev/null && whiptail --title "Packages to Purge" --msgbox "The following packages have leftover configuration files that will be purged:\n\n$packages_to_purge" 15 70
-
-            for pkg in $packages_to_purge; do
-                HARDN_STATUS "error" "Purging $pkg..."
-                if apt purge -y "$pkg"; then
-                    HARDN_STATUS "pass" "Successfully purged $pkg."
-                else
-                    HARDN_STATUS "error" "Failed to purge $pkg. Trying dpkg --purge..."
-                    if dpkg --purge "$pkg"; then
-                        HARDN_STATUS "pass" "Successfully purged $pkg with dpkg."
-                    else
-                        HARDN_STATUS "error" "Failed to purge $pkg with dpkg as well."
-                    fi
-                fi
-            done
-            whiptail --infobox "Purged configuration files for removed packages." 7 70
-        else
+        [[ -z "$packages_to_purge" ]] && {
             HARDN_STATUS "pass" "No old/removed packages with leftover configuration files found to purge."
             whiptail --infobox "No leftover package configurations to purge." 7 70
-        fi
+
+            # Clean up anyway
+            HARDN_STATUS "error" "Running apt autoremove and clean to free up space..."
+            apt autoremove -y
+            apt clean
+            whiptail --infobox "Apt cache cleaned." 7 70
+            return 0
+        }
+
+        HARDN_STATUS "info" "Found the following packages with leftover configuration files to purge:"
+        echo "$packages_to_purge"
+
+        command -v whiptail >/dev/null &&
+            whiptail --title "Packages to Purge" --msgbox "The following packages have leftover configuration files that will be purged:\n\n$packages_to_purge" 15 70
+
+        for pkg in $packages_to_purge; do
+            HARDN_STATUS "error" "Purging $pkg..."
+
+            apt purge -y "$pkg" && {
+                HARDN_STATUS "pass" "Successfully purged $pkg."
+            } || {
+                HARDN_STATUS "error" "Failed to purge $pkg. Trying dpkg --purge..."
+                dpkg --purge "$pkg" &&
+                    HARDN_STATUS "pass" "Successfully purged $pkg with dpkg." ||
+                    HARDN_STATUS "error" "Failed to purge $pkg with dpkg as well."
+            }
+        done
+
+        whiptail --infobox "Purged configuration files for removed packages." 7 70
 
         HARDN_STATUS "error" "Running apt autoremove and clean to free up space..."
         apt autoremove -y
@@ -1355,7 +1337,6 @@ purge_old_packages() {
         whiptail --infobox "Apt cache cleaned." 7 70
 }
 
-# ENABLE NAME SERVERS FUNCTION: Let user decide DNS, but place recommendation. ADD TO /DOCS
 enable_nameservers() {
         HARDN_STATUS "info" "Configuring DNS nameservers..."
 
@@ -1369,8 +1350,6 @@ enable_nameservers() {
             ["UncensoredDNS"]="91.239.100.100 89.233.43.71"
         )
 
-        # Create menu options for whiptail
-
         # A through selection of recommended Secured DNS provider
         local selected_provider
         selected_provider=$(whiptail --title "DNS Provider Selection" --menu \
@@ -1383,13 +1362,11 @@ enable_nameservers() {
             "UncensoredDNS" "DNSSEC, No Logging, Europe-based, Privacy Focus" \
             3>&1 1>&2 2>&3)
 
-        # Exit if user cancels
         if [[ -z "$selected_provider" ]]; then
             HARDN_STATUS "warning" "DNS configuration cancelled by user. Using system defaults."
             return 0
         fi
 
-        # Get the selected DNS servers
         read -r primary_dns secondary_dns <<< "${dns_providers[$selected_provider]}"
         HARDN_STATUS "info" "Selected $selected_provider DNS: Primary $primary_dns, Secondary $secondary_dns"
 
@@ -1397,7 +1374,6 @@ enable_nameservers() {
         local configured_persistently=false
         local changes_made=false
 
-        # Check for systemd-resolved
         if systemctl is-active --quiet systemd-resolved && \
            [[ -L "$resolv_conf" ]] && \
            (readlink "$resolv_conf" | grep -qE "systemd/resolve/(stub-resolv.conf|resolv.conf)"); then
@@ -1413,7 +1389,6 @@ enable_nameservers() {
 
             cp "$resolved_conf_systemd" "$temp_resolved_conf"
 
-            # Set DNS= and FallbackDNS= explicitly
             if grep -qE "^\s*DNS=" "$temp_resolved_conf"; then
                 sed -i -E "s/^\s*DNS=.*/DNS=$primary_dns $secondary_dns/" "$temp_resolved_conf"
             else
@@ -1424,7 +1399,6 @@ enable_nameservers() {
                 fi
             fi
 
-            # Set FallbackDNS as well (optional, for redundancy)
             if grep -qE "^\s*FallbackDNS=" "$temp_resolved_conf"; then
                 sed -i -E "s/^\s*FallbackDNS=.*/FallbackDNS=$secondary_dns $primary_dns/" "$temp_resolved_conf"
             else
@@ -1477,23 +1451,19 @@ configure_dns_via_networkmanager() {
         mapfile -t connections < <(nmcli -t -f NAME,TYPE,DEVICE,STATE c show --active | grep -E ':(ethernet|wifi):.+:activated')
         conn_count=${#connections[@]}
 
-        # No active connections found
         if ((conn_count == 0)); then
             HARDN_STATUS "warning" "No active NetworkManager connection found."
             return 1
         fi
 
-        # Process the first active connection (could be extended to handle multiple)
         local active_conn
         active_conn=$(echo "${connections[0]}" | cut -d: -f1)
         HARDN_STATUS "info" "Configuring DNS for active connection: $active_conn"
 
-        # Try to modify the connection - use && and || for cleaner conditional execution
         nmcli c modify "$active_conn" ipv4.dns "$primary_dns,$secondary_dns" ipv4.ignore-auto-dns yes && \
             HARDN_STATUS "pass" "NetworkManager DNS configuration updated." || \
             { HARDN_STATUS "error" "Failed to update NetworkManager DNS configuration."; return 1; }
 
-        # Restart the connection to apply changes - use case statement for clearer flow control
         HARDN_STATUS "info" "Restarting connection to apply changes..."
         if nmcli c down "$active_conn" && nmcli c up "$active_conn"; then
             HARDN_STATUS "pass" "NetworkManager connection restarted successfully."
@@ -1503,36 +1473,28 @@ configure_dns_via_networkmanager() {
             HARDN_STATUS "error" "Failed to restart NetworkManager connection. Changes may not be applied."
         fi
 
-        # Return the updated values
         configured_persistently=${result[0]}
         changes_made=${result[1]}
         echo "$configured_persistently $changes_made"
 }
 
-# Main DNS configuration code
     if [[ "$configured_persistently" = false ]] && command -v nmcli >/dev/null 2>&1; then
-        # Call the function and capture the returned values
         read -r configured_persistently changes_made <<< "$(configure_dns_via_networkmanager "$primary_dns" "$secondary_dns" "$configured_persistently" "$changes_made")"
     fi
 
-        # If not using systemd-resolved or NetworkManager, try to set directly in /etc/resolv.conf
         if [[ "$configured_persistently" = false ]]; then
             HARDN_STATUS "info" "Attempting direct modification of $resolv_conf."
             if [[ -f "$resolv_conf" ]] && [[ -w "$resolv_conf" ]]; then
-                # Backup the original file
                 cp "$resolv_conf" "${resolv_conf}.bak.$(date +%Y%m%d%H%M%S)"
 
-                # Create a new resolv.conf with our DNS servers
                 {
                     echo "# Generated by HARDN-XDR"
                     echo "# DNS Provider: $selected_provider"
                     echo "nameserver $primary_dns"
                     echo "nameserver $secondary_dns"
-                    # Preserve any options or search domains from the original file
                     grep -E "^\s*(options|search|domain)" "$resolv_conf" || true
                 } > "${resolv_conf}.new"
 
-                # Replace the original file
                 mv "${resolv_conf}.new" "$resolv_conf"
                 chmod 644 "$resolv_conf"
 
@@ -1540,7 +1502,6 @@ configure_dns_via_networkmanager() {
                 HARDN_STATUS "warning" "Warning: Direct changes to $resolv_conf might be overwritten by network management tools."
                 changes_made=true
 
-                # Make resolv.conf immutable to prevent overwriting
                 if whiptail --title "Protect DNS Configuration" --yesno "Would you like to make $resolv_conf immutable to prevent other services from changing it?\n\nNote: This may interfere with DHCP or VPN services." 10 78; then
                     if chattr +i "$resolv_conf" 2>/dev/null; then
                         HARDN_STATUS "pass" "Made $resolv_conf immutable to prevent changes."
@@ -1553,7 +1514,6 @@ configure_dns_via_networkmanager() {
             fi
         fi
 
-        # Create a persistent hook for dhclient if it exists
         if command -v dhclient >/dev/null 2>&1; then
             local dhclient_dir="/etc/dhcp/dhclient-enter-hooks.d"
             local hook_file="$dhclient_dir/hardn-dns"
@@ -1600,23 +1560,19 @@ EOF
     HARDN_STATUS "info"
 }
 
-# Enable process accounting and sysstat
 enable_process_accounting_and_sysstat() {
     HARDN_STATUS "error" "Enabling process accounting (acct) and system statistics (sysstat)..."
     local changed=false
     install_and_configure_acct && changed=true
     install_and_configure_sysstat && changed=true
 
-    # Final status report
     $changed && HARDN_STATUS "pass" "Process accounting and sysstat configured successfully." || \
                HARDN_STATUS "pass" "Process accounting and sysstat already configured or no changes needed."
 }
 
-# Helper function for acct installation and configuration
 install_and_configure_acct() {
         local changed=false
 
-        # Check if acct/psacct is already installed
         if dpkg -s acct >/dev/null 2>&1 || dpkg -s psacct >/dev/null 2>&1; then
             HARDN_STATUS "info" "acct/psacct is already installed."
         else
@@ -1629,9 +1585,7 @@ install_and_configure_acct() {
             } || HARDN_STATUS "error" "Failed to install acct. Please check manually."
         fi
 
-        # Enable service if installed (only proceed if installation check passed)
         if dpkg -s acct >/dev/null 2>&1 || dpkg -s psacct >/dev/null 2>&1; then
-            # Check if service is already active
             systemctl is-active --quiet acct || systemctl is-active --quiet psacct || {
                 HARDN_STATUS "info" "Enabling and starting acct/psacct service..."
                 systemctl enable --now acct 2>/dev/null || systemctl enable --now psacct 2>/dev/null && {
@@ -1644,10 +1598,8 @@ install_and_configure_acct() {
         $changed && return 0 || return 1
 }
 
-# Helper function for sysstat installation and configuration
 install_and_configure_sysstat() {
         local changed=false
-        # Check if sysstat is already installed
         if dpkg -s sysstat >/dev/null 2>&1; then
             HARDN_STATUS "info" "sysstat is already installed."
         else
@@ -1660,11 +1612,9 @@ install_and_configure_sysstat() {
             } || HARDN_STATUS "error" "Failed to install sysstat. Please check manually."
     fi
 
-        # Configure sysstat if installed
         if dpkg -s sysstat >/dev/null 2>&1; then
             local sysstat_conf="/etc/default/sysstat"
 
-            # Configure sysstat if config file exists
             [[ -f "$sysstat_conf" ]] && {
                 grep -qE '^\s*ENABLED="true"' "$sysstat_conf" || {
                     HARDN_STATUS "info" "Enabling sysstat data collection..."
@@ -1675,7 +1625,6 @@ install_and_configure_sysstat() {
                 } && HARDN_STATUS "pass" "sysstat data collection is already enabled."
             } || HARDN_STATUS "warning" "sysstat configuration file not found. Manual check needed."
 
-            # Enable sysstat service
             systemctl is-active --quiet sysstat || {
                 HARDN_STATUS "info" "Enabling and starting sysstat service..."
                 systemctl enable --now sysstat && {
@@ -1688,7 +1637,6 @@ install_and_configure_sysstat() {
     $changed && return 0 || return 1
 }
 
-# Apply kernel security settings
 apply_kernel_security() {
         HARDN_STATUS "info" "Applying kernel security settings..."
 
@@ -1841,18 +1789,15 @@ apply_kernel_security() {
 
 }
 
-# Function to ensure SSH prerequisites are met
 ensure_ssh_prerequisites() {
         HARDN_STATUS "info" "Checking SSH prerequisites..."
 
-        # Check if sshd directory exists, create if not
         if [ ! -d "/run/sshd" ]; then
             HARDN_STATUS "info" "Creating missing privilege separation directory: /run/sshd"
             mkdir -p /run/sshd
             chmod 0755 /run/sshd
         fi
 
-        # Check if OpenSSH server is installed
         if ! command -v sshd >/dev/null 2>&1; then
             HARDN_STATUS "info" "OpenSSH server is not installed. Installing..."
             apt update && apt install -y openssh-server
@@ -1865,7 +1810,6 @@ ensure_ssh_prerequisites() {
         return 0
 }
 
-# Function to harden SSH configuration
 harden_ssh_config() {
         HARDN_STATUS "section" "Hardening SSH Configuration"
 
@@ -2023,13 +1967,11 @@ Subsystem	sftp	/usr/lib/openssh/sftp-server
 
 EOF
 
-        # Apply the new config
         if ! mv "${temp_config}" "${system_config}"; then
             HARDN_STATUS "error" "Failed to apply new SSH configuration. Check ${temp_config}."
             return 1
         fi
 
-        # Set proper permissions
         chmod 600 "${system_config}"
 
         HARDN_STATUS "info" "Restarting SSH service to apply changes..."
@@ -2044,16 +1986,13 @@ EOF
         return 0
 }
 
-# Central logging
 setup_central_logging() {
         HARDN_STATUS "error" "Setting up central logging for security tools..."
 
-        # Check and install rsyslog and logrotate if necessary
         local logging_packages="rsyslog logrotate"
         HARDN_STATUS "info" "Checking and installing logging packages ($logging_packages)..."
-        # shellcheck disable=SC2086
+
         if ! dpkg -s $logging_packages >/dev/null 2>&1; then
-            # shellcheck disable=SC2086
             if apt update >/dev/null 2>&1 && apt install -y $logging_packages >/dev/null 2>&1; then
                 HARDN_STATUS "pass" "Logging packages installed successfully."
             else
@@ -2066,7 +2005,6 @@ setup_central_logging() {
 
         HARDN_STATUS "info" "Creating log directories and files..."
         mkdir -p /usr/local/var/log/suricata
-        # Note: /var/log/suricata is often created by the suricata package itself
         touch /usr/local/var/log/suricata/hardn-xdr.log
         chmod 640 /usr/local/var/log/suricata/hardn-xdr.log
         chown root:adm /usr/local/var/log/suricata/hardn-xdr.log
@@ -2109,7 +2047,6 @@ EOF
     chmod 644 /etc/rsyslog.d/30-hardn-xdr.conf
     HARDN_STATUS "pass" "Rsyslog configuration created/updated."
 
-    # Create logrotate configuration for the central log
     HARDN_STATUS "info" "Creating logrotate configuration file /etc/logrotate.d/hardn-xdr..."
     cat > /etc/logrotate.d/hardn-xdr << 'EOF'
 /usr/local/var/log/suricata/hardn-xdr.log {
@@ -2143,9 +2080,6 @@ EOF
         chmod 644 /etc/logrotate.d/hardn-xdr
         HARDN_STATUS "pass" "Logrotate configuration created/updated."
 
-
-
-        # Restart rsyslog to apply changes
         HARDN_STATUS "info" "Restarting rsyslog service to apply configuration changes..."
         if systemctl restart rsyslog; then
             HARDN_STATUS "pass" "Rsyslog service restarted successfully."
@@ -2153,11 +2087,9 @@ EOF
             HARDN_STATUS "error" "Failed to restart rsyslog service. Manual check required."
         fi
 
-        # Create a symlink in /var/log for easier access
         HARDN_STATUS "info" "Creating symlink /var/log/hardn-xdr.log..."
         ln -sf /usr/local/var/log/suricata/hardn-xdr.log /var/log/hardn-xdr.log
         HARDN_STATUS "pass" "Symlink created at /var/log/hardn-xdr.log."
-
 
         HARDN_STATUS "pass" "Central logging setup complete. All security logs will be collected in /usr/local/var/log/suricata/hardn-xdr.log"
 }
@@ -2204,16 +2136,13 @@ remove_unnecessary_services() {
 improve_lynis_score() {
         HARDN_STATUS "info" "Applying Lynis score improvements..."
 
-        # Create /tmp with proper permissions (Lynis check FILE-6310)
         HARDN_STATUS "info" "Setting secure permissions on /tmp directory..."
         chmod 1777 /tmp
 
-        # Secure /var/tmp permissions (Lynis check FILE-6311)
         if [[ -d /var/tmp ]]; then
             chmod 1777 /var/tmp
         fi
 
-        # Set proper permissions on log files (Lynis checks FILE-6374, FILE-6376)
         HARDN_STATUS "info" "Securing log file permissions..."
         find /var/log -type f -exec chmod 640 {} \; 2>/dev/null || true
         find /var/log -type d -exec chmod 750 {} \; 2>/dev/null || true
@@ -2223,16 +2152,13 @@ improve_lynis_score() {
         if [[ -f "$ssh_config" ]]; then
             HARDN_STATUS "info" "Enhancing SSH configuration for better Lynis scores..."
 
-            # Backup SSH config
             cp "$ssh_config" "${ssh_config}.bak.hardn" 2>/dev/null || true
 
-            # Apply additional SSH hardening for Lynis
             sed -i 's/^#*ClientAliveInterval.*/ClientAliveInterval 300/' "$ssh_config"
             sed -i 's/^#*ClientAliveCountMax.*/ClientAliveCountMax 0/' "$ssh_config"
             sed -i 's/^#*MaxStartups.*/MaxStartups 10:30:60/' "$ssh_config"
             sed -i 's/^#*LoginGraceTime.*/LoginGraceTime 60/' "$ssh_config"
 
-            # Add SSH hardening if not present
             if ! grep -q "^MaxSessions" "$ssh_config"; then
                 echo "MaxSessions 4" >> "$ssh_config"
             fi
@@ -2240,7 +2166,6 @@ improve_lynis_score() {
             systemctl reload ssh 2>/dev/null || true
         fi
 
-        # Kernel parameter improvements for Lynis (KRNL checks)
         HARDN_STATUS "info" "Applying additional kernel parameters for Lynis score improvement..."
         local sysctl_lynis="/etc/sysctl.d/99-lynis-hardening.conf"
 
@@ -2270,28 +2195,23 @@ fs.protected_symlinks = 1
 EOF
         sysctl -p "$sysctl_lynis" >/dev/null 2>&1 || true
 
-        # PAM configuration improvements (Plugable Authentication Module)
         HARDN_STATUS "info" "Enhancing PAM configuration for Lynis scores..."
         local pam_login="/etc/pam.d/login"
         if [[ -f "$pam_login" ]] && ! grep -q "pam_limits.so" "$pam_login"; then
             echo "session required pam_limits.so" >> "$pam_login"
         fi
 
-        # Set proper file permissions that Lynis checks
         HARDN_STATUS "info" "Setting secure file permissions for Lynis checks..."
 
-        # Secure crontab permissions
         chmod 600 /etc/crontab 2>/dev/null || true
         chmod -R 600 /etc/cron.d/* 2>/dev/null || true
         chmod -R 700 /etc/cron.daily /etc/cron.hourly /etc/cron.monthly /etc/cron.weekly 2>/dev/null || true
 
-        # Secure system configuration files
         chmod 644 /etc/passwd 2>/dev/null || true
         chmod 640 /etc/shadow 2>/dev/null || true
         chmod 644 /etc/group 2>/dev/null || true
         chmod 640 /etc/gshadow 2>/dev/null || true
 
-        # Remove world-writable files (Lynis check FILE-6362)
         HARDN_STATUS "info" "Removing world-writable permissions from system files..."
         find /etc -type f -perm -002 -exec chmod o-w {} \; 2>/dev/null || true
 
@@ -2300,7 +2220,6 @@ EOF
             echo "umask 027" >> /etc/profile
         fi
 
-        # Secure mail queue permissions if postfix is installed
         if command -v postfix >/dev/null 2>&1; then
             chmod 700 /var/spool/postfix/maildrop 2>/dev/null || true
         fi
@@ -2311,32 +2230,24 @@ EOF
 pen_test() {
         HARDN_STATUS "info" "Running comprehensive security audit with Lynis and nmap..."
 
-        # Ensure Lynis is installed (it should be from progs.csv)
         if ! command -v lynis >/dev/null 2>&1; then
             HARDN_STATUS "info" "Installing Lynis..."
             apt install lynis -y >/dev/null 2>&1
         fi
 
-        # Create Lynis log directory
         mkdir -p /var/log/lynis
         chmod 750 /var/log/lynis
 
-        # Apply Lynis score improvements first
         improve_lynis_score
-
-        # Run comprehensive Lynis audit
         HARDN_STATUS "info" "Running comprehensive Lynis system audit..."
         lynis audit system --verbose --log-file /var/log/lynis/hardn-audit.log --report-file /var/log/lynis/hardn-report.dat 2>/dev/null
 
-        # Run Lynis with pentest profile for additional checks
         HARDN_STATUS "info" "Running Lynis penetration testing profile..."
         lynis audit system --pentest --verbose --log-file /var/log/lynis/hardn-pentest.log 2>/dev/null
 
-        # Generate Lynis report
         if [[ -f /var/log/lynis/hardn-report.dat ]]; then
             HARDN_STATUS "pass" "Lynis audit completed. Report saved to /var/log/lynis/hardn-report.dat"
 
-            # Extract and display hardening index if available
             local hardening_index
             hardening_index=$(grep "hardening_index=" /var/log/lynis/hardn-report.dat 2>/dev/null | cut -d'=' -f2)
             if [[ -n "$hardening_index" ]]; then
@@ -2346,30 +2257,23 @@ pen_test() {
             HARDN_STATUS "warning" "Lynis report file not found. Check /var/log/lynis/ for details."
         fi
 
-        # Run nmap scan for network security assessment
         HARDN_STATUS "info" "Starting network security assessment with nmap..."
 
-        # Install nmap if not present
         if ! command -v nmap >/dev/null 2>&1; then
             apt install nmap -y >/dev/null 2>&1
         fi
 
-        # Create nmap log directory
         mkdir -p /var/log/nmap
         chmod 750 /var/log/nmap
-
-        # Run comprehensive nmap scan
         nmap -sS -sV -O -p- localhost > /var/log/nmap/hardn-localhost-scan.log 2>&1 &
         local nmap_pid=$!
 
-        # Run network interface scan
         local interface_ip
         interface_ip=$(ip route get 1.1.1.1 2>/dev/null | grep -oP 'src \K\S+' | head -1)
         if [[ -n "$interface_ip" ]]; then
             nmap -sn "${interface_ip%.*}.0/24" > /var/log/nmap/hardn-network-discovery.log 2>&1 &
         fi
 
-        # Wait for localhost scan to complete
         wait $nmap_pid
         if wait $nmap_pid; then
             HARDN_STATUS "pass" "Network security scan completed. Results saved to /var/log/nmap/"
@@ -2377,7 +2281,6 @@ pen_test() {
             HARDN_STATUS "error" "Network scan encountered issues. Check /var/log/nmap/ for details."
         fi
 
-        # Summary of security audit
         HARDN_STATUS "info" "Security audit summary:"
         HARDN_STATUS "info" "- Lynis reports: /var/log/lynis/"
         HARDN_STATUS "info" "- Network scans: /var/log/nmap/"
