@@ -13,6 +13,13 @@ PROGS_CSV_PATH="${SCRIPT_DIR}/../../progs.csv"
 CURRENT_DEBIAN_VERSION_ID=""
 CURRENT_DEBIAN_CODENAME=""
 
+# Alternative to sleep that uses read with a timeout
+read_sleep() {
+    # Usage: read_sleep 1
+    #        read_sleep 0.2
+    read -rt "$1" <> <(:) || :
+}
+
 HARDN_STATUS() {
     local status="$1"
     local message="$2"
@@ -33,16 +40,19 @@ HARDN_STATUS() {
             echo -e "\033[1;37m[UNKNOWN]\033[0m $message"
             ;;
     esac
-}   
+}
+
+
 detect_os_details() {
-    if [[ -r /etc/os-release ]]; then
-        source /etc/os-release
-        CURRENT_DEBIAN_CODENAME="${VERSION_CODENAME}"
-        CURRENT_DEBIAN_VERSION_ID="${VERSION_ID}"
-    fi
+    [[ -r /etc/os-release ]] && {
+        source /etc/os-release;
+        CURRENT_DEBIAN_CODENAME="${VERSION_CODENAME}";
+        CURRENT_DEBIAN_VERSION_ID="${VERSION_ID}";
+    }
 }
 
 detect_os_details
+
 
 show_system_info() {
     echo "HARDN-XDR v${HARDN_VERSION} - System Information"
@@ -66,7 +76,7 @@ welcomemsg() {
     echo ""
     echo "This installer will update your system first..."
     if whiptail --title "HARDN-XDR v${HARDN_VERSION}" --yesno "Do you want to continue with the installation?" 10 60; then
-        true  
+        true
     else
         echo "Installation cancelled by user."
         exit 1
@@ -77,15 +87,15 @@ preinstallmsg() {
     echo ""
     whiptail --title "HARDN-XDR" --msgbox "Welcome to HARDN-XDR. A Linux Security Hardening program." 10 60
     echo "The system will be configured to ensure STIG and Security compliance."
-   
+
 }
 
 update_system_packages() {
     HARDN_STATUS "pass" "Updating system packages..."
-    if DEBIAN_FRONTEND=noninteractive timeout 10s apt-get -o Acquire::ForceIPv4=true update -y; then
+    if DEBIAN_FRONTEND=noninteractive timeout 10s apt -o Acquire::ForceIPv4=true update -y; then
         HARDN_STATUS "pass" "System package list updated successfully."
     else
-        HARDN_STATUS "warning" "apt-get update failed or timed out after 60 seconds. Check your network or apt sources, but continuing script."
+        HARDN_STATUS "warning" "apt update failed or timed out after 60 seconds. Check your network or apt sources, but continuing script."
     fi
 }
 
@@ -93,16 +103,15 @@ update_system_packages() {
 install_package_dependencies() {
     HARDN_STATUS "pass" "Installing package dependencies from ${PROGS_CSV_PATH}..."
 
-    if ! command -v git >/dev/null 2>&1; then
+    if command -v git >/dev/null 2>&1; then
+        HARDN_STATUS "info" "Git is already installed."
+    else
         HARDN_STATUS "info" "Git is not installed. Attempting to install git..."
-        if DEBIAN_FRONTEND=noninteractive apt-get install -y git >/dev/null 2>&1; then
+        if DEBIAN_FRONTEND=noninteractive apt install -y git >/dev/null 2>&1; then
             HARDN_STATUS "pass" "Successfully installed git."
         else
             HARDN_STATUS "error" "Failed to install git. Some packages might fail to install if they require git."
-            # Do not exit, allow script to continue if git is not strictly needed by all packages
         fi
-    else
-        HARDN_STATUS "info" "Git is already installed."
     fi
 
     # Check if the CSV file exists
@@ -128,17 +137,23 @@ install_package_dependencies() {
 
         HARDN_STATUS "info" "Processing package: $name (Version: $version, Min Debian: $debian_min_version, Codenames: '$debian_codenames_str')"
 
-        # Check OS compatibility
+        # Check OS compatibility - simplified logic with fewer nesting levels
         os_compatible=false
-        if [[ ",${debian_codenames_str}," == *",${CURRENT_DEBIAN_CODENAME},"* ]]; then
-            if [[ "${debian_min_version}" == "12" ]]; then
-                os_compatible=true
-            else
-                HARDN_STATUS "warning" "Skipping $name: Requires Debian version >= $debian_min_version, but current is $CURRENT_DEBIAN_VERSION_ID."
-            fi
-        else
+
+        # Check if package is compatible with current Debian codename
+        if [[ ",${debian_codenames_str}," != *",${CURRENT_DEBIAN_CODENAME},"* ]]; then
             HARDN_STATUS "warning" "Skipping $name: Not compatible with Debian codename $CURRENT_DEBIAN_CODENAME (requires one of: $debian_codenames_str)."
+            continue
         fi
+
+        # Check if package is compatible with current Debian version
+        if [[ "${debian_min_version}" != "12" ]]; then
+            HARDN_STATUS "warning" "Skipping $name: Requires Debian version >= $debian_min_version, but current is $CURRENT_DEBIAN_VERSION_ID."
+            continue
+        fi
+
+        # If we got here, the package is compatible
+        os_compatible=true
 
         if ! $os_compatible; then
             continue
@@ -152,11 +167,11 @@ install_package_dependencies() {
                     if DEBIAN_FRONTEND=noninteractive apt install -y "$name"; then
                         HARDN_STATUS "pass" "Successfully installed $name."
                     else
-                        HARDN_STATUS "warning" "apt install failed for $name, trying apt-get..."
-                        if DEBIAN_FRONTEND=noninteractive apt-get install -y "$name"; then
-                             HARDN_STATUS "pass" "Successfully installed $name with apt-get."
+                        HARDN_STATUS "warning" "apt install failed for $name, trying apt..."
+                        if DEBIAN_FRONTEND=noninteractive apt install -y "$name"; then
+                             HARDN_STATUS "pass" "Successfully installed $name with apt."
                         else
-                            HARDN_STATUS "error" "Failed to install $name with both apt and apt-get. Please check manually."
+                            HARDN_STATUS "error" "Failed to install $name with both apt and apt. Please check manually."
                         fi
                     fi
                 else
@@ -197,19 +212,19 @@ print_ascii_banner() {
     local banner
     banner=$(cat << "EOF"
 
-   ▄█    █▄            ▄████████         ▄████████      ████████▄       ███▄▄▄▄   
-  ███    ███          ███    ███        ███    ███      ███   ▀███      ███▀▀▀██▄ 
-  ███    ███          ███    ███        ███    ███      ███    ███      ███   ███ 
- ▄███▄▄▄▄███▄▄        ███    ███       ▄███▄▄▄▄██▀      ███    ███      ███   ███ 
-▀▀███▀▀▀▀███▀       ▀███████████      ▀▀███▀▀▀▀▀        ███    ███      ███   ███ 
-  ███    ███          ███    ███      ▀███████████      ███    ███      ███   ███ 
-  ███    ███          ███    ███        ███    ███      ███   ▄███      ███   ███ 
-  ███    █▀           ███    █▀         ███    ███      ████████▀        ▀█   █▀  
-                                        ███    ███ 
-                           
+   ▄█    █▄            ▄████████         ▄████████      ████████▄       ███▄▄▄▄
+  ███    ███          ███    ███        ███    ███      ███   ▀███      ███▀▀▀██▄
+  ███    ███          ███    ███        ███    ███      ███    ███      ███   ███
+ ▄███▄▄▄▄███▄▄        ███    ███       ▄███▄▄▄▄██▀      ███    ███      ███   ███
+▀▀███▀▀▀▀███▀       ▀███████████      ▀▀███▀▀▀▀▀        ███    ███      ███   ███
+  ███    ███          ███    ███      ▀███████████      ███    ███      ███   ███
+  ███    ███          ███    ███        ███    ███      ███    ███      ███   ███
+  ███    █▀           ███    █▀         ███    ███      ████████▀        ▀█   █▀
+                                        ███    ███
+
                             Extended Detection and Response
                             by Security International Group
-                                  
+
 EOF
 )
     local banner_width
@@ -223,74 +238,82 @@ EOF
         done
         printf "%s\n" "$line"
     done <<< "$banner"
-    sleep 2
+    read_sleep 2
     printf "\033[0m"
 
 }
 
 setup_security(){
-    # OS detection is done by detect_os_details() 
-    # global variables CURRENT_DEBIAN_VERSION_ID and CURRENT_DEBIAN_CODENAME are available.
-    HARDN_STATUS "pass" "Using detected system: Debian ${CURRENT_DEBIAN_VERSION_ID} (${CURRENT_DEBIAN_CODENAME}) for security setup."
-    HARDN_STATUS "info" "Setting up security tools and configurations..."
-    source ./modules/ufw.sh 
-	source ./modules/deleted_files.sh 
-	source ./modules/ntp.sh
-	source ./modules/usb.sh
-	source ./modules/network_protocols.sh
-	source ./modules/file_perms.sh
-	source ./modules/shared_mem.sh
-	source ./modules/coredumps.sh
-	source ./modules/auto_updates.sh
-	source ./modules/secure_net.sh
- 	source ./modules/stig_pwquality.sh
-	# TODO: fix chkrootkit's download URL; the one in the module DOES NOT exist.
-	#source ./modules/chkrootkit.sh
-	source ./modules/auditd.sh
-	source ./modules/suricata.sh
-	source ./modules/debsums.sh
-	source ./modules/aide.sh
-	source ./modules/yara.sh
-	source ./modules/banner.sh
-	source ./modules/compilers.sh
-	source ./modules/grub.sh
-	source ./modules/binfmt.sh
-	source ./modules/purge_old_pkgs.sh
-	source ./modules/dns_config.sh
-	source ./modules/firewire.sh
-	source ./modules/process_accounting.sh
-	source ./modules/kernel_sec.sh
-	source ./modules/central_logging.sh
-	source ./modules/unnecesary_services.sh
-	source ./modules/audit_system.sh
-	source ./modules/pentest.sh
-	source ./modules/rkhunter.sh 
+        # OS detection is done by detect_os_details()
+        # global variables CURRENT_DEBIAN_VERSION_ID and CURRENT_DEBIAN_CODENAME are available.
+        HARDN_STATUS "pass" "Using detected system: Debian ${CURRENT_DEBIAN_VERSION_ID} (${CURRENT_DEBIAN_CODENAME}) for security setup."
+        HARDN_STATUS "info" "Setting up security tools and configurations..."
+
+        # Use full paths to ensure modules are found
+        local MODULE_DIR="${SCRIPT_DIR}/modules"
+
+        # Check if module directory exists
+        [[ -d "${MODULE_DIR}" ]] || { HARDN_STATUS "error" "Module directory not found: ${MODULE_DIR}"; return 1; }
+
+        # Define array of modules & cycle through them
+        modules=(
+            ufw.sh deleted_files.sh ntp.sh usb.sh network_protocols.sh file_perms.sh
+            shared_mem.sh coredumps.sh auto_updates.sh secure_net.sh stig_pwquality.sh
+            auditd.sh suricata.sh debsums.sh aide.sh yara.sh banner.sh compilers.sh
+            grub.sh binfmt.sh purge_old_pkgs.sh dns_config.sh firewire.sh
+            process_accounting.sh kernel_sec.sh central_logging.sh unnecesary_services.sh
+            audit_system.sh pentest.sh rkhunter.sh
+        )
+
+        # Function to load a module
+        # shellcheck disable=SC1090
+        load_module() {
+            local module="$1"
+            if [[ -f "${MODULE_DIR}/${module}" ]]; then
+                HARDN_STATUS "info" "Loading module: ${module}"
+                source "${MODULE_DIR}/${module}"
+                return 0
+            else
+                HARDN_STATUS "warning" "Module not found: ${module}"
+                return 1
+            fi
+        }
+
+        # Load each module in the array
+        for ((i=0; i<${#modules[@]}; i++)); do
+            load_module "${modules[$i]}"
+        done
+
+        # TODO: fix chkrootkit's download URL; the one in the module DOES NOT exist.
+        # if [[ -f "${MODULE_DIR}/chkrootkit.sh" ]]; then
+        #     source "${MODULE_DIR}/chkrootkit.sh"
+        # fi
 }
 
 cleanup() {
-    HARDN_STATUS "info" "Performing final system cleanup..."
-    apt-get autoremove -y >/dev/null 2>&1
-    apt-get clean >/dev/null 2>&1
-    apt-get autoclean >/dev/null 2>&1
-    HARDN_STATUS "pass" "System cleanup completed. Unused packages and cache cleared."
-    whiptail --infobox "HARDN-XDR v${HARDN_VERSION} setup complete! Please reboot your system." 8 75
-    sleep 3
+        HARDN_STATUS "info" "Performing final system cleanup..."
+        apt autoremove -y >/dev/null 2>&1
+        apt clean >/dev/null 2>&1
+        apt autoclean >/dev/null 2>&1
+        HARDN_STATUS "pass" "System cleanup completed. Unused packages and cache cleared."
+        whiptail --infobox "HARDN-XDR v${HARDN_VERSION} setup complete! Please reboot your system." 8 75
+        read_sleep 3
 
 }
 
 main() {
-    print_ascii_banner
-    show_system_info
-    welcomemsg
-    update_system_packages
-    install_package_dependencies "../../progs.csv"
-    setup_security
-    cleanup
-    print_ascii_banner
+        print_ascii_banner
+        show_system_info
+        welcomemsg
+        update_system_packages
+        install_package_dependencies "../../progs.csv"
+        setup_security
+        cleanup
+        print_ascii_banner
 
-    HARDN_STATUS "pass" "HARDN-XDR v${HARDN_VERSION} installation completed successfully!"
-    HARDN_STATUS "info" "Your system has been hardened with STIG compliance and security tools."
-    HARDN_STATUS "warning" "Please reboot your system to complete the configuration."
+        HARDN_STATUS "pass" "HARDN-XDR v${HARDN_VERSION} installation completed successfully!"
+        HARDN_STATUS "info" "Your system has been hardened with STIG compliance and security tools."
+        HARDN_STATUS "warning" "Please reboot your system to complete the configuration."
 }
 
 # Command line argument handling
@@ -331,5 +354,6 @@ if [[ $# -gt 0 ]]; then
             ;;
     esac
 fi
+
 
 main
