@@ -3,6 +3,10 @@
 # This module handles the hardening of GRUB bootloader settings
 # It is part of the HARDN-XDR security hardening framework
 
+# https://help.ubuntu.com/community/Grub2/Passwords
+# Set a password on GRUB boot loader to prevent altering boot configuratio
+
+
 HARDN_STATUS "info" "Checking and configuring GRUB settings..."
 
 # Define color codes
@@ -144,6 +148,27 @@ update_grub_config() {
             success "Backup of original GRUB custom configuration created."
         fi
 
+        # Create /boot/grub2/user.cfg if it doesn't exist
+        local grub2_dir="/boot/grub2"
+        local user_cfg="${grub2_dir}/user.cfg"
+
+        # Create directory if it doesn't exist
+        if [ ! -d "$grub2_dir" ]; then
+            mkdir -p "$grub2_dir"
+            info "Created directory $grub2_dir"
+        fi
+
+        # Create or update user.cfg file
+        {
+            echo "# GRUB2 user configuration file - created by HARDN-XDR"
+            echo "# $(date)"
+            echo "set superusers=\"$grub_username\""
+            echo "password_pbkdf2 $grub_username $password_hash"
+        } > "$user_cfg"
+
+        chmod 600 "$user_cfg"
+        success "Created GRUB2 user configuration file at $user_cfg"
+
         local temp_file
         temp_file=$(mktemp)
         # The use of a trap, will help ensure temporary file security
@@ -157,8 +182,13 @@ update_grub_config() {
             echo "# Simply type the menu entries you want to add after this comment."
             echo "# Be careful not to change the 'exec tail' line above."
             echo ""
-            echo "set superusers="$grub_username""
+            echo "set superusers=\"$grub_username\""
             echo "password_pbkdf2 $grub_username $password_hash"
+            echo ""
+            echo "# Include the user configuration file if it exists"
+            echo "if [ -f /boot/grub2/user.cfg ]; then"
+            echo "  source /boot/grub2/user.cfg"
+            echo "fi"
         } > "$temp_file"
 
         # Copy the rest of the original file if it exists and has content beyond the header

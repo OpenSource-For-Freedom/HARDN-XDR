@@ -253,7 +253,6 @@ setup_security(){
 	source ./modules/yara.sh
 	source ./modules/banner.sh
 	source ./modules/compilers.sh
-	source ./modules/grub.sh
 	source ./modules/binfmt.sh
 	source ./modules/purge_old_pkgs.sh
 	source ./modules/dns_config.sh
@@ -262,6 +261,7 @@ setup_security(){
 	source ./modules/kernel_sec.sh
 	source ./modules/central_logging.sh
 	source ./modules/unnecesary_services.sh
+    source ./modules/grub.sh
 	source ./modules/audit_system.sh
 	source ./modules/pentest.sh
 	source ./modules/rkhunter.sh
