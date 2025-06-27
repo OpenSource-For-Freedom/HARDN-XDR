@@ -1,69 +1,122 @@
-#!/bin/bash
+#######################################
+# GRUB Configuration
+# This module handles the hardening of GRUB bootloader settings
+# It is part of the HARDN-XDR security hardening framework
 
-# secure_grub.sh - Automates the process of securing GRUB with a password
-# Part of the HARDN-XDR project
+HARDN_STATUS "info" "Checking and configuring GRUB settings..."
 
-check_root () {
-    [ "$(id -u)" -ne 0 ] && echo "Please run this script as root." && exit 1
+# Define color codes
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[0;33m'
+BOLD='\033[1m'
+RESET='\033[0m'
+
+# Print color messages/output
+print_msg() {
+        local color="$1"
+        local msg="$2"
+        printf "${color}${BOLD}%s${RESET}\n" "$msg"
 }
 
-setup_status_function() {
-    # Import the HARDN status function if available
-    if [ -f "../hardn-main.sh" ]; then
-        source "../hardn-main.sh"
-    else
-        # Define a simple status function if the main script is not available
-        HARDN_STATUS() {
-            local type="$1"
-            local message="$2"
-            case "$type" in
-                info) echo -e "\033[0;34m[INFO]\033[0m $message" ;;
-                pass) echo -e "\033[0;32m[PASS]\033[0m $message" ;;
-                warning) echo -e "\033[0;33m[WARNING]\033[0m $message" ;;
-                error) echo -e "\033[0;31m[ERROR]\033[0m $message" ;;
-                *) echo "$message" ;;
-            esac
-        }
-    fi
+error(){
+        print_msg "$RED" "Error: $1" >&2
+        # If this is the main script (not sourced), then exit
+        if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+            exit 1
+        else
+            # Otherwise just return with error code
+            return 1
+        fi
+}
+
+success(){
+        print_msg "$GREEN" "Success: $1"
+}
+
+info(){
+        print_msg "$BLUE" "Info: $1"
+}
+
+warning(){
+        print_msg "$YELLOW" "Warning: $1"
+}
+
+check_root() {
+        [ "$(id -u)" -ne 0 ] && error "Please run this script as root."
+}
+
+# Different GRUB versions might have different configuration requirements.
+# This necessitates a GRUB version check
+check_grub_version() {
+        local grub_version
+        grub_version=$(grub-install --version 2>/dev/null | awk '{print $NF}' | cut -d. -f1)
+
+        if [ -z "$grub_version" ]; then
+            warning "Could not determine GRUB version. Proceeding anyway."
+        elif [ "$grub_version" -lt 2 ]; then
+            warning "This script is designed for GRUB 2. Your version may not support all features."
+        else
+            info "Detected GRUB version $grub_version. Compatible with this script."
+        fi
 }
 
 check_dependencies() {
-        # Check if grub-mkpasswd-pbkdf2 is available in PATH
         command -v grub-mkpasswd-pbkdf2 &> /dev/null && return 0
+        info "grub-mkpasswd-pbkdf2 not found. Installing grub-common..."
 
-        # Tool not found, attempt to install it
-        HARDN_STATUS "info" "grub-mkpasswd-pbkdf2 not found. Installing grub-common..."
-
-        # Use && to only proceed if the previous command succeeds
-        # This avoids nested if statements
         apt update && apt install -y grub-common && {
-            HARDN_STATUS "pass" "Successfully installed grub-common."
+            success "Successfully installed grub-common."
             return 0
         }
 
-        # If we reach here, installation failed
-        HARDN_STATUS "error" "Failed to install grub-common. Exiting."
-    exit 1
+        error "Failed to install grub-common. Exiting."
 }
 
 generate_password_hash() {
-        HARDN_STATUS "info" "Generating GRUB password hash..."
+        info "Generating GRUB password hash..."
 
         [ ! -t 0 ] && {
-            HARDN_STATUS "error" "This script requires an interactive terminal for password input."
-            exit 1
+            error "This script requires an interactive terminal for password input."
         }
 
-        echo "Please enter a strong password for GRUB:"
-        local password_hash
-        password_hash=$(grub-mkpasswd-pbkdf2 | grep "PBKDF2 hash of your password is" | sed 's/PBKDF2 hash of your password is //')
+        # Add trap for Ctrl+C
+        trap 'echo ""; warning "Password generation cancelled."; return 1' INT
 
-        if [ -z "$password_hash" ]; then
-            HARDN_STATUS "error" "Failed to generate password hash. Exiting."
-            exit 1
+        # More secure password input
+        local password password_confirm
+        echo "Please enter a strong password for GRUB (minimum 10 characters recommended):"
+        read -r -s password
+        echo
+        echo "Please confirm the password:"
+        read -r -s password_confirm
+        echo
+
+        if [ "$password" != "$password_confirm" ]; then
+            warning "Passwords do not match. Please try again."
+            trap - INT
+            return 1
         fi
 
-        HARDN_STATUS "pass" "Password hash generated successfully."
+        # Check password strength
+        if [ ${#password} -lt 10 ]; then
+            warning "Password is too short. Please use at least 10 characters."
+            trap - INT
+            return 1
+        fi
+
+        # Generate hash from the password
+        local password_hash
+        password_hash=$(echo -e "$password\n$password" | grub-mkpasswd-pbkdf2 2>/dev/null | grep "PBKDF2 hash of your password is" | sed 's/PBKDF2 hash of your password is //')
+
+        # Reset the trap
+        trap - INT
+
+        # Checking for successful password hash generation.
+        [ -z "$password_hash" ] && error "Password did not generate. Exiting"
+
+        success "Password hash generated successfully."
         echo "$password_hash"
 }
 
@@ -71,95 +124,176 @@ update_grub_config() {
         local password_hash="$1"
         local grub_username="admin"
 
-        HARDN_STATUS "info" "Updating GRUB configuration with password protection..."
+        info "Updating GRUB configuration with password protection..."
 
-        # Backup the original 40_custom file
-        if [ -f /etc/grub.d/40_custom ]; then
-            cp /etc/grub.d/40_custom "/etc/grub.d/40_custom.bak.$(date +%Y%m%d-%H%M%S)"
+        # Check if password protection is already configured
+        if [ -f /etc/grub.d/40_custom ] && grep -q "set superusers=" /etc/grub.d/40_custom; then
+            warning "GRUB password protection appears to be already configured."
+            read -r -p "Do you want to overwrite the existing configuration? [y/N]: " answer
+            answer=${answer:-N}  # Default to N if Enter is pressed
+
+            if [[ ! $answer =~ ^[Yy]$ ]]; then
+                info "Keeping existing configuration."
+                return 0
+            fi
         fi
 
-        local temp_file=$(mktemp)
+        # Backing up the original 40_custom file
+        if [ -f /etc/grub.d/40_custom ]; then
+            cp /etc/grub.d/40_custom "/etc/grub.d/40_custom.bak.$(date +%Y%m%d-%H%M%S).$$"
+            success "Backup of original GRUB custom configuration created."
+        fi
+
+        local temp_file
+        temp_file=$(mktemp)
+        # The use of a trap, will help ensure temporary file security
+        trap 'rm -f "$temp_file"' EXIT
 
         # Add the superuser and password configuration at the top
-        echo "#!/bin/sh" > "$temp_file"
-        echo "exec tail -n +3 \$0" >> "$temp_file"
-        echo "# This file provides an easy way to add custom menu entries." >> "$temp_file"
-        echo "# Simply type the menu entries you want to add after this comment." >> "$temp_file"
-        echo "# Be careful not to change the 'exec tail' line above." >> "$temp_file"
-        echo "" >> "$temp_file"
-        echo "set superusers="$grub_username"" >> "$temp_file"
-        echo "password_pbkdf2 $grub_username $password_hash" >> "$temp_file"
+        {
+            echo "#!/bin/sh"
+            echo "exec tail -n +3 \$0"
+            echo "# This file provides an easy way to add custom menu entries."
+            echo "# Simply type the menu entries you want to add after this comment."
+            echo "# Be careful not to change the 'exec tail' line above."
+            echo ""
+            echo "set superusers=\"$grub_username\""
+            echo "password_pbkdf2 $grub_username $password_hash"
+        } > "$temp_file"
 
         # Copy the rest of the original file if it exists and has content beyond the header
         if [ -f /etc/grub.d/40_custom ]; then
             # Skip the first 6 lines (the standard header)
-            tail -n +7 /etc/grub.d/40_custom >> "$temp_file"
+            tail -n +7 /etc/grub.d/40_custom >> "$temp_file" 2>/dev/null || true
         fi
 
         # Replace the original file with our modified version
         mv "$temp_file" /etc/grub.d/40_custom
         chmod 755 /etc/grub.d/40_custom
+        success "GRUB custom configuration updated with password protection."
 
-        HARDN_STATUS "info" "Regenerating GRUB configuration..."
-        if update-grub; then
-            HARDN_STATUS "pass" "GRUB configuration updated successfully."
+        info "Regenerating GRUB configuration..."
+        if command -v update-grub >/dev/null 2>&1; then
+            if update-grub; then
+                success "GRUB configuration updated successfully."
+                return 0
+            else
+                error "Failed to update GRUB configuration."
+            fi
+        elif command -v grub2-mkconfig >/dev/null 2>&1; then
+            local grub_cfg="/boot/grub2/grub.cfg"
+            [ -d /boot/grub ] && grub_cfg="/boot/grub/grub.cfg"
+
+            if grub2-mkconfig -o "$grub_cfg"; then
+                success "GRUB configuration updated successfully."
+                return 0
+            else
+                error "Failed to update GRUB configuration."
+            fi
         else
-            HARDN_STATUS "error" "Failed to update GRUB configuration."
-            return 1
+            error "Could not find update-grub or grub2-mkconfig. Please update GRUB configuration manually."
+        fi
+}
+
+# Checking that the GRUB changes were properly applied.
+verify_grub_config() {
+        info "Verifying GRUB configuration..."
+
+        local grub_cfg=""
+        if [ -f /boot/grub/grub.cfg ]; then
+            grub_cfg="/boot/grub/grub.cfg"
+        elif [ -f /boot/grub2/grub.cfg ]; then
+            grub_cfg="/boot/grub2/grub.cfg"
         fi
 
-        return 0
+        if [ -n "$grub_cfg" ] && grep -q "set superusers=" "$grub_cfg" &&
+           grep -q "password_pbkdf2" "$grub_cfg"; then
+            success "GRUB password protection verified in configuration."
+        else
+            warning "Could not verify GRUB password protection in final configuration."
+            warning "This might be normal if your GRUB configuration is in a non-standard location."
+            warning "Please check manually after reboot."
+        fi
 }
 
 ask_for_reboot() {
-        HARDN_STATUS "info" "GRUB has been secured with a password."
-        HARDN_STATUS "info" "To test the configuration, you need to reboot your system."
-        HARDN_STATUS "info" "After reboot, press Esc or Shift to enter the GRUB menu."
-        HARDN_STATUS "info" "Try entering the command line (c) or editing entries (e)."
-        HARDN_STATUS "info" "You should be prompted for the GRUB username (admin) and password."
+        info "GRUB has been secured with a password."
+        info "To test the configuration, you need to reboot your system."
+        info "After reboot, press Esc or Shift to enter the GRUB menu."
+        info "Try entering the command line (c) or editing entries (e)."
+        info "You should be prompted for the GRUB username (admin) and password."
+
+        # Check if there are any processes that might prevent a clean reboot
+        if command -v needrestart >/dev/null 2>&1; then
+            needrestart -k -r a -q || warning "Some services may need to be restarted after reboot."
+        fi
 
         read -r -p "Do you want to reboot now? [Y/n]: " answer
         answer=${answer:-Y}  # Default to Y if Enter is pressed
 
         case "$answer" in
             [Yy]*)
-                HARDN_STATUS "info" "Rebooting system..."
+                info "Rebooting system..."
+                sync  # Ensure all changes are written to disk
                 reboot
                 ;;
             *)
-                HARDN_STATUS "info" "Reboot skipped. Remember to reboot later to apply the changes."
+                info "Reboot skipped. Remember to reboot later to apply the changes."
                 ;;
         esac
 }
 
 # Main
 secure_grub() {
+        # Localize shell options
+        local IFS_OLD=$IFS
+        local LC_ALL_OLD=$LC_ALL
+        local LANG_OLD=$LANG
 
-        HARDN_STATUS "info" "Starting GRUB password protection setup..."
+        # Function to restore environment variables
+        restore_env() {
+            IFS=$IFS_OLD
+            LC_ALL=$LC_ALL_OLD
+            LANG=$LANG_OLD
+        }
+
+        # Setting strict shell options for this function only
+        set -euo pipefail
+        IFS=$'\n\t'  # Set IFS to newline and tab to avoid issues with spaces in filenames
+
+        # Disable unicode for performance increase
+        LC_ALL=C
+        LANG=C
+
+        # Ensure environment is restored on exit
+        trap restore_env EXIT
+
+        info "Starting GRUB password protection setup..."
 
         check_root
-        setup_status_function
+        check_grub_version
         check_dependencies
 
-        # Generate password hash
         local password_hash
         password_hash=$(generate_password_hash)
 
         # Check if password hash was successfully generated
-        [ -z "$password_hash" ] && {
-            HARDN_STATUS "error" "Password hash generation failed. Exiting."
-            exit 1
-        }
+        if [ -z "$password_hash" ]; then
+            error "Password hash generation failed. Exiting."
+            return 1
+        fi
 
+        if ! update_grub_config "$password_hash"; then
+            error "Failed to secure GRUB. Exiting."
+            return 1
+        fi
 
-        # Update GRUB configuration
-        update_grub_config "$password_hash" || {
-            HARDN_STATUS "error" "Failed to secure GRUB. Exiting."
-            exit 1
-        }
+        verify_grub_config
 
+        # trap will handle environment restoration
         ask_for_reboot
 }
 
-# main function
+# Calling the main function
 secure_grub
+
