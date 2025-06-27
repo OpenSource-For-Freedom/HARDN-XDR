@@ -162,7 +162,7 @@ update_grub_config() {
         {
             echo "# GRUB2 user configuration file - created by HARDN-XDR"
             echo "# $(date)"
-            echo "set superusers=\"$grub_username\""
+            echo "set superusers="$grub_username""
             echo "password_pbkdf2 $grub_username $password_hash"
         } > "$user_cfg"
 
@@ -327,3 +327,9 @@ secure_grub() {
         ask_for_reboot
 }
 
+# Export the main function for use in other scripts
+export -f secure_grub
+# Execute the main function when the script is run directly (not sourced)
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+    secure_grub
+fi
