@@ -157,7 +157,7 @@ update_grub_config() {
             echo "# Simply type the menu entries you want to add after this comment."
             echo "# Be careful not to change the 'exec tail' line above."
             echo ""
-            echo "set superusers=\"$grub_username\""
+            echo "set superusers="$grub_username""
             echo "password_pbkdf2 $grub_username $password_hash"
         } > "$temp_file"
 
@@ -245,16 +245,16 @@ ask_for_reboot() {
 
 # Main
 secure_grub() {
-        # Localize shell options
-        local IFS_OLD=$IFS
-        local LC_ALL_OLD=$LC_ALL
-        local LANG_OLD=$LANG
+        # Save current environment variables before setting strict mode
+        local IFS_OLD="$IFS"
+        local LC_ALL_OLD="${LC_ALL:-}"
+        local LANG_OLD="${LANG:-}"
 
         # Function to restore environment variables
         restore_env() {
-            IFS=$IFS_OLD
-            LC_ALL=$LC_ALL_OLD
-            LANG=$LANG_OLD
+            IFS="$IFS_OLD"
+            LC_ALL="$LC_ALL_OLD"
+            LANG="$LANG_OLD"
         }
 
         # Setting strict shell options for this function only
@@ -280,20 +280,20 @@ secure_grub() {
         # Check if password hash was successfully generated
         if [ -z "$password_hash" ]; then
             error "Password hash generation failed. Exiting."
+            restore_env  # Explicitly call restore_env before returning
             return 1
         fi
 
         if ! update_grub_config "$password_hash"; then
             error "Failed to secure GRUB. Exiting."
+            restore_env  # Explicitly call restore_env before returning
             return 1
         fi
 
         verify_grub_config
 
-        # trap will handle environment restoration
+        # Explicitly call restore_env before asking for reboot
+        restore_env
         ask_for_reboot
 }
-
-# Calling the main function
-secure_grub
 
