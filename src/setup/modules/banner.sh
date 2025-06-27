@@ -1,3 +1,11 @@
+#######################################
+# Banner settings
+# This module handles the banner
+#######################################
+
+
+HARDN_STATUS "info" "Setting up the HARDN XDR Banner..."
+
 
 configure_stig_banner() {
         local banner_file="$1"
@@ -31,3 +39,5 @@ configure_stig_banner() {
 
 # Configure banner for remote logins
 configure_stig_banner "/etc/issue.net" "remote logins (/etc/issue.net)"
+
+
