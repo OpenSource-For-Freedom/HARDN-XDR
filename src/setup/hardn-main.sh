@@ -33,7 +33,7 @@ HARDN_STATUS() {
             echo -e "\033[1;37m[UNKNOWN]\033[0m $message"
             ;;
     esac
-}   
+}
 detect_os_details() {
     if [[ -r /etc/os-release ]]; then
         source /etc/os-release
@@ -66,7 +66,7 @@ welcomemsg() {
     echo ""
     echo "This installer will update your system first..."
     if whiptail --title "HARDN-XDR v${HARDN_VERSION}" --yesno "Do you want to continue with the installation?" 10 60; then
-        true  
+        true
     else
         echo "Installation cancelled by user."
         exit 1
@@ -77,7 +77,7 @@ preinstallmsg() {
     echo ""
     whiptail --title "HARDN-XDR" --msgbox "Welcome to HARDN-XDR. A Linux Security Hardening program." 10 60
     echo "The system will be configured to ensure STIG and Security compliance."
-   
+
 }
 
 update_system_packages() {
@@ -197,19 +197,19 @@ print_ascii_banner() {
     local banner
     banner=$(cat << "EOF"
 
-   ▄█    █▄            ▄████████         ▄████████      ████████▄       ███▄▄▄▄   
-  ███    ███          ███    ███        ███    ███      ███   ▀███      ███▀▀▀██▄ 
-  ███    ███          ███    ███        ███    ███      ███    ███      ███   ███ 
- ▄███▄▄▄▄███▄▄        ███    ███       ▄███▄▄▄▄██▀      ███    ███      ███   ███ 
-▀▀███▀▀▀▀███▀       ▀███████████      ▀▀███▀▀▀▀▀        ███    ███      ███   ███ 
-  ███    ███          ███    ███      ▀███████████      ███    ███      ███   ███ 
-  ███    ███          ███    ███        ███    ███      ███   ▄███      ███   ███ 
-  ███    █▀           ███    █▀         ███    ███      ████████▀        ▀█   █▀  
-                                        ███    ███ 
-                           
+   ▄█    █▄            ▄████████         ▄████████      ████████▄       ███▄▄▄▄
+  ███    ███          ███    ███        ███    ███      ███   ▀███      ███▀▀▀██▄
+  ███    ███          ███    ███        ███    ███      ███    ███      ███   ███
+ ▄███▄▄▄▄███▄▄        ███    ███       ▄███▄▄▄▄██▀      ███    ███      ███   ███
+▀▀███▀▀▀▀███▀       ▀███████████      ▀▀███▀▀▀▀▀        ███    ███      ███   ███
+  ███    ███          ███    ███      ▀███████████      ███    ███      ███   ███
+  ███    ███          ███    ███        ███    ███      ███   ▄███      ███   ███
+  ███    █▀           ███    █▀         ███    ███      ████████▀        ▀█   █▀
+                                        ███    ███
+
                             Extended Detection and Response
                             by Security International Group
-                                  
+
 EOF
 )
     local banner_width
@@ -229,12 +229,12 @@ EOF
 }
 
 setup_security(){
-    # OS detection is done by detect_os_details() 
+    # OS detection is done by detect_os_details()
     # global variables CURRENT_DEBIAN_VERSION_ID and CURRENT_DEBIAN_CODENAME are available.
     HARDN_STATUS "pass" "Using detected system: Debian ${CURRENT_DEBIAN_VERSION_ID} (${CURRENT_DEBIAN_CODENAME}) for security setup."
     HARDN_STATUS "info" "Setting up security tools and configurations..."
-    source ./modules/ufw.sh 
-	source ./modules/deleted_files.sh 
+    source ./modules/ufw.sh
+	source ./modules/deleted_files.sh
 	source ./modules/ntp.sh
 	source ./modules/usb.sh
 	source ./modules/network_protocols.sh
@@ -244,8 +244,8 @@ setup_security(){
 	source ./modules/auto_updates.sh
 	source ./modules/secure_net.sh
  	source ./modules/stig_pwquality.sh
-	# TODO: fix chkrootkit's download URL; the one in the module DOES NOT exist.
-	#source ./modules/chkrootkit.sh
+	# chkrootkit dl url prob DONE..testing to confirm --> fix chkrootkit's download URL; the one in the module DOES NOT exist. Trying FTP
+	source ./modules/chkrootkit.sh
 	source ./modules/auditd.sh
 	source ./modules/suricata.sh
 	source ./modules/debsums.sh
@@ -264,7 +264,7 @@ setup_security(){
 	source ./modules/unnecesary_services.sh
 	source ./modules/audit_system.sh
 	source ./modules/pentest.sh
-	source ./modules/rkhunter.sh 
+	source ./modules/rkhunter.sh
 }
 
 cleanup() {
