@@ -229,42 +229,42 @@ EOF
 }
 
 setup_security(){
-    # OS detection is done by detect_os_details()
-    # global variables CURRENT_DEBIAN_VERSION_ID and CURRENT_DEBIAN_CODENAME are available.
-    HARDN_STATUS "pass" "Using detected system: Debian ${CURRENT_DEBIAN_VERSION_ID} (${CURRENT_DEBIAN_CODENAME}) for security setup."
-    HARDN_STATUS "info" "Setting up security tools and configurations..."
-    source ./modules/ufw.sh
-	source ./modules/deleted_files.sh
-	source ./modules/ntp.sh
-	source ./modules/usb.sh
-	source ./modules/network_protocols.sh
-	source ./modules/file_perms.sh
-	source ./modules/shared_mem.sh
-	source ./modules/coredumps.sh
-	source ./modules/auto_updates.sh
-	source ./modules/secure_net.sh
- 	source ./modules/stig_pwquality.sh
-	# chkrootkit dl url prob DONE..testing to confirm --> fix chkrootkit's download URL; the one in the module DOES NOT exist. Trying FTP
-	source ./modules/chkrootkit.sh
-	source ./modules/auditd.sh
-	source ./modules/suricata.sh
-	source ./modules/debsums.sh
-	source ./modules/aide.sh
-	source ./modules/yara.sh
-	source ./modules/banner.sh
-	source ./modules/compilers.sh
-	source ./modules/binfmt.sh
-	source ./modules/purge_old_pkgs.sh
-	source ./modules/dns_config.sh
-	source ./modules/firewire.sh
-	source ./modules/process_accounting.sh
-	source ./modules/kernel_sec.sh
-	source ./modules/central_logging.sh
-	source ./modules/unnecesary_services.sh
-    source ./modules/rkhunter.sh
-    source ./modules/grub.sh
-	source ./modules/audit_system.sh
-	source ./modules/pentest.sh
+        # OS detection is done by detect_os_details()
+        # global variables CURRENT_DEBIAN_VERSION_ID and CURRENT_DEBIAN_CODENAME are available.
+        HARDN_STATUS "pass" "Using detected system: Debian ${CURRENT_DEBIAN_VERSION_ID} (${CURRENT_DEBIAN_CODENAME}) for security setup."
+        HARDN_STATUS "info" "Setting up security tools and configurations..."
+        source ./modules/ufw.sh
+    	source ./modules/deleted_files.sh
+    	source ./modules/ntp.sh
+    	source ./modules/usb.sh
+    	source ./modules/network_protocols.sh
+    	source ./modules/file_perms.sh
+    	source ./modules/shared_mem.sh
+    	source ./modules/coredumps.sh
+    	source ./modules/auto_updates.sh
+    	source ./modules/secure_net.sh
+     	source ./modules/stig_pwquality.sh
+    	# chkrootkit dl url prob DONE..testing to confirm --> fix chkrootkit's download URL; the one in the module DOES NOT exist. Trying FTP
+    	source ./modules/chkrootkit.sh
+    	source ./modules/auditd.sh
+    	source ./modules/suricata.sh
+    	source ./modules/debsums.sh
+    	source ./modules/aide.sh
+    	source ./modules/yara.sh
+    	source ./modules/banner.sh
+    	source ./modules/compilers.sh
+    	source ./modules/binfmt.sh
+    	source ./modules/purge_old_pkgs.sh
+    	source ./modules/dns_config.sh
+    	source ./modules/firewire.sh
+    	source ./modules/process_accounting.sh
+    	source ./modules/kernel_sec.sh
+    	source ./modules/central_logging.sh
+    	source ./modules/unnecesary_services.sh
+        source ./modules/rkhunter.sh
+        source ./modules/grub.sh
+    	source ./modules/audit_system.sh
+    	source ./modules/pentest.sh
 }
 
 cleanup() {
