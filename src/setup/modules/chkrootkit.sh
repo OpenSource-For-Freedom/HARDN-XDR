@@ -4,11 +4,6 @@
 # It is part of the HARDN-XDR security hardening framework
 #######################################
 
-#TODO add more robust error handleing
-# & disable unicode
-#        IFS=$IFS_OLD
-#        LC_ALL=$LC_ALL_OLD
-#        LANG=$LANG_OLD
 
 HARDN_STATUS "info" "Setting up Chkrootkit..."
 
