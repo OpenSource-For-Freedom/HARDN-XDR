@@ -261,10 +261,10 @@ setup_security(){
 	source ./modules/kernel_sec.sh
 	source ./modules/central_logging.sh
 	source ./modules/unnecesary_services.sh
+    source ./modules/rkhunter.sh
     source ./modules/grub.sh
 	source ./modules/audit_system.sh
 	source ./modules/pentest.sh
-	source ./modules/rkhunter.sh
 }
 
 cleanup() {
