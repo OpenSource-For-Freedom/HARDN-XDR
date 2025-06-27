@@ -1,5 +1,16 @@
-# chkrootkit
+#######################################
+# Chkrootkit Configuration
+# This module handles the hardening of GRUB Chkrootkit settings
+# It is part of the HARDN-XDR security hardening framework
+#######################################
 
+#TODO add more robust error handleing
+# & disable unicode
+#        IFS=$IFS_OLD
+#        LC_ALL=$LC_ALL_OLD
+#        LANG=$LANG_OLD
+
+HARDN_STATUS "info" "Setting up Chkrootkit..."
 
 install_chkrootkit_from_source() {
 
