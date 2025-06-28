@@ -377,12 +377,8 @@ ask_for_reboot() {
 export -f print_msg error success info warning check_root check_grub_version
 export -f detect_grub_environment check_dependencies generate_password_hash generate_password_hash_noninteractive
 export -f update_grub_config verify_grub_config ask_for_reboot
-
-# Export the main function for use in other scripts
+# Export the main function AFTER it's defined
 export -f secure_grub
-
-# Add this debug call to see when the module is loaded
-debug_grub_module
 
 # Main function with optional parameter for non-interactive mode
 secure_grub() {
