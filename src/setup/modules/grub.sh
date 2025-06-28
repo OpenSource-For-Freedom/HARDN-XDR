@@ -6,6 +6,31 @@
 # https://help.ubuntu.com/community/Grub2/Passwords
 # Set a password on GRUB boot loader to prevent altering boot configuratio
 
+# Add debugging functions to help troubleshoot execution issues
+debug_grub_module() {
+    {
+        echo "===== GRUB MODULE DEBUG INFO ====="
+        echo "Date/Time: $(date)"
+        echo "Script path: $0"
+        echo "BASH_SOURCE: ${BASH_SOURCE[*]}"
+        echo "Called directly? $([ "${BASH_SOURCE[0]}" = "$0" ] && echo "Yes" || echo "No")"
+        echo "Current directory: $(pwd)"
+        echo "Parent process: $(ps -o comm= $PPID)"
+        echo "User: $(whoami)"
+        echo "Environment variables:"
+        env | grep -E '^(HARDN|PATH)' || echo "No HARDN environment variables found"
+        echo "Function availability:"
+        declare -F | grep -E 'secure_grub|print_msg|error|success|info|warning' || echo "Functions not properly exported"
+        echo "GRUB installation:"
+        command -v grub-install || command -v grub2-install || echo "GRUB installation commands not found"
+        echo "GRUB configuration files:"
+        ls -la /etc/grub.d/ 2>/dev/null || echo "/etc/grub.d/ not found"
+        echo "=================================="
+    } >&2
+}
+
+# Run debug at the beginning to see when the module is loaded
+debug_grub_module
 
 HARDN_STATUS "info" "Checking and configuring GRUB settings..."
 
@@ -66,7 +91,6 @@ check_grub_version() {
         fi
 }
 
-# Add this function between check_grub_version() and check_dependencies()
 detect_grub_environment() {
         info "Detecting GRUB environment..."
 
@@ -160,7 +184,6 @@ generate_password_hash() {
         echo "$password_hash"
 }
 
-# Add this function after generate_password_hash()
 generate_password_hash_noninteractive() {
     local default_password="$1"
 
