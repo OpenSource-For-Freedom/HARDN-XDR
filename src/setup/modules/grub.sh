@@ -409,19 +409,24 @@ secure_grub() {
         fi
 
         # Save current environment variables before setting strict mode
-        local IFS_OLD="$IFS"
-        local LC_ALL_OLD="${LC_ALL:-}"
-        local LANG_OLD="${LANG:-}"
+        # Make sure to initialize these variables to avoid "unbound variable" errors
+        local IFS_OLD="${IFS-}"
+        local LC_ALL_OLD="${LC_ALL-}"
+        local LANG_OLD="${LANG-}"
 
         # Function to restore environment variables
         restore_env() {
-            IFS="$IFS_OLD"
-            LC_ALL="$LC_ALL_OLD"
-            LANG="$LANG_OLD"
+            # Only restore if the variables were previously set
+            [ -n "${IFS_OLD+x}" ] && IFS="$IFS_OLD"
+            [ -n "${LC_ALL_OLD+x}" ] && LC_ALL="$LC_ALL_OLD"
+            [ -n "${LANG_OLD+x}" ] && LANG="$LANG_OLD"
         }
 
+        info "Starting GRUB password protection setup..."
+
         # Setting strict shell options for this function only
-        set -euo pipefail
+        # Use || true to prevent the script from exiting if set fails
+        set -euo pipefail || true
         IFS=$'\n\t'  # Set IFS to newline and tab to avoid issues with spaces in filenames
 
         # Disable unicode for performance increase
@@ -430,8 +435,6 @@ secure_grub() {
 
         # Ensure environment is restored on exit
         trap restore_env EXIT
-
-        info "Starting GRUB password protection setup..."
 
         check_root
         check_grub_version
