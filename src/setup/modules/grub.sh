@@ -66,6 +66,42 @@ check_grub_version() {
         fi
 }
 
+# Add this function between check_grub_version() and check_dependencies()
+detect_grub_environment() {
+        info "Detecting GRUB environment..."
+
+        # Check if GRUB is installed
+        if ! command -v grub-install >/dev/null 2>&1 && ! command -v grub2-install >/dev/null 2>&1; then
+            warning "GRUB installation commands not found. Is GRUB installed?"
+            # Check for common GRUB files to confirm installation
+            if [ -d /boot/grub ] || [ -d /boot/grub2 ]; then
+                info "GRUB directories found in /boot. Proceeding with caution."
+            else
+                error "No evidence of GRUB installation found. Please install GRUB first."
+                return 1
+            fi
+        fi
+
+        # Detect distribution for distribution-specific handling
+        local distro=""
+        if [ -f /etc/os-release ]; then
+            distro=$(grep -oP '(?<=^ID=).+' /etc/os-release | tr -d '"')
+            info "Detected distribution: $distro"
+        else
+            warning "Could not detect distribution. Using generic approach."
+        fi
+
+        # Check for GRUB configuration directories
+        if [ -d /etc/grub.d ]; then
+            info "Found GRUB configuration directory: /etc/grub.d"
+        else
+            warning "GRUB configuration directory /etc/grub.d not found."
+            warning "This script may not work correctly on your system."
+        fi
+
+        return 0
+}
+
 check_dependencies() {
         command -v grub-mkpasswd-pbkdf2 &> /dev/null && return 0
         info "grub-mkpasswd-pbkdf2 not found. Installing grub-common..."
@@ -158,13 +194,13 @@ update_grub_config() {
             info "Created directory $grub2_dir"
         fi
 
-        # Create or update user.cfg file
-        {
-            echo "# GRUB2 user configuration file - created by HARDN-XDR"
-            echo "# $(date)"
-            echo "set superusers="$grub_username""
-            echo "password_pbkdf2 $grub_username $password_hash"
-        } > "$user_cfg"
+        # Create or update user.cfg file using heredoc
+        cat > "$user_cfg" << EOF
+# GRUB2 user configuration file - created by HARDN-XDR
+# $(date)
+set superusers="${grub_username}"
+password_pbkdf2 ${grub_username} ${password_hash}
+EOF
 
         chmod 600 "$user_cfg"
         success "Created GRUB2 user configuration file at $user_cfg"
@@ -174,22 +210,22 @@ update_grub_config() {
         # The use of a trap, will help ensure temporary file security
         trap 'rm -f "$temp_file"' EXIT
 
-        # Add the superuser and password configuration at the top
-        {
-            echo "#!/bin/sh"
-            echo "exec tail -n +3 \$0"
-            echo "# This file provides an easy way to add custom menu entries."
-            echo "# Simply type the menu entries you want to add after this comment."
-            echo "# Be careful not to change the 'exec tail' line above."
-            echo ""
-            echo "set superusers=\"$grub_username\""
-            echo "password_pbkdf2 $grub_username $password_hash"
-            echo ""
-            echo "# Include the user configuration file if it exists"
-            echo "if [ -f /boot/grub2/user.cfg ]; then"
-            echo "  source /boot/grub2/user.cfg"
-            echo "fi"
-        } > "$temp_file"
+        # Add the superuser and password configuration at the top using heredoc
+        cat > "$temp_file" << EOF
+#!/bin/sh
+exec tail -n +3 \$0
+# This file provides an easy way to add custom menu entries.
+# Simply type the menu entries you want to add after this comment.
+# Be careful not to change the 'exec tail' line above.
+
+set superusers="${grub_username}"
+password_pbkdf2 ${grub_username} ${password_hash}
+
+# Include the user configuration file if it exists
+if [ -f /boot/grub2/user.cfg ]; then
+  source /boot/grub2/user.cfg
+fi
+EOF
 
         # Copy the rest of the original file if it exists and has content beyond the header
         if [ -f /etc/grub.d/40_custom ]; then
@@ -302,6 +338,7 @@ secure_grub() {
 
         check_root
         check_grub_version
+        detect_grub_environment
         check_dependencies
 
         local password_hash
