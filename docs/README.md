@@ -1,3 +1,4 @@
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/OpenSource-For-Freedom/HARDN-XDR?include_prereleases)
 
 
 <p align="center">
@@ -5,7 +6,7 @@
 </p>
 
 <p align="center">
-  <img src="https://github.com/OpenSource-For-Freedom/HARDN-XDR/blob/main/docs/assets/HARDN%20(1).png" /><br><br>
+  <img src="assets/HARDN(1).png" alt="HARDN Logo" width="300px" /><br><br>
   <img src="https://img.shields.io/badge/The_Linux_Security_Project-red?style=for-the-badge&labelColor=black" alt="The Linux Security Project"><br><br>
   <code>HARDN-XDR</code>
 </p>
@@ -62,15 +63,15 @@
 1.  **One command**
 
     ```bash
-    git clone https://github.com/opensource-for-freedom/HARDN-XDR && cd HARDEN-XDR && sudo chmod +x install.sh && sudo ./install.sh
+    curl -LO https://raw.githubusercontent.com/opensource-for-freedom/HARDN-XDR/refs/heads/main/install.sh && sudo chmod +x install.sh && sudo ./install.sh
     ```
 
 <br>
 
 ### Installation Notes
 - HARDN-XDR is currently being developed and tested for **BARE-METAL installs of Debian based distributions and Virtual Machines**.
-- Ensure you have the latest version of **Debian 12**.
-- By installing HARDN-XDR with the command listed in the installation, the following changes will be made to your system:
+- Ensure you have the latest version of **Debian 12** or **Ubuntu 24.04**.
+- By installing HARDN-XDR with the commands listed in the installation process, the following changes will be made to your system:
 > - A collection of security focused packages will be installed.
 > - Security tools and services will be enabled.
 > - System hardening and STIG settings will be applied.
@@ -93,25 +94,25 @@
 
 ```bash
 HARDN-XDR/
-├── changelog.md                 
-├── docs                         
-│   ├── assets                   
-│   │   ├── cybersynapse.png     
-│   │   └── HARDN(1).png         
-│   ├── CODE_OF_CONDUCT.md       
-│   ├── deb_stig.md              
-│   ├── hardn-main-sh-review.md  
-│   ├── HARDN.md                 
-│   ├── hardn-security-tools.md  
-│   └── TODO.md                  
-├── install.sh                  
-├── LICENSE                      
-├── progs.csv                    
+├── changelog.md                 # Documents version history and changes
+├── docs                         # Documentation directory
+│   ├── assets                   # Images and visual resources
+│   │   ├── cybersynapse.png     # Partner logo
+│   │   └── HARDN(1).png         # Project logo
+│   ├── CODE_OF_CONDUCT.md       # Community guidelines and expectations
+│   ├── deb_stig.md              # Debian STIG compliance documentation
+│   ├── hardn-main-sh-review.md  # Review of the main script functionality
+│   ├── HARDN.md                 # Detailed project documentation
+│   ├── hardn-security-tools.md  # Security tools documentation
+│   └── TODO.md                  # Planned features and improvements
+├── install.sh                   # Main installation script
+├── LICENSE                      # MIT License file
+├── progs.csv                    # List of programs and packages to be installed
 ├── README.md                    
 └── src                          
     └── setup                    
         ├── hardn-main.sh        
-           
+        └── hardn-uninstall.sh   
 ```
 
 
@@ -124,11 +125,7 @@ HARDN-XDR/
 
 
 <p align="center">
-  <img src="docs/assets/cybersynapse.png" alt="CyberSynapse Logo" />
-</p>
-
-<p align="center">
-  <img src="docs/assets/securejump.jpg" alt="SecureJump Logo" />
+  <img src="assets/cybersynapse.png" alt="cybersynapse Logo" />
 </p>
 
 <br>
@@ -144,8 +141,6 @@ This project is licensed under the MIT License.
 <p align="center">
   <img src="https://img.shields.io/badge/CONTACT-white?style=for-the-badge&labelColor=black" alt="CONTACT"><br><br>
 office@cybersynapse.ro
-<br>
-contacto@securejump.cl
 </p>
 
 

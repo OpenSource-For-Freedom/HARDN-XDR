@@ -4,7 +4,7 @@ on:
   push:
     branches: [ "main" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "jumpsecurity" ]
   schedule:
     - cron: '39 23 * * 6'  # Weekly on Saturday
 
@@ -70,6 +70,7 @@ jobs:
         uses: returntocorp/semgrep-action@v1
         with:
           config: "auto"
+          publishToken: ${{ secrets.SEMGREP_APP_TOKEN }}
           output: "semgrep-report.sarif"
           format: "sarif"
       - name: Upload Semgrep Report
@@ -77,3 +78,4 @@ jobs:
         with:
           name: semgrep-report
           path: semgrep-report.sarif
+
