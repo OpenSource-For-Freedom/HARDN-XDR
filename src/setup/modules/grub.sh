@@ -1,4 +1,3 @@
-#!/bin/bash
 #######################################
 # GRUB Password Protection Module; sourced an executed by hardn-main.sh.
 # Part of the HARDN-XDR security hardening framework
@@ -26,6 +25,8 @@
 #  - Ubuntu Community Help: https://help.ubuntu.com/community/Grub2/Passwords
 #
 #######################################
+
+HARDN_STATUS "info" "Setting up the GRUB boot loader password..."
 
 # Define color codes for output
 RED='\033[0;31m'
@@ -324,7 +325,8 @@ generate_password_hash_noninteractive() {
 # Update GRUB configuration with password protection
 update_grub_config() {
     local password_hash="$1"
-    local grub_username="admin"
+    #local grub_username="admin"
+    local grub_username="root"
     local non_interactive=0
 
     # Check if we're in non-interactive mode
@@ -687,7 +689,9 @@ else
             # Use a default password when run from hardn-main.sh to avoid terminal issues
             # This is a security compromise but ensures automation works
             # Default password is: HardnGrubPassword123!
-            DEFAULT_PASSWORD="HardnGrubPassword123!"
+            # Default password is: Password123!
+            #DEFAULT_PASSWORD="HardnGrubPassword123!"
+            DEFAULT_PASSWORD="Password123!"
             warning "Using default password for GRUB due to automation."
             warning "SECURITY RISK: Please change this password after installation!"
             warning "Default password is: $DEFAULT_PASSWORD"
