@@ -408,39 +408,27 @@ secure_grub() {
             echo
         fi
 
-        # Save current environment variables before setting strict mode
-        # Make sure to initialize these variables to avoid "unbound variable" errors
-        local IFS_OLD="${IFS-}"
-        local LC_ALL_OLD="${LC_ALL-}"
-        local LANG_OLD="${LANG-}"
-
-        # Function to restore environment variables
-        restore_env() {
-            # Only restore if the variables were previously set
-            [ -n "${IFS_OLD+x}" ] && IFS="$IFS_OLD"
-            [ -n "${LC_ALL_OLD+x}" ] && LC_ALL="$LC_ALL_OLD"
-            [ -n "${LANG_OLD+x}" ] && LANG="$LANG_OLD"
-        }
-
         info "Starting GRUB password protection setup..."
 
-        # Setting strict shell options for this function only
-        # Use || true to prevent the script from exiting if set fails
-        set -euo pipefail || true
-        IFS=$'\n\t'  # Set IFS to newline and tab to avoid issues with spaces in filenames
+        # Add detailed debugging
+        debug_grub_module
 
-        # Disable unicode for performance increase
-        LC_ALL=C
-        LANG=C
+        # IMPORTANT: Remove strict mode for now to help diagnose issues
+        # We'll use more explicit error checking instead
 
-        # Ensure environment is restored on exit
-        trap restore_env EXIT
+        info "Checking if running as root..."
+        check_root || return 1
 
-        check_root
-        check_grub_version
-        detect_grub_environment || { restore_env; return 1; }
-        check_dependencies
+        info "Checking GRUB version..."
+        check_grub_version || true  # Continue even if this fails
 
+        info "Detecting GRUB environment..."
+        detect_grub_environment || return 1
+
+        info "Checking dependencies..."
+        check_dependencies || return 1
+
+        info "Generating password hash..."
         local password_hash
 
         # Choose password generation method based on mode
@@ -453,20 +441,17 @@ secure_grub() {
         # Check if password hash was successfully generated
         if [ -z "$password_hash" ]; then
             error "Password hash generation failed. Exiting."
-            restore_env  # Explicitly call restore_env before returning
             return 1
         fi
 
+        info "Updating GRUB configuration..."
         if ! update_grub_config "$password_hash"; then
             error "Failed to secure GRUB. Exiting."
-            restore_env  # Explicitly call restore_env before returning
             return 1
         fi
 
+        info "Verifying GRUB configuration..."
         verify_grub_config
-
-        # Explicitly call restore_env before asking for reboot
-        restore_env
 
         # Only ask for reboot in interactive mode
         if [ $non_interactive -eq 0 ]; then
@@ -479,7 +464,7 @@ secure_grub() {
 # Execute the main function when the script is run directly (not sourced)
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     info "Running GRUB module directly"
-    secure_grub
+    secure_grub "$@"
 else
     info "GRUB module loaded from $(ps -o comm= $PPID)"
 
@@ -488,7 +473,7 @@ else
     if [ -z "${HARDN_EXECUTING_MODULE:-}" ]; then
         export HARDN_EXECUTING_MODULE="grub"
         info "Executing GRUB configuration automatically"
-        secure_grub
+        secure_grub "$@"
         unset HARDN_EXECUTING_MODULE
     else
         info "GRUB module loaded but execution skipped (already running)"
