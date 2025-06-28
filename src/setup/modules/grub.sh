@@ -3,6 +3,17 @@
 # Part of the HARDN-XDR security hardening framework
 #######################################
 #
+# ATTN!! READ BEFORE running.
+# This script auto defaults to the non-interactive password set
+# The default credentials are hard coded into the script
+# That is just temporary, because you can change them after reboot.
+# The script technically 'works',
+# However, the credentials either do not work, or
+# unlocking GRUB gets stuck in a loop.
+# SEE the if-else statement at the bottom of the script for more details
+# Also, see the generate_password_hash() function.
+#
+#
 # What this script does:
 #  - Sets a password on GRUB boot loader to prevent altering boot configuration
 #  - Prevents unauthorized access to single user mode and GRUB command line
@@ -177,7 +188,11 @@ check_dependencies() {
     return 0
 }
 
-# Generate password hash interactively
+# THIS PART NEEDS WORK, SCRIPT DEFAULTS TO NON INTERACTIVE MODE
+# the default credentials are:
+# Username: admin
+# Password: HardnGrubPassword123!
+# These are set in a function called 'generate_password_hash'
 generate_password_hash() {
     info "Generating GRUB password hash..."
 
@@ -292,6 +307,9 @@ generate_password_hash() {
 }
 
 # Generate password hash non-interactively (for automated deployments)
+# Default username is: admin
+# Default password is: HardnGrubPassword123!
+# These credentials are set in the secure_grub() function'
 generate_password_hash_noninteractive() {
     local default_password="$1"
 
@@ -325,8 +343,7 @@ generate_password_hash_noninteractive() {
 # Update GRUB configuration with password protection
 update_grub_config() {
     local password_hash="$1"
-    #local grub_username="admin"
-    local grub_username="root"
+    local grub_username="admin"
     local non_interactive=0
 
     # Check if we're in non-interactive mode
@@ -688,10 +705,9 @@ else
 
             # Use a default password when run from hardn-main.sh to avoid terminal issues
             # This is a security compromise but ensures automation works
+            # Default username is: admin
             # Default password is: HardnGrubPassword123!
-            # Default password is: Password123!
-            #DEFAULT_PASSWORD="HardnGrubPassword123!"
-            DEFAULT_PASSWORD="Password123!"
+            DEFAULT_PASSWORD="HardnGrubPassword123!"
             warning "Using default password for GRUB due to automation."
             warning "SECURITY RISK: Please change this password after installation!"
             warning "Default password is: $DEFAULT_PASSWORD"
