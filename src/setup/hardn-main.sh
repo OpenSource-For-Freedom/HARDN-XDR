@@ -6,6 +6,32 @@
 # About this script:
 # STIG Compliance: Security Technical Implementation Guide.
 
+#-----------------------------------------------------------------------------
+# ATTN!:
+# PLEASE READ BEFORE RUNNING THIS SCRIPT.
+# The following source commands are commented in this way for troubleshooting purposes.
+
+# I commented out the audit and pentest sections to make troubleshooting the
+# GRUB issues easier.
+# The GRUB modules are the last ones called for that purpose too.
+# When they work correctly, you need to reboot anyways.
+
+# This is what you will see in the setup_security() function.
+# The grub.sh will run as default if you do not edit anything in this script.
+#------------------------------------------------------------------------------
+#        echo "Configuring GRUB security settings..."
+#        source ./modules/grub.sh
+#        # uncomment the grub-debian.sh below if you want to try it out.
+#        #source ./modules/grub-debian.sh
+#
+#        # PENTEST SECTIONS COMMENTED OUT FOR GRUB TROUBLESHOOTING PRUPOSES.
+#        #source ./modules/audit_system.sh
+#        #source ./modules/pentest.sh
+#
+#-----------------------------------------------------------------------------
+
+
+
 HARDN_VERSION="2.1.0"
 export APT_LISTBUGS_FRONTEND=none
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -33,7 +59,7 @@ HARDN_STATUS() {
             echo -e "\033[1;37m[UNKNOWN]\033[0m $message"
             ;;
     esac
-}   
+}
 detect_os_details() {
     if [[ -r /etc/os-release ]]; then
         source /etc/os-release
@@ -66,7 +92,7 @@ welcomemsg() {
     echo ""
     echo "This installer will update your system first..."
     if whiptail --title "HARDN-XDR v${HARDN_VERSION}" --yesno "Do you want to continue with the installation?" 10 60; then
-        true  
+        true
     else
         echo "Installation cancelled by user."
         exit 1
@@ -77,7 +103,7 @@ preinstallmsg() {
     echo ""
     whiptail --title "HARDN-XDR" --msgbox "Welcome to HARDN-XDR. A Linux Security Hardening program." 10 60
     echo "The system will be configured to ensure STIG and Security compliance."
-   
+
 }
 
 update_system_packages() {
@@ -197,19 +223,19 @@ print_ascii_banner() {
     local banner
     banner=$(cat << "EOF"
 
-   ▄█    █▄            ▄████████         ▄████████      ████████▄       ███▄▄▄▄   
-  ███    ███          ███    ███        ███    ███      ███   ▀███      ███▀▀▀██▄ 
-  ███    ███          ███    ███        ███    ███      ███    ███      ███   ███ 
- ▄███▄▄▄▄███▄▄        ███    ███       ▄███▄▄▄▄██▀      ███    ███      ███   ███ 
-▀▀███▀▀▀▀███▀       ▀███████████      ▀▀███▀▀▀▀▀        ███    ███      ███   ███ 
-  ███    ███          ███    ███      ▀███████████      ███    ███      ███   ███ 
-  ███    ███          ███    ███        ███    ███      ███   ▄███      ███   ███ 
-  ███    █▀           ███    █▀         ███    ███      ████████▀        ▀█   █▀  
-                                        ███    ███ 
-                           
+   ▄█    █▄            ▄████████         ▄████████      ████████▄       ███▄▄▄▄
+  ███    ███          ███    ███        ███    ███      ███   ▀███      ███▀▀▀██▄
+  ███    ███          ███    ███        ███    ███      ███    ███      ███   ███
+ ▄███▄▄▄▄███▄▄        ███    ███       ▄███▄▄▄▄██▀      ███    ███      ███   ███
+▀▀███▀▀▀▀███▀       ▀███████████      ▀▀███▀▀▀▀▀        ███    ███      ███   ███
+  ███    ███          ███    ███      ▀███████████      ███    ███      ███   ███
+  ███    ███          ███    ███        ███    ███      ███   ▄███      ███   ███
+  ███    █▀           ███    █▀         ███    ███      ████████▀        ▀█   █▀
+                                        ███    ███
+
                             Extended Detection and Response
                             by Security International Group
-                                  
+
 EOF
 )
     local banner_width
@@ -229,6 +255,7 @@ EOF
 }
 
 setup_security(){
+<<<<<<< HEAD
     # OS detection is done by detect_os_details() 
     # global variables CURRENT_DEBIAN_VERSION_ID and CURRENT_DEBIAN_CODENAME are available.
     HARDN_STATUS "pass" "Using detected system: Debian ${CURRENT_DEBIAN_VERSION_ID} (${CURRENT_DEBIAN_CODENAME}) for security setup."
@@ -266,6 +293,51 @@ setup_security(){
 	source ./modules/audit_system.sh
 	source ./modules/pentest.sh
 	source ./modules/rkhunter.sh 
+=======
+        # OS detection is done by detect_os_details()
+        # global variables CURRENT_DEBIAN_VERSION_ID and CURRENT_DEBIAN_CODENAME are available.
+        HARDN_STATUS "pass" "Using detected system: Debian ${CURRENT_DEBIAN_VERSION_ID} (${CURRENT_DEBIAN_CODENAME}) for security setup."
+        HARDN_STATUS "info" "Setting up security tools and configurations..."
+        source ./modules/ufw.sh
+    	source ./modules/deleted_files.sh
+    	source ./modules/ntp.sh
+    	source ./modules/usb.sh
+    	source ./modules/network_protocols.sh
+    	source ./modules/file_perms.sh
+    	source ./modules/shared_mem.sh
+    	source ./modules/coredumps.sh
+    	source ./modules/auto_updates.sh
+    	source ./modules/secure_net.sh
+     	source ./modules/stig_pwquality.sh
+    	source ./modules/chkrootkit.sh # This might still need some work.
+    	source ./modules/auditd.sh
+    	source ./modules/suricata.sh
+    	source ./modules/debsums.sh
+    	source ./modules/aide.sh
+    	source ./modules/yara.sh
+    	source ./modules/banner.sh
+    	source ./modules/compilers.sh
+    	source ./modules/binfmt.sh
+    	source ./modules/purge_old_pkgs.sh
+    	source ./modules/dns_config.sh
+    	source ./modules/firewire.sh
+    	source ./modules/process_accounting.sh
+    	source ./modules/kernel_sec.sh
+    	source ./modules/central_logging.sh
+    	source ./modules/unnecesary_services.sh
+        source ./modules/rkhunter.sh
+
+        echo "Configuring GRUB security settings..."
+        source ./modules/grub.sh
+        # uncomment the grub-debian.sh below if you want to try it out.
+        #source ./modules/grub-debian.sh
+        #source ./modules/audit_system.sh
+        #source ./modules/pentest.sh
+
+        echo ''
+        echo "RUN THE LYNIS AUDIT TO TEST AFTER GRUB SUCCSS"
+        echo ''
+>>>>>>> origin/main
 }
 
 cleanup() {
