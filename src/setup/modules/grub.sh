@@ -336,13 +336,71 @@ verify_grub_config() {
             grub_cfg="/boot/grub2/grub.cfg"
         fi
 
+        # Create a verification log
+        local log_file="/var/log/hardn-grub-verification.log"
+        {
+            echo "=== GRUB Configuration Verification ==="
+            echo "Date: $(date)"
+            echo "User: $(whoami)"
+            echo "GRUB config file: $grub_cfg"
+
+            if [ -n "$grub_cfg" ]; then
+                echo "File exists: Yes"
+                echo "File permissions: $(ls -l "$grub_cfg")"
+                echo "File size: $(du -h "$grub_cfg" | cut -f1)"
+
+                echo "Checking for superusers setting..."
+                if grep -q "set superusers=" "$grub_cfg"; then
+                    echo "  Found: Yes"
+                    grep -n "set superusers=" "$grub_cfg" | head -1
+                else
+                    echo "  Found: No"
+                fi
+
+                echo "Checking for password_pbkdf2 setting..."
+                if grep -q "password_pbkdf2" "$grub_cfg"; then
+                    echo "  Found: Yes"
+                    grep -n "password_pbkdf2" "$grub_cfg" | head -1 | sed 's/\(password_pbkdf2 [^ ]* \).*/\1****/'
+                else
+                    echo "  Found: No"
+                fi
+
+                echo "Custom configuration file:"
+                if [ -f /etc/grub.d/40_custom ]; then
+                    echo "  Exists: Yes"
+                    echo "  Content (sensitive info redacted):"
+                    grep -v "password_pbkdf2" /etc/grub.d/40_custom || echo "  No non-sensitive content found"
+                else
+                    echo "  Exists: No"
+                fi
+
+                echo "User configuration file:"
+                if [ -f /boot/grub2/user.cfg ]; then
+                    echo "  Exists: Yes"
+                    echo "  Permissions: $(ls -l /boot/grub2/user.cfg)"
+                else
+                    echo "  Exists: No"
+                fi
+            else
+                echo "GRUB configuration file not found!"
+            fi
+
+            echo "=== End of Verification ==="
+        } > "$log_file" 2>&1
+
+        chmod 600 "$log_file"
+
         if [ -n "$grub_cfg" ] && grep -q "set superusers=" "$grub_cfg" &&
            grep -q "password_pbkdf2" "$grub_cfg"; then
             success "GRUB password protection verified in configuration."
+            info "Detailed verification log saved to $log_file"
+            return 0
         else
             warning "Could not verify GRUB password protection in final configuration."
             warning "This might be normal if your GRUB configuration is in a non-standard location."
             warning "Please check manually after reboot."
+            info "Detailed verification log saved to $log_file"
+            return 1
         fi
 }
 
