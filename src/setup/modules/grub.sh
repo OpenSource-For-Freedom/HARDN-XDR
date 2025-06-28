@@ -180,11 +180,74 @@ check_dependencies() {
 generate_password_hash() {
     info "Generating GRUB password hash..."
 
-    if [ ! -t 0 ]; then
-        error "This script requires an interactive terminal for password input."
-        return 1
+    # Check if we have a proper terminal for input
+    if [ ! -t 0 ] || [ ! -t 1 ]; then
+        warning "No proper terminal detected for password input."
+        warning "Using alternative input method..."
+
+        # Try to use dialog if available
+        if command -v dialog >/dev/null 2>&1; then
+            local temp_file
+            temp_file=$(mktemp)
+            trap 'rm -f "$temp_file"' EXIT
+
+            # Use dialog to get password
+            if dialog --title "GRUB Password" --passwordbox "Enter a strong password for GRUB (minimum 10 characters):" 10 60 2>"$temp_file"; then
+                local password
+                password=$(cat "$temp_file")
+                rm -f "$temp_file"
+
+                temp_file=$(mktemp)
+                if dialog --title "GRUB Password" --passwordbox "Confirm password:" 10 60 2>"$temp_file"; then
+                    local password_confirm
+                    password_confirm=$(cat "$temp_file")
+                    rm -f "$temp_file"
+
+                    if [ "$password" != "$password_confirm" ]; then
+                        dialog --title "Error" --msgbox "Passwords do not match. Please try again." 8 40
+                        return 1
+                    fi
+
+                    if [ ${#password} -lt 10 ]; then
+                        dialog --title "Error" --msgbox "Password is too short. Please use at least 10 characters." 8 40
+                        return 1
+                    fi
+
+                    # Generate hash from the password
+                    local password_hash
+                    password_hash=$(echo -e "$password\n$password" | grub-mkpasswd-pbkdf2 2>/dev/null | grep "PBKDF2 hash of your password is" | sed 's/PBKDF2 hash of your password is //')
+
+                    if [ -z "$password_hash" ]; then
+                        dialog --title "Error" --msgbox "Password hash generation failed." 8 40
+                        return 1
+                    fi
+
+                    echo "$password_hash"
+                    return 0
+                fi
+            fi
+            return 1
+        else
+            # Fallback to a default password with warning
+            warning "No interactive terminal and no dialog utility available."
+            warning "Using default password 'HardnGrubPassword123!' for GRUB."
+            warning "SECURITY RISK: Please change this password after installation!"
+
+            local default_password="HardnGrubPassword123!"
+            local password_hash
+            password_hash=$(echo -e "$default_password\n$default_password" | grub-mkpasswd-pbkdf2 2>/dev/null | grep "PBKDF2 hash of your password is" | sed 's/PBKDF2 hash of your password is //')
+
+            if [ -z "$password_hash" ]; then
+                error "Password hash generation failed even with default password."
+                return 1
+            fi
+
+            echo "$password_hash"
+            return 0
+        fi
     fi
 
+    # Standard terminal input method
     # Add trap for Ctrl+C
     trap 'echo ""; warning "Password generation cancelled."; return 1' INT
 
@@ -613,14 +676,28 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
 else
     info "GRUB module loaded from $(ps -o comm= $PPID)"
 
-    # Always execute when sourced from hardn-main.sh
-    # Set HARDN_EXECUTING_MODULE to prevent recursive execution
-    if [ -z "${HARDN_EXECUTING_MODULE:-}" ]; then
-        export HARDN_EXECUTING_MODULE="grub"
-        info "Executing GRUB configuration automatically"
-        secure_grub "$@"
-        unset HARDN_EXECUTING_MODULE
+    # Check if being run by hardn-main.sh
+    if [[ "$(ps -o comm= $PPID)" == *"hardn-main"* ]] || [[ "$0" == *"hardn-main"* ]]; then
+        # Always execute when sourced from hardn-main.sh
+        # Set HARDN_EXECUTING_MODULE to prevent recursive execution
+        if [ -z "${HARDN_EXECUTING_MODULE:-}" ]; then
+            export HARDN_EXECUTING_MODULE="grub"
+            info "Executing GRUB configuration automatically"
+
+            # Use a default password when run from hardn-main.sh to avoid terminal issues
+            # This is a security compromise but ensures automation works
+            # Default password is: HardnGrubPassword123!
+            DEFAULT_PASSWORD="HardnGrubPassword123!"
+            warning "Using default password for GRUB due to automation."
+            warning "SECURITY RISK: Please change this password after installation!"
+            warning "Default password is: $DEFAULT_PASSWORD"
+
+            secure_grub "$DEFAULT_PASSWORD"
+            unset HARDN_EXECUTING_MODULE
+        else
+            info "GRUB module loaded but execution skipped (already running)"
+        fi
     else
-        info "GRUB module loaded but execution skipped (already running)"
+        info "GRUB module loaded but not executed (not called from hardn-main.sh)"
     fi
 fi
