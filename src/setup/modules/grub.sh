@@ -480,15 +480,14 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
 else
     info "GRUB module loaded from $(ps -o comm= $PPID)"
 
-    # Always run the secure_grub function when sourced from hardn-main.sh
-    if [[ "$(ps -o comm= $PPID)" == *"hardn-main"* ]]; then
-        info "Detected sourcing from hardn-main.sh - executing GRUB configuration automatically"
+    # Always execute when sourced from hardn-main.sh
+    # Set HARDN_EXECUTING_MODULE to prevent recursive execution
+    if [ -z "${HARDN_EXECUTING_MODULE:-}" ]; then
+        export HARDN_EXECUTING_MODULE="grub"
+        info "Executing GRUB configuration automatically"
         secure_grub
-    # Also run if explicitly requested via environment variable
-    elif [ "${HARDN_MODULE_EXECUTE:-}" = "grub" ]; then
-        info "Auto-executing GRUB module based on HARDN_MODULE_EXECUTE setting"
-        secure_grub
+        unset HARDN_EXECUTING_MODULE
     else
-        info "GRUB module loaded but not executed. To run, call 'secure_grub' function."
+        info "GRUB module loaded but execution skipped (already running)"
     fi
 fi

@@ -262,9 +262,11 @@ setup_security(){
     	source ./modules/central_logging.sh
     	source ./modules/unnecesary_services.sh
         source ./modules/rkhunter.sh
+        echo "Configuring GRUB security settings..."
         source ./modules/grub.sh
-    	source ./modules/audit_system.sh
-    	source ./modules/pentest.sh
+       # source ./modules/audit_system.sh
+       # source ./modules/pentest.sh
+        echo "run the lynis audit to test the security"
 }
 
 cleanup() {
