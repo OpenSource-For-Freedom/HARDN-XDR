@@ -6,6 +6,32 @@
 # About this script:
 # STIG Compliance: Security Technical Implementation Guide.
 
+#-----------------------------------------------------------------------------
+# ATTN!:
+# PLEASE READ BEFORE RUNNING THIS SCRIPT.
+# The following source commands are commented in this way for troubleshooting purposes.
+
+# I commented out the audit and pentest sections to make troubleshooting the
+# GRUB issues easier.
+# The GRUB modules are the last ones called for that purpose too.
+# When they work correctly, you need to reboot anyways.
+
+# This is what you will see in the setup_security() function.
+# The grub.sh will run as default if you do not edit anything in this script.
+#------------------------------------------------------------------------------
+#        echo "Configuring GRUB security settings..."
+#        source ./modules/grub.sh
+#        # uncomment the grub-debian.sh below if you want to try it out.
+#        #source ./modules/grub-debian.sh
+#
+#        # PENTEST SECTIONS COMMENTED OUT FOR GRUB TROUBLESHOOTING PRUPOSES.
+#        #source ./modules/audit_system.sh
+#        #source ./modules/pentest.sh
+#
+#-----------------------------------------------------------------------------
+
+
+
 HARDN_VERSION="2.1.0"
 export APT_LISTBUGS_FRONTEND=none
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -261,12 +287,16 @@ setup_security(){
     	source ./modules/central_logging.sh
     	source ./modules/unnecesary_services.sh
         source ./modules/rkhunter.sh
-        #echo "Configuring GRUB security settings..."
+
+        echo "Configuring GRUB security settings..."
         source ./modules/grub.sh
-       # source ./modules/audit_system.sh
-       # source ./modules/pentest.sh
+        # uncomment the grub-debian.sh below if you want to try it out.
+        #source ./modules/grub-debian.sh
+        #source ./modules/audit_system.sh
+        #source ./modules/pentest.sh
+
         echo ''
-        echo "RUN THE LYNIS AUDIT TO TEST THE SECURITY"
+        echo "RUN THE LYNIS AUDIT TO TEST AFTER GRUB SUCCSS"
         echo ''
 }
 
