@@ -160,21 +160,62 @@ generate_password_hash() {
         echo "$password_hash"
 }
 
+# Add this function after generate_password_hash()
+generate_password_hash_noninteractive() {
+    local default_password="$1"
+
+    if [ -z "$default_password" ]; then
+        error "Non-interactive mode requires a default password"
+        return 1
+    fi
+
+    # Check password strength
+    if [ ${#default_password} -lt 10 ]; then
+        warning "Default password is too short. Please use at least 10 characters."
+        return 1
+    fi
+
+    info "Using provided default password in non-interactive mode"
+
+    # Generate hash from the password
+    local password_hash
+    password_hash=$(echo -e "$default_password\n$default_password" | grub-mkpasswd-pbkdf2 2>/dev/null | grep "PBKDF2 hash of your password is" | sed 's/PBKDF2 hash of your password is //')
+
+    # Check for successful password hash generation
+    if [ -z "$password_hash" ]; then
+        error "Password hash generation failed"
+        return 1
+    fi
+
+    success "Password hash generated successfully (non-interactive mode)"
+    echo "$password_hash"
+}
+
 update_grub_config() {
         local password_hash="$1"
         local grub_username="admin"
+        local non_interactive=0
+
+        # Check if we're in non-interactive mode
+        [ ! -t 0 ] && non_interactive=1
 
         info "Updating GRUB configuration with password protection..."
 
         # Check if password protection is already configured
         if [ -f /etc/grub.d/40_custom ] && grep -q "set superusers=" /etc/grub.d/40_custom; then
             warning "GRUB password protection appears to be already configured."
-            read -r -p "Do you want to overwrite the existing configuration? [y/N]: " answer
-            answer=${answer:-N}  # Default to N if Enter is pressed
 
-            if [[ ! $answer =~ ^[Yy]$ ]]; then
-                info "Keeping existing configuration."
-                return 0
+            if [ $non_interactive -eq 1 ]; then
+                # In non-interactive mode, always overwrite
+                info "Non-interactive mode: Overwriting existing configuration."
+            else
+                read -r -p "Do you want to overwrite the existing configuration? [y/N]: " answer
+                answer=${answer:-N}  # Default to N if Enter is pressed
+
+                if [[ ! $answer =~ ^[Yy]$ ]]; then
+                    info "Keeping existing configuration."
+                    return 0
+                fi
             fi
         fi
 
@@ -309,8 +350,52 @@ ask_for_reboot() {
         esac
 }
 
-# Main
+# Export all necessary functions to ensure they're available when sourced
+export -f print_msg error success info warning check_root check_grub_version
+export -f detect_grub_environment check_dependencies generate_password_hash generate_password_hash_noninteractive
+export -f update_grub_config verify_grub_config ask_for_reboot
+
+# Add debugging functions to help troubleshoot execution issues
+debug_grub_module() {
+    {
+        echo "===== GRUB MODULE DEBUG INFO ====="
+        echo "Date/Time: $(date)"
+        echo "Script path: $0"
+        echo "BASH_SOURCE: ${BASH_SOURCE[*]}"
+        echo "Called directly? $([ "${BASH_SOURCE[0]}" = "$0" ] && echo "Yes" || echo "No")"
+        echo "Current directory: $(pwd)"
+        echo "Parent process: $(ps -o comm= $PPID)"
+        echo "User: $(whoami)"
+        echo "Environment variables:"
+        env | grep -E '^(HARDN|PATH)' || echo "No HARDN environment variables found"
+        echo "Function availability:"
+        declare -F | grep -E 'secure_grub|print_msg|error|success|info|warning' || echo "Functions not properly exported"
+        echo "GRUB installation:"
+        command -v grub-install || command -v grub2-install || echo "GRUB installation commands not found"
+        echo "GRUB configuration files:"
+        ls -la /etc/grub.d/ 2>/dev/null || echo "/etc/grub.d/ not found"
+        echo "=================================="
+    } >&2
+}
+
+# Export the main function for use in other scripts
+export -f secure_grub
+
+# Add this debug call to see when the module is loaded
+debug_grub_module
+
+# Main function with optional parameter for non-interactive mode
 secure_grub() {
+        local default_password="${1:-}"
+        local non_interactive=0
+
+        # Check if we're in non-interactive mode
+        if [ -n "$default_password" ] || [ ! -t 0 ]; then
+            non_interactive=1
+            info "Running in non-interactive mode"
+            [ -z "$default_password" ] && error "Non-interactive mode requires a default password parameter"
+        fi
+
         # Save current environment variables before setting strict mode
         local IFS_OLD="$IFS"
         local LC_ALL_OLD="${LC_ALL:-}"
@@ -338,11 +423,17 @@ secure_grub() {
 
         check_root
         check_grub_version
-        detect_grub_environment
+        detect_grub_environment || { restore_env; return 1; }
         check_dependencies
 
         local password_hash
-        password_hash=$(generate_password_hash)
+
+        # Choose password generation method based on mode
+        if [ $non_interactive -eq 1 ] && [ -n "$default_password" ]; then
+            password_hash=$(generate_password_hash_noninteractive "$default_password")
+        else
+            password_hash=$(generate_password_hash)
+        fi
 
         # Check if password hash was successfully generated
         if [ -z "$password_hash" ]; then
@@ -361,12 +452,24 @@ secure_grub() {
 
         # Explicitly call restore_env before asking for reboot
         restore_env
-        ask_for_reboot
+
+        # Only ask for reboot in interactive mode
+        if [ $non_interactive -eq 0 ]; then
+            ask_for_reboot
+        else
+            info "GRUB has been secured with a password. System needs to be rebooted to apply changes."
+        fi
 }
 
-# Export the main function for use in other scripts
-export -f secure_grub
 # Execute the main function when the script is run directly (not sourced)
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+    info "Running GRUB module directly"
     secure_grub
+else
+    info "GRUB module loaded from $(ps -o comm= $PPID)"
+    # Check if HARDN_MODULE_EXECUTE is set to run this module automatically when sourced
+    if [ "${HARDN_MODULE_EXECUTE:-}" = "grub" ]; then
+        info "Auto-executing GRUB module based on HARDN_MODULE_EXECUTE setting"
+        secure_grub
+    fi
 fi
