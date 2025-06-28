@@ -378,29 +378,6 @@ export -f print_msg error success info warning check_root check_grub_version
 export -f detect_grub_environment check_dependencies generate_password_hash generate_password_hash_noninteractive
 export -f update_grub_config verify_grub_config ask_for_reboot
 
-# Add debugging functions to help troubleshoot execution issues
-debug_grub_module() {
-    {
-        echo "===== GRUB MODULE DEBUG INFO ====="
-        echo "Date/Time: $(date)"
-        echo "Script path: $0"
-        echo "BASH_SOURCE: ${BASH_SOURCE[*]}"
-        echo "Called directly? $([ "${BASH_SOURCE[0]}" = "$0" ] && echo "Yes" || echo "No")"
-        echo "Current directory: $(pwd)"
-        echo "Parent process: $(ps -o comm= $PPID)"
-        echo "User: $(whoami)"
-        echo "Environment variables:"
-        env | grep -E '^(HARDN|PATH)' || echo "No HARDN environment variables found"
-        echo "Function availability:"
-        declare -F | grep -E 'secure_grub|print_msg|error|success|info|warning' || echo "Functions not properly exported"
-        echo "GRUB installation:"
-        command -v grub-install || command -v grub2-install || echo "GRUB installation commands not found"
-        echo "GRUB configuration files:"
-        ls -la /etc/grub.d/ 2>/dev/null || echo "/etc/grub.d/ not found"
-        echo "=================================="
-    } >&2
-}
-
 # Export the main function for use in other scripts
 export -f secure_grub
 
@@ -417,6 +394,18 @@ secure_grub() {
             non_interactive=1
             info "Running in non-interactive mode"
             [ -z "$default_password" ] && error "Non-interactive mode requires a default password parameter"
+        else
+            # Clear visual indicator that user input is required
+            echo
+            echo "╔════════════════════════════════════════════════════════════╗"
+            echo "║                GRUB PASSWORD CONFIGURATION                 ║"
+            echo "║                                                            ║"
+            echo "║  You will be prompted to create a password for GRUB.       ║"
+            echo "║  This password protects your bootloader from unauthorized  ║"
+            echo "║  modifications and increases system security.              ║"
+            echo "║                                                            ║"
+            echo "╚════════════════════════════════════════════════════════════╝"
+            echo
         fi
 
         # Save current environment variables before setting strict mode
@@ -490,9 +479,16 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     secure_grub
 else
     info "GRUB module loaded from $(ps -o comm= $PPID)"
-    # Check if HARDN_MODULE_EXECUTE is set to run this module automatically when sourced
-    if [ "${HARDN_MODULE_EXECUTE:-}" = "grub" ]; then
+
+    # Always run the secure_grub function when sourced from hardn-main.sh
+    if [[ "$(ps -o comm= $PPID)" == *"hardn-main"* ]]; then
+        info "Detected sourcing from hardn-main.sh - executing GRUB configuration automatically"
+        secure_grub
+    # Also run if explicitly requested via environment variable
+    elif [ "${HARDN_MODULE_EXECUTE:-}" = "grub" ]; then
         info "Auto-executing GRUB module based on HARDN_MODULE_EXECUTE setting"
         secure_grub
+    else
+        info "GRUB module loaded but not executed. To run, call 'secure_grub' function."
     fi
 fi
