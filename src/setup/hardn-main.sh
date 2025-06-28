@@ -244,8 +244,7 @@ setup_security(){
     	source ./modules/auto_updates.sh
     	source ./modules/secure_net.sh
      	source ./modules/stig_pwquality.sh
-    	# chkrootkit dl url prob DONE..testing to confirm --> fix chkrootkit's download URL; the one in the module DOES NOT exist. Trying FTP
-    	source ./modules/chkrootkit.sh
+    	source ./modules/chkrootkit.sh # This might still need some work.
     	source ./modules/auditd.sh
     	source ./modules/suricata.sh
     	source ./modules/debsums.sh
@@ -262,11 +261,13 @@ setup_security(){
     	source ./modules/central_logging.sh
     	source ./modules/unnecesary_services.sh
         source ./modules/rkhunter.sh
-        echo "Configuring GRUB security settings..."
+        #echo "Configuring GRUB security settings..."
         source ./modules/grub.sh
        # source ./modules/audit_system.sh
        # source ./modules/pentest.sh
-        echo "run the lynis audit to test the security"
+        echo ''
+        echo "RUN THE LYNIS AUDIT TO TEST THE SECURITY"
+        echo ''
 }
 
 cleanup() {
