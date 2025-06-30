@@ -47,15 +47,9 @@ main() {
   check_root
   verify_dependencies
   update_system
-
-    echo "Error: main script not found at $MAIN_SCRIPT" >&2
-    exit 1
-  fi
-  chmod +x "$MAIN_SCRIPT"
-
   install_wrapper
 
-  echo "hardn-xdr installer is ready. Run 'hardn-xdr' to begin."
+  echo "hardn-xdr installer is ready. Run 'sudo hardn-xdr' to begin."
 }
 
 main "$@"
