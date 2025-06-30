@@ -1,16 +1,21 @@
 #!/bin/bash
 set -e
 
-
-
 case "$1" in
-    configure)
-        chmod +x /usr/share/hardn-xdr/install.sh 2>/dev/null || true
-        chmod +x /usr/share/hardn-xdr/src/setup/hardn-main.sh 2>/dev/null || true
-        chmod +x /usr/bin/hardn-xdr2>/dev/null || true
-        echo "HARDN-XDR has been installed."
-        echo "To begin system hardening, run: sudo /usr/share/hardn-xdr/install.sh"
-        ;;
+  configure)
+    # wrapper
+    chmod +x /usr/share/hardn-xdr/install.sh         >/dev/null 2>&1 || true
+    chmod +x /usr/share/hardn-xdr/src/setup/hardn-main.sh  >/dev/null 2>&1 || true
+    chmod +x /usr/bin/hardn-xdr                       >/dev/null 2>&1 || true
+
+    cat << EOF
+HARDN-XDR has been installed!
+To begin system hardening, run:
+
+    sudo hardn-xdr
+
+EOF
+    ;;
 esac
 
 exit 0
