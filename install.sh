@@ -1,6 +1,6 @@
 #!/bin/bash
 # HARDN-XDR installed entry point
-# Author: Christopher Bingham
+# Author: SIG Team
 check_root () {
     [ "$(id -u)" -ne 0 ] && echo "Please run this script as root." && exit 1
 }
@@ -9,7 +9,9 @@ update_system() {
     apt update && apt upgrade -y
 }
 run_hardn() {
-    MAIN_SCRIPT="/usr/share/hardn-xdr/src/setup/hardn-main.sh"
+    # uncomment to run binary install packaging 
+    #MAIN_SCRIPT="/usr/share/hardn-xdr/src/setup/hardn-main.sh"
+        MAIN_SCRIPT="hardn-xdr/src/setup/hardn-main.sh"
     if [ -f "$MAIN_SCRIPT" ]; then
         chmod +x "$MAIN_SCRIPT"
         "$MAIN_SCRIPT"
