@@ -1,6 +1,6 @@
 # Security Tools in HARDN-XDR
 
-Below is a comprehensive list of security tools used in the HARDN-XDR project's `hardn-main.sh` script, along with brief descriptions and external resource links:
+Below is a comprehensive list of security tools used in the HARDN-XDR project's `hardn-main.sh` script and `/modules`, along with brief descriptions and external resource links:
 
 ## System Security Tools
 
