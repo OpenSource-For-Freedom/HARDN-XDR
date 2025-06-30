@@ -2,7 +2,12 @@ Source: hardn
 Section: admin
 Priority: optional
 Maintainer: Matei B. <office@cybersynapse.ro>
-Build-Depends: debhelper-compat (= 13)
+Build-Depends: debhelper-compat (= 13),
+ devscripts,
+ dpkg-dev,
+ fakeroot,
+ build-essential,
+ python3,
 Standards-Version: 4.6.2
 Rules-Requires-Root: no
 Homepage: https://github.com/OpenSource-For-Freedom/HARDN-XDR
