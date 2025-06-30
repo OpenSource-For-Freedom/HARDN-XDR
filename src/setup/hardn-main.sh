@@ -12,6 +12,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROGS_CSV_PATH="${SCRIPT_DIR}/../../progs.csv"
 CURRENT_DEBIAN_VERSION_ID=""
 CURRENT_DEBIAN_CODENAME=""
+MODULES_DIR="${SCRIPT_DIR}/../modules"
 
 HARDN_STATUS() {
     local status="$1"
@@ -233,38 +234,35 @@ setup_security(){
         # global variables CURRENT_DEBIAN_VERSION_ID and CURRENT_DEBIAN_CODENAME are available.
         HARDN_STATUS "pass" "Using detected system: Debian ${CURRENT_DEBIAN_VERSION_ID} (${CURRENT_DEBIAN_CODENAME}) for security setup."
         HARDN_STATUS "info" "Setting up security tools and configurations..."
-        source ./modules/ufw.sh
-    	source ./modules/deleted_files.sh
-    	source ./modules/ntp.sh
-    	source ./modules/usb.sh
-    	source ./modules/network_protocols.sh
-    	source ./modules/file_perms.sh
-    	source ./modules/shared_mem.sh
-    	source ./modules/coredumps.sh
-    	source ./modules/auto_updates.sh
-    	source ./modules/secure_net.sh
-     	source ./modules/stig_pwquality.sh
-    	source ./modules/chkrootkit.sh # This might still need some work.
-    	source ./modules/auditd.sh
-    	source ./modules/suricata.sh
-    	source ./modules/debsums.sh
-    	source ./modules/aide.sh
-    	source ./modules/yara.sh
-    	source ./modules/banner.sh
-    	source ./modules/compilers.sh
-    	source ./modules/binfmt.sh
-    	source ./modules/purge_old_pkgs.sh
-    	source ./modules/dns_config.sh
-    	source ./modules/firewire.sh
-    	source ./modules/process_accounting.sh
-    	source ./modules/kernel_sec.sh
-    	source ./modules/central_logging.sh
-    	source ./modules/unnecesary_services.sh
-        source ./modules/rkhunter.sh
-        #echo "Configuring GRUB security settings..."
-        #source ./modules/grub.sh
-        source ./modules/audit_system.sh
-        source ./modules/pentest.sh
+        
+        source "${MODULES_DIR}/ntp.sh"
+        source "${MODULES_DIR}/usb.sh"
+        source "${MODULES_DIR}/network_protocols.sh"
+        source "${MODULES_DIR}/file_perms.sh"
+        source "${MODULES_DIR}/shared_mem.sh"
+        source "${MODULES_DIR}/coredumps.sh"
+        source "${MODULES_DIR}/auto_updates.sh"
+        source "${MODULES_DIR}/secure_net.sh"
+        source "${MODULES_DIR}/stig_pwquality.sh"
+        source "${MODULES_DIR}/chkrootkit.sh"
+        source "${MODULES_DIR}/auditd.sh"
+        source "${MODULES_DIR}/suricata.sh"
+        source "${MODULES_DIR}/debsums.sh"
+        source "${MODULES_DIR}/aide.sh"
+        source "${MODULES_DIR}/yara.sh"
+        source "${MODULES_DIR}/banner.sh"
+        source "${MODULES_DIR}/compilers.sh"
+        source "${MODULES_DIR}/binfmt.sh"
+        source "${MODULES_DIR}/purge_old_pkgs.sh"
+        source "${MODULES_DIR}/dns_config.sh"
+        source "${MODULES_DIR}/firewire.sh"
+        source "${MODULES_DIR}/process_accounting.sh"
+        source "${MODULES_DIR}/kernel_sec.sh"
+        source "${MODULES_DIR}/central_logging.sh"
+        source "${MODULES_DIR}/unnecesary_services.sh"
+        source "${MODULES_DIR}/rkhunter.sh"
+        source "${MODULES_DIR}/audit_system.sh"
+        source "${MODULES_DIR}/pentest.sh"
 
         echo ''
         echo "RUN THE LYNIS AUDIT TO TEST AFTER GRUB SUCCSS"
