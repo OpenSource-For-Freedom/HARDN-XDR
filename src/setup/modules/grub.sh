@@ -2,7 +2,8 @@
 # GRUB Password Protection Module; sourced an executed by hardn-main.sh.
 # Part of the HARDN-XDR security hardening framework
 #######################################
-#
+###################################################################################THIS FILE IS NOT FULLY COMPLETE###################>>>>>>>
+
 # ATTN!! READ BEFORE running.
 # This script auto defaults to the non-interactive password set
 # The default credentials are hard coded into the script
