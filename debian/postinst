@@ -7,6 +7,7 @@ case "$1" in
     configure)
         chmod +x /usr/share/hardn-xdr/install.sh 2>/dev/null || true
         chmod +x /usr/share/hardn-xdr/src/setup/hardn-main.sh 2>/dev/null || true
+        chmod +x /usr/bin/hardn-xdr2>/dev/null || true
         echo "HARDN-XDR has been installed."
         echo "To begin system hardening, run: sudo /usr/share/hardn-xdr/install.sh"
         ;;
