@@ -34,7 +34,6 @@ The script follows a modular design with distinct functions for different securi
 ### 1. System Package Management
 
 ```bash
-# File: /home/linux/Projects/LinuxThings/Hardn-Project/Chris/HARDN-XDR/src/setup/hardn-main.sh
 update_system_packages()
 install_package_dependencies("../../progs.csv")
 ```
@@ -50,7 +49,6 @@ The script begins by updating the system and installing security-focused package
 ### 2. Kernel Security Hardening
 
 ```bash
-# File: /home/linux/Projects/LinuxThings/Hardn-Project/Chris/HARDN-XDR/src/setup/hardn-main.sh
 apply_kernel_security()
 ```
 
@@ -64,7 +62,6 @@ This function implements kernel-level security by configuring sysctl parameters 
 ### 3. Network Security
 
 ```bash
-# File: /home/linux/Projects/LinuxThings/Hardn-Project/Chris/HARDN-XDR/src/setup/hardn-main.sh
 enable_nameservers()
 ```
 
@@ -79,7 +76,6 @@ The script configures DNS to use secure providers (Quad9 and Cloudflare) and han
 The script configures multiple layers of intrusion detection:
 
 ```bash
-# File: /home/linux/Projects/LinuxThings/Hardn-Project/Chris/HARDN-XDR/src/setup/hardn-main.sh
 # Suricata configuration
 if dpkg -s suricata >/dev/null 2>&1; then
     # Configuration logic...
@@ -93,7 +89,6 @@ Suricata is configured as a network-based intrusion detection system with automa
 ### 5. Audit Framework Configuration
 
 ```bash
-# File: /home/linux/Projects/LinuxThings/Hardn-Project/Chris/HARDN-XDR/src/setup/hardn-main.sh
 # auditd configuration
 if dpkg -s auditd >/dev/null 2>&1; then
     # Configuration logic...
@@ -113,7 +108,6 @@ The script implements a comprehensive audit framework using auditd with optimize
 Multiple tools are configured to ensure system integrity:
 
 ```bash
-# File: /home/linux/Projects/LinuxThings/Hardn-Project/Chris/HARDN-XDR/src/setup/hardn-main.sh
 # AIDE configuration
 if ! dpkg -s aide >/dev/null 2>&1; then
     # Installation and configuration logic...
@@ -123,7 +117,6 @@ fi
 AIDE (Advanced Intrusion Detection Environment) is configured to create and maintain a database of file checksums for integrity verification.
 
 ```bash
-# File: /home/linux/Projects/LinuxThings/Hardn-Project/Chris/HARDN-XDR/src/setup/hardn-main.sh
 # debsums configuration
 if command -v debsums >/dev/null 2>&1; then
     # Configuration logic...
@@ -135,7 +128,6 @@ Debsums is set up to verify installed package files against known good checksums
 ### 7. Rootkit Detection
 
 ```bash
-# File: /home/linux/Projects/LinuxThings/Hardn-Project/Chris/HARDN-XDR/src/setup/hardn-main.sh
 # rkhunter configuration
 if ! dpkg -s rkhunter >/dev/null 2>&1; then
     # Installation and configuration logic...
@@ -154,7 +146,6 @@ Both rkhunter and chkrootkit are configured to run daily checks for rootkits and
 Several functions reduce the attack surface:
 
 ```bash
-# File: /home/linux/Projects/LinuxThings/Hardn-Project/Chris/HARDN-XDR/src/setup/hardn-main.sh
 disable_firewire_drivers()
 disable_binfmt_misc()
 restrict_compilers()
@@ -170,7 +161,6 @@ These functions:
 ### 9. Centralized Logging
 
 ```bash
-# File: /home/linux/Projects/LinuxThings/Hardn-Project/Chris/HARDN-XDR/src/setup/hardn-main.sh
 setup_central_logging()
 ```
 
@@ -183,7 +173,6 @@ This function creates a unified logging framework that:
 ### 10. Penetration Testing
 
 ```bash
-# File: /home/linux/Projects/LinuxThings/Hardn-Project/Chris/HARDN-XDR/src/setup/hardn-main.sh
 pen_test()
 ```
 
@@ -199,7 +188,6 @@ The script includes a self-assessment component that:
 The script uses a custom `HARDN_STATUS` function to provide consistent status reporting:
 
 ```bash
-# File: /home/linux/Projects/LinuxThings/Hardn-Project/Chris/HARDN-XDR/src/setup/hardn-main.sh
 HARDN_STATUS "info" "Message"  # Informational message
 HARDN_STATUS "pass" "Message"  # Success message
 HARDN_STATUS "error" "Message" # Error message
@@ -211,7 +199,6 @@ HARDN_STATUS "warning" "Message" # Warning message
 The script uses `whiptail` for user interaction, providing a semi-graphical interface in the terminal:
 
 ```bash
-# File: /home/linux/Projects/LinuxThings/Hardn-Project/Chris/HARDN-XDR/src/setup/hardn-main.sh
 whiptail --infobox "Message" 7 70
 ```
 
@@ -220,7 +207,6 @@ whiptail --infobox "Message" 7 70
 The script implements fallback mechanisms when primary installation methods fail:
 
 ```bash
-# File: /home/linux/Projects/LinuxThings/Hardn-Project/Chris/HARDN-XDR/src/setup/hardn-main.sh
 # Example from rkhunter installation
 if apt-get install -y rkhunter >/dev/null 2>&1; then
     HARDN_STATUS "pass" "rkhunter installed successfully via apt."
@@ -235,7 +221,6 @@ fi
 Before modifying critical configuration files, the script creates backups:
 
 ```bash
-# File: /home/linux/Projects/LinuxThings/Hardn-Project/Chris/HARDN-XDR/src/setup/hardn-main.sh
 # Example from auditd configuration
 if [ -f "$audit_rules_file" ]; then
     cp "$audit_rules_file" "${audit_rules_file}.bak.$(date +%F-%T)" 2>/dev/null || true
@@ -248,7 +233,6 @@ fi
 The `enable_nameservers()` function (where your cursor was positioned) demonstrates sophisticated handling of DNS configuration:
 
 ```bash
-# File: /home/linux/Projects/LinuxThings/Hardn-Project/Chris/HARDN-XDR/src/setup/hardn-main.sh
 enable_nameservers() {
     # Function implementation...
     local resolved_conf_systemd temp_resolved_conf
@@ -270,7 +254,7 @@ This function:
 
 ## Conclusion
 
-The `hardn-main.sh` script is a comprehensive security hardening tool that implements defense-in-depth through multiple security layers. It follows security best practices by:
+The `hardn-main.sh` alongside the `/modules` scripts are comprehensive security hardening tools that implements defense-in-depth through multiple security layers. It follows security best practices by:
 
 1. Implementing principle of least privilege
 2. Reducing attack surface
