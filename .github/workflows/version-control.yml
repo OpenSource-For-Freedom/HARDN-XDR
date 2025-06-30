@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - jumpsecurity
 
 jobs:
   bump-version:

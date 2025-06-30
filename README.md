@@ -65,6 +65,10 @@
     git clone https://github.com/opensource-for-freedom/HARDN-XDR && cd HARDEN-XDR && sudo chmod +x install.sh && sudo ./install.sh
     ```
 
+2. **Build the Debian package**
+    ```bash
+    <<<BUILD STEPS>>>
+
 <br>
 
 ### Installation Notes
@@ -103,14 +107,16 @@ HARDN-XDR/
 │   ├── hardn-main-sh-review.md  
 │   ├── HARDN.md                 
 │   ├── hardn-security-tools.md  
-│   └── TODO.md                  
+│   └── TODO.md            
 ├── install.sh                  
 ├── LICENSE                      
 ├── progs.csv                    
 ├── README.md                    
 └── src                          
     └── setup                    
-        ├── hardn-main.sh        
+        ├── hardn-main.sh
+        ├── modules*
+              └── (modules)        
            
 ```
 

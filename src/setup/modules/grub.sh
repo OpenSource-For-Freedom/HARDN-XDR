@@ -607,12 +607,38 @@ secure_grub() {
     chmod 600 "$LOG_FILE"
     log "Starting GRUB password protection setup"
 
+    # Secure Boot detection
+    if [ -d /sys/firmware/efi ]; then
+        if command -v mokutil >/dev/null 2>&1 && mokutil --sb-state 2>/dev/null | grep -q 'SecureBoot enabled'; then
+            info "Secure Boot is enabled. Skipping GRUB password protection."
+            whiptail --title "GRUB Security" --msgbox "Secure Boot is enabled. GRUB password protection is not required and will be skipped." 10 60 2>/dev/null || true
+            return 0
+        fi
+    fi
+
     # Check if we're in non-interactive mode
     if [ -n "$default_password" ] || [ ! -t 0 ]; then
         non_interactive=1
         info "Running in non-interactive mode"
         [ -z "$default_password" ] && error "Non-interactive mode requires a default password parameter"
     else
+        # Ask user if they want to enable GRUB password protection
+        if command -v whiptail >/dev/null 2>&1; then
+            if ! whiptail --title "GRUB Password Protection" --yesno "Do you want to enable GRUB password protection?\n\nThis protects the bootloader from unauthorized changes, but is not required if Secure Boot is enabled." 12 70; then
+                info "User declined GRUB password protection. Skipping setup."
+                whiptail --title "GRUB Security" --msgbox "GRUB password protection was skipped at your request." 10 60 2>/dev/null || true
+                return 0
+            fi
+        else
+            echo
+            echo "You can enable GRUB password protection to prevent unauthorized changes."
+            read -r -p "Enable GRUB password protection? [y/N]: " answer
+            answer=${answer:-N}
+            if [[ ! $answer =~ ^[Yy]$ ]]; then
+                info "User declined GRUB password protection. Skipping setup."
+                return 0
+            fi
+        fi
         # Clear visual indicator that user input is required
         echo
         echo "╔════════════════════════════════════════════════════════════╗"

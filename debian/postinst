@@ -1,0 +1,16 @@
+#!/bin/bash
+set -e
+
+# postinst script for HARDN-XDR
+
+case "$1" in
+    configure)
+        chmod +x /usr/share/hardn-xdr/install.sh 2>/dev/null || true
+        chmod +x /usr/share/hardn-xdr/src/setup/hardn-main.sh 2>/dev/null || true
+        # Optionally display a message to the user
+        echo "HARDN-XDR has been installed."
+        echo "To begin system hardening, run: sudo /usr/share/hardn-xdr/install.sh"
+        ;;
+esac
+
+exit 0

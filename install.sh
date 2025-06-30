@@ -20,6 +20,7 @@ retrieve_and_run() {
 
 main() {
         check_root
+        update_system
         retrieve_and_run
 }
 
