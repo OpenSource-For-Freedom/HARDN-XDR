@@ -10,8 +10,8 @@ update_system() {
 }
 run_hardn() {
     # uncomment to run binary install packaging 
-    #MAIN_SCRIPT="/usr/share/hardn-xdr/src/setup/hardn-main.sh"
-        MAIN_SCRIPT="hardn-xdr/src/setup/hardn-main.sh"
+    MAIN_SCRIPT="/usr/share/hardn-xdr/src/setup/hardn-main.sh"
+        
     if [ -f "$MAIN_SCRIPT" ]; then
         chmod +x "$MAIN_SCRIPT"
         "$MAIN_SCRIPT"
