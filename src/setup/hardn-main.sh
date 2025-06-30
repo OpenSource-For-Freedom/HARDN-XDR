@@ -81,15 +81,6 @@ preinstallmsg() {
 
 }
 
-update_system_packages() {
-    HARDN_STATUS "pass" "Updating system packages..."
-    if DEBIAN_FRONTEND=noninteractive timeout 10s apt-get -o Acquire::ForceIPv4=true update -y; then
-        HARDN_STATUS "pass" "System package list updated successfully."
-    else
-        HARDN_STATUS "warning" "apt-get update failed or timed out after 60 seconds. Check your network or apt sources, but continuing script."
-    fi
-}
-
 
 print_ascii_banner() {
 
@@ -186,7 +177,6 @@ main() {
     print_ascii_banner
     show_system_info
     welcomemsg
-    update_system_packages
     setup_security
     cleanup
     print_ascii_banner
