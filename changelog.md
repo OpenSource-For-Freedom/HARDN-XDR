@@ -4,9 +4,20 @@
 
 #### Improved
 - **Modular system**: Restructured the security setup function into a modular system.
+- **Update isntall** to source local file and not the clone, incase clone has chanes local does not.
+- **Debian Packaging** add Debian packaging and build action in /workflows. This should allow any change to main create a new release, for the user to download the `.hardn-xdr_1.1.48` from releases.
+- Upated all documentaiton in `/docs`
 
 #### Fixed
 - **Rkhunter**: Changed repository to the real, existing one.
+
+### NEEDS ATTENTION:
+- `grub.sh`
+- `auditd.sh`
+- `suricata.sh`
+- `yara.sh`
+- `sshd.sh`
+- "All SSH policies"
 
 ---
 
