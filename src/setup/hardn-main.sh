@@ -90,106 +90,6 @@ update_system_packages() {
     fi
 }
 
-# install_package_dependencies
-install_package_dependencies() {
-    HARDN_STATUS "pass" "Installing package dependencies from ${PROGS_CSV_PATH}..."
-
-    if ! command -v git >/dev/null 2>&1; then
-        HARDN_STATUS "info" "Git is not installed. Attempting to install git..."
-        if DEBIAN_FRONTEND=noninteractive apt-get install -y git >/dev/null 2>&1; then
-            HARDN_STATUS "pass" "Successfully installed git."
-        else
-            HARDN_STATUS "error" "Failed to install git. Some packages might fail to install if they require git."
-            # Do not exit, allow script to continue if git is not strictly needed by all packages
-        fi
-    else
-        HARDN_STATUS "info" "Git is already installed."
-    fi
-
-    # Check if the CSV file exists
-    if [[ ! -f "${PROGS_CSV_PATH}" ]]; then
-        HARDN_STATUS "error" "Package list file not found: ${PROGS_CSV_PATH}"
-        return 1
-    fi
-
-    # Read the CSV file, skipping the header
-    while IFS=, read -r name version debian_min_version debian_codenames_str rest || [[ -n "$name" ]]; do
-        # Skip comments and empty lines
-        [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
-
-        name=$(echo "$name" | xargs)
-        version=$(echo "$version" | xargs)
-        debian_min_version=$(echo "$debian_min_version" | xargs)
-        debian_codenames_str=$(echo "$debian_codenames_str" | xargs | tr -d '"') # Remove quotes from codenames string
-
-        if [[ -z "$name" ]]; then
-            HARDN_STATUS "warning" "Skipping line with empty package name."
-            continue
-        fi
-
-        HARDN_STATUS "info" "Processing package: $name (Version: $version, Min Debian: $debian_min_version, Codenames: '$debian_codenames_str')"
-
-        # Check OS compatibility
-        os_compatible=false
-        if [[ ",${debian_codenames_str}," == *",${CURRENT_DEBIAN_CODENAME},"* ]]; then
-            if [[ "${debian_min_version}" == "12" ]]; then
-                os_compatible=true
-            else
-                HARDN_STATUS "warning" "Skipping $name: Requires Debian version >= $debian_min_version, but current is $CURRENT_DEBIAN_VERSION_ID."
-            fi
-        else
-            HARDN_STATUS "warning" "Skipping $name: Not compatible with Debian codename $CURRENT_DEBIAN_CODENAME (requires one of: $debian_codenames_str)."
-        fi
-
-        if ! $os_compatible; then
-            continue
-        fi
-
-        # Installation logic based on version
-        case "$version" in
-            "latest")
-                if ! dpkg -s "$name" >/dev/null 2>&1; then
-                    HARDN_STATUS "info" "Attempting to install package: $name (latest from apt)..."
-                    if DEBIAN_FRONTEND=noninteractive apt install -y "$name"; then
-                        HARDN_STATUS "pass" "Successfully installed $name."
-                    else
-                        HARDN_STATUS "warning" "apt install failed for $name, trying apt-get..."
-                        if DEBIAN_FRONTEND=noninteractive apt-get install -y "$name"; then
-                             HARDN_STATUS "pass" "Successfully installed $name with apt-get."
-                        else
-                            HARDN_STATUS "error" "Failed to install $name with both apt and apt-get. Please check manually."
-                        fi
-                    fi
-                else
-                    HARDN_STATUS "info" "Package $name is already installed."
-                fi
-                ;;
-            "source")
-                HARDN_STATUS "warning" "INFO: 'source' installation type for $name. This type requires manual implementation in the script."
-                HARDN_STATUS "warning" "Example steps for a source install (e.g., for a package named 'mytool'):"
-                HARDN_STATUS "warning" "  1. Ensure build dependencies are installed (e.g., build-essential, cmake, etc.)."
-                HARDN_STATUS "warning" "  2. wget https://example.com/mytool-src.tar.gz -O /tmp/mytool-src.tar.gz"
-                HARDN_STATUS "warning" "  3. tar -xzf /tmp/mytool-src.tar.gz -C /tmp"
-                HARDN_STATUS "warning" "  4. cd /tmp/mytool-* || exit 1"
-                HARDN_STATUS "warning" "  5. ./configure && make && sudo make install"
-                HARDN_STATUS "warning" "Skipping $name as its specific source installation steps are not defined."
-                ;;
-            "custom")
-                HARDN_STATUS "warning" "INFO: 'custom' installation type for $name. This type requires manual implementation in the script."
-                HARDN_STATUS "warning" "Example steps for a custom install (e.g., for a package named 'mycustomapp'):"
-                HARDN_STATUS "warning" "  1. Add custom repository: curl -sSL https://example.com/repo/gpg | sudo apt-key add -"
-                HARDN_STATUS "warning" "  2. echo 'deb https://example.com/repo ${CURRENT_DEBIAN_CODENAME} main' | sudo tee /etc/apt/sources.list.d/mycustomapp.list"
-                HARDN_STATUS "warning" "  3. sudo apt update"
-                HARDN_STATUS "warning" "  4. sudo apt install -y mycustomapp"
-                HARDN_STATUS "warning" "Skipping $name as its specific custom installation steps are not defined."
-                ;;
-            *)
-                HARDN_STATUS "error" "Unknown version '$version' for package $name. Skipping..."
-                ;;
-        esac
-    done < <(tail -n +2 "${PROGS_CSV_PATH}")
-    HARDN_STATUS "pass" "Package dependency installation attempt completed."
-}
 
 print_ascii_banner() {
 
@@ -208,7 +108,7 @@ print_ascii_banner() {
   ███    █▀           ███    █▀         ███    ███      ████████▀        ▀█   █▀
                                         ███    ███
 
-                            Extended Detection and Response
+                            Endpoint Detection and Response
                             by Security International Group
 
 EOF
@@ -262,11 +162,10 @@ setup_security(){
         source "${MODULES_DIR}/unnecesary_services.sh"
         source "${MODULES_DIR}/rkhunter.sh"
         source "${MODULES_DIR}/audit_system.sh"
-        source "${MODULES_DIR}/pentest.sh"
-
         echo ''
         echo "RUN THE LYNIS AUDIT TO TEST AFTER GRUB SUCCSS"
         echo ''
+        source "${MODULES_DIR}/pentest.sh"
 }
 
 cleanup() {
@@ -285,7 +184,6 @@ main() {
     show_system_info
     welcomemsg
     update_system_packages
-    install_package_dependencies "../../progs.csv"
     setup_security
     cleanup
     print_ascii_banner
