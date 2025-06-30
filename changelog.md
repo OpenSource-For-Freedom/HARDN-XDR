@@ -1,6 +1,6 @@
 # Changelog
 
-## Version 2.1.0
+## Version 1.1.46
 
 #### Improved
 - **Modular system**: Restructured the security setup function into a modular system.
@@ -10,7 +10,7 @@
 
 ---
 
-## Version 2.0.0
+## Version 1.1.13
 
 #### Added
 - **Version Tracking**: Added explicit version identifier (v2.0.0) throughout the script and user interface
