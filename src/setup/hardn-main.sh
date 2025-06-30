@@ -130,53 +130,56 @@ EOF
 }
 
 setup_security(){
-        # OS detection is done by detect_os_details()
-        # global variables CURRENT_DEBIAN_VERSION_ID and CURRENT_DEBIAN_CODENAME are available.
-        HARDN_STATUS "pass" "Using detected system: Debian ${CURRENT_DEBIAN_VERSION_ID} (${CURRENT_DEBIAN_CODENAME}) for security setup."
-        HARDN_STATUS "info" "Setting up security tools and configurations..."
-        
-        source "${MODULES_DIR}/ntp.sh"
-        source "${MODULES_DIR}/usb.sh"
-        source "${MODULES_DIR}/network_protocols.sh"
-        source "${MODULES_DIR}/file_perms.sh"
-        source "${MODULES_DIR}/shared_mem.sh"
-        source "${MODULES_DIR}/coredumps.sh"
-        source "${MODULES_DIR}/auto_updates.sh"
-        source "${MODULES_DIR}/secure_net.sh"
-        source "${MODULES_DIR}/stig_pwquality.sh"
-        source "${MODULES_DIR}/chkrootkit.sh"
-        source "${MODULES_DIR}/auditd.sh"
-        source "${MODULES_DIR}/suricata.sh"
-        source "${MODULES_DIR}/debsums.sh"
-        source "${MODULES_DIR}/aide.sh"
-        source "${MODULES_DIR}/yara.sh"
-        source "${MODULES_DIR}/banner.sh"
-        source "${MODULES_DIR}/compilers.sh"
-        source "${MODULES_DIR}/binfmt.sh"
-        source "${MODULES_DIR}/purge_old_pkgs.sh"
-        source "${MODULES_DIR}/dns_config.sh"
-        source "${MODULES_DIR}/firewire.sh"
-        source "${MODULES_DIR}/process_accounting.sh"
-        source "${MODULES_DIR}/kernel_sec.sh"
-        source "${MODULES_DIR}/central_logging.sh"
-        source "${MODULES_DIR}/unnecesary_services.sh"
-        source "${MODULES_DIR}/rkhunter.sh"
-        source "${MODULES_DIR}/audit_system.sh"
-        echo ''
-        echo "RUN THE LYNIS AUDIT TO TEST AFTER GRUB SUCCSS"
-        echo ''
-        source "${MODULES_DIR}/pentest.sh"
-}
+    HARDN_STATUS "pass"  "Using detected system: Debian ${CURRENT_DEBIAN_VERSION_ID} (${CURRENT_DEBIAN_CODENAME}) for security setup."
+    HARDN_STATUS "info"  "Loading and running security modules..."
 
-cleanup() {
-    HARDN_STATUS "info" "Performing final system cleanup..."
-    apt-get autoremove -y >/dev/null 2>&1
-    apt-get clean >/dev/null 2>&1
-    apt-get autoclean >/dev/null 2>&1
-    HARDN_STATUS "pass" "System cleanup completed. Unused packages and cache cleared."
-    whiptail --infobox "HARDN-XDR v${HARDN_VERSION} setup complete! Please reboot your system." 8 75
-    sleep 3
+    # listing every module simpler
+    local mods=(
+      aide
+      auditd
+      audit_system
+      auto_updates
+      banner
+      binfmt
+      central_logging
+      chkrootkit
+      compilers
+      coredumps
+      debsums
+      deleted_files
+      dns_config
+      file_perms
+      firewire
+      grub
+      kernel_sec
+      network_protocols
+      ntp
+      pentest
+      process_accounting
+      purge_old_pkgs
+      rkhunter
+      secure_net
+      service_disable
+      shared_mem
+      stig_pwquality
+      suricata
+      ufw
+      unhide
+      unnecesary_services
+      usb
+    )
 
+    for m in "${mods[@]}"; do
+      if [[ -r "${MODULES_DIR}/${m}.sh" ]]; then
+        source "${MODULES_DIR}/${m}.sh"
+      else
+        HARDN_STATUS "warning" "Module not found: ${m}.sh"
+      fi
+    done
+
+    echo ""
+    echo "RUN THE LYNIS AUDIT TO TEST AFTER GRUB SUCCESS"
+    echo ""
 }
 
 main() {
