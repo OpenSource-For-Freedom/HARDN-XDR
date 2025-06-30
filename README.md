@@ -65,9 +65,9 @@
     git clone https://github.com/opensource-for-freedom/HARDN-XDR && cd HARDEN-XDR && sudo chmod +x install.sh && sudo ./install.sh
     ```
 
-2. **Build the Debian package**
-    ```bash
-    <<<BUILD STEPS>>>
+2. **Access it through the latest release**
+ - You will find the mode resent Debian release here:
+    [HARDN-XDR Debian Package](https://github.com/OpenSource-For-Freedom/HARDN-XDR/releases)
 
 <br>
 
