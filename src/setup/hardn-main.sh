@@ -307,9 +307,8 @@ if [[ $# -gt 0 ]]; then
             echo ""
             echo "Target Systems: Debian 12+, Ubuntu 24.04+"
             echo "Features: STIG Compliance, Malware Detection, System Hardening"
-            echo "Developed by: Christopher Bingham and Tim Burns"
+            echo "Developed by: SIG Team"
             echo ""
-            echo "This is the final public release of HARDN-XDR."
             exit 0
             ;;
         --help|-h)
