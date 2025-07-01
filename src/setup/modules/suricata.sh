@@ -287,6 +287,52 @@ verify_suricata_installation() {
     return 0
 }
 
+# Utility function to determine the primary network interface
+get_interface() {
+    # Try to get the default route interface
+    local interface
+    interface=$(ip route | grep default | awk '{print $5}' | head -n 1)
+
+    # If that fails, try to get the first non-loopback interface
+    if [ -z "$interface" ]; then
+        interface=$(ip -o link show | grep -v "lo:" | awk -F': ' '{print $2}' | head -n 1)
+    fi
+
+    # If we still don't have an interface, use a fallback
+    if [ -z "$interface" ]; then
+        HARDN_STATUS "warning" "Could not determine primary network interface. Using 'eth0' as fallback."
+        interface="eth0"
+    else
+        HARDN_STATUS "info" "Detected primary network interface: $interface"
+    fi
+
+    echo "$interface"
+}
+
+# Utility function to get the IP address of the primary interface
+get_ip_address() {
+    local interface
+    interface=$(get_interface)
+
+    local ip_addr
+    ip_addr=$(ip -4 addr show "$interface" | grep -oP '(?<=inet\s)\d+(\.\d+){3}(/\d+)?' | head -n 1)
+
+    # If that fails, try to get any non-loopback IPv4 address
+    if [ -z "$ip_addr" ]; then
+        ip_addr=$(ip -4 addr show | grep -v "127.0.0.1" | grep -oP '(?<=inet\s)\d+(\.\d+){3}(/\d+)?' | head -n 1)
+    fi
+
+    # If we still don't have an IP address, use a fallback
+    if [ -z "$ip_addr" ]; then
+        HARDN_STATUS "warning" "Could not determine IP address. Using '192.168.1.0/24' as fallback."
+        ip_addr="192.168.1.0/24"
+    else
+        HARDN_STATUS "info" "Detected IP address: $ip_addr"
+    fi
+
+    echo "$ip_addr"
+}
+
 # Main module function - this is what gets executed when the module is sourced
 suricata_module() {
     HARDN_STATUS "info" "Checking and configuring Suricata..."
