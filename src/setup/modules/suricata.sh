@@ -88,6 +88,10 @@ update_suricata_config() {
     local interface="$1"
     local ip_addr="$2"
 
+    # Clean up interface and IP address values to remove any embedded log messages
+    interface=$(echo "$interface" | grep -o '[a-zA-Z0-9]\+$')
+    ip_addr=$(echo "$ip_addr" | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+\.[0-9]\+/[0-9]\+$')
+
     if [ ! -f "/etc/suricata/suricata.yaml" ]; then
         HARDN_STATUS "error" "Suricata configuration file not found."
         return 1
@@ -119,10 +123,9 @@ update_suricata_config() {
     home_net="${home_net_ip}${home_net_cidr}"
 
     if grep -q "^    HOME_NET:" /etc/suricata/suricata.yaml; then
-        sed -i "s/^    HOME_NET: .*$/    HOME_NET: "${home_net}"/" /etc/suricata/suricata.yaml
+        sed -i "s|^    HOME_NET: .*$|    HOME_NET: "${home_net}"|" /etc/suricata/suricata.yaml
     else
-        # If pattern not found, try to add it in the appropriate section
-        sed -i "/^vars:/a \    HOME_NET: "${home_net}"/" /etc/suricata/suricata.yaml
+        sed -i "/^vars:/a \    HOME_NET: "${home_net}"" /etc/suricata/suricata.yaml
     fi
 
     return 0

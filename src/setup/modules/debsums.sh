@@ -8,6 +8,11 @@
 # 5. Adaptive Execution: Script adjusts based on available system tools
 # 6. Automatic Dependencies: Installs required tools for optimal performance
 
+# Speed up script by not using unicode.
+LC_ALL=C
+LANG=C
+
+
 # Function to detect package manager
 get_pkg_manager() {
     if command -v apt >/dev/null 2>&1; then
@@ -54,24 +59,29 @@ HARDN_STATUS "info" "Configuring debsums..."
 # Get package manager once to avoid redundant checks
 PKG_MANAGER=$(get_pkg_manager)
 
-if ! is_installed debsums; then
-    HARDN_STATUS "info" "Installing debsums..."
-    if [ "$PKG_MANAGER" = "apt" ]; then
-        apt-get update -qq
-        apt-get install -y debsums || {
-            HARDN_STATUS "error" "Failed to install debsums"
+# Check if debsums is installed or needs to be installed
+case "$PKG_MANAGER" in
+    apt)
+        if ! is_installed debsums; then
+            HARDN_STATUS "info" "Installing debsums..."
+            apt-get update -qq
+            apt-get install -y debsums || {
+                HARDN_STATUS "error" "Failed to install debsums"
+                exit 1
+            }
+        fi
+
+        # Verify debsums is available
+        if ! command -v debsums >/dev/null 2>&1; then
+            HARDN_STATUS "error" "debsums command not found, skipping configuration"
             exit 1
-        }
-    else
+        fi
+        ;;
+    *)
         HARDN_STATUS "warning" "debsums is a Debian-specific package, cannot install on this system."
         exit 0
-    fi
-fi
-
-if ! command -v debsums >/dev/null 2>&1; then
-    HARDN_STATUS "error" "debsums command not found, skipping configuration"
-    exit 1
-fi
+        ;;
+esac
 
 # Create optimized daily cron job for debsums
 CRON_DAILY="/etc/cron.daily/debsums"
@@ -125,14 +135,20 @@ else
 fi
 
 # Install parallel for faster processing if available
-if [ "$PKG_MANAGER" = "apt" ]; then
-    if ! is_installed parallel; then
-        HARDN_STATUS "info" "Installing GNU parallel for faster debsums processing..."
-        apt-get install -y parallel || {
-            HARDN_STATUS "warning" "Failed to install GNU parallel, will use standard method"
-        }
-    fi
-fi
+install_parallel() {
+    # Only attempt installation on apt-based systems
+    [ "$PKG_MANAGER" != "apt" ] && return 0
+
+    # Skip if already installed
+    is_installed parallel && return 0
+
+    HARDN_STATUS "info" "Installing GNU parallel for faster debsums processing..."
+    apt-get install -y parallel ||
+        HARDN_STATUS "warning" "Failed to install GNU parallel, will use standard method"
+}
+
+# Call the function to install parallel
+install_parallel
 
 # Run initial check with optimizations
 HARDN_STATUS "info" "Running initial debsums check (this may take some time)..."
