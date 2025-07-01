@@ -18,17 +18,24 @@ install_suricata() {
     HARDN_STATUS "info" "Installing Suricata..."
     apt-get install -y suricata
 
-    # Install suricata-update tool
+    # Install suricata-update tool using apt instead of pip
     HARDN_STATUS "info" "Installing suricata-update tool..."
-    apt-get install -y python3-pip
-    pip3 install suricata-update
+    apt-get install -y python3-suricata-update || {
+        HARDN_STATUS "warning" "python3-suricata-update not found in repositories, trying alternative method..."
+        # Try to install via pip with --break-system-packages flag if needed
+        apt-get install -y python3-pip
+        pip3 install suricata-update --break-system-packages
+    }
 }
 
 # Function to install suricata-update tool
 install_suricata_update() {
     HARDN_STATUS "warning" "suricata-update command not found. Installing it now..."
-    apt-get install -y python3-pip
-    pip3 install suricata-update
+    apt-get install -y python3-suricata-update || {
+        HARDN_STATUS "warning" "python3-suricata-update not found in repositories, trying alternative method..."
+        apt-get install -y python3-pip
+        pip3 install suricata-update --break-system-packages
+    }
 }
 
 # Function to update Suricata rules using suricata-update
@@ -112,10 +119,10 @@ update_suricata_config() {
     home_net="${home_net_ip}${home_net_cidr}"
 
     if grep -q "^    HOME_NET:" /etc/suricata/suricata.yaml; then
-        sed -i "s/^    HOME_NET: .*$/    HOME_NET: \"${home_net}\"/" /etc/suricata/suricata.yaml
+        sed -i "s/^    HOME_NET: .*$/    HOME_NET: "${home_net}"/" /etc/suricata/suricata.yaml
     else
         # If pattern not found, try to add it in the appropriate section
-        sed -i "/^vars:/a \    HOME_NET: \"${home_net}\"/" /etc/suricata/suricata.yaml
+        sed -i "/^vars:/a \    HOME_NET: "${home_net}"/" /etc/suricata/suricata.yaml
     fi
 
     return 0
