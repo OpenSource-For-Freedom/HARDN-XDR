@@ -104,22 +104,27 @@ update_suricata_config() {
     # Backup original config
     cp /etc/suricata/suricata.yaml /etc/suricata/suricata.yaml.bak
 
-    # Update interface - more robust pattern matching
-    if grep -q "^  - interface:" /etc/suricata/suricata.yaml; then
-        sed -i "s/^  - interface: .*$/  - interface: $interface/" /etc/suricata/suricata.yaml
-    else
-        # If pattern not found, try to add it in the appropriate section
-        sed -i "/^af-packet:/a \  - interface: $interface" /etc/suricata/suricata.yaml
-    fi
+    # Create a temporary file for modifications
+    temp_config=$(mktemp)
 
-    # Update HOME_NET - fixed sed command with proper quote handling
-    if grep -q "^    HOME_NET:" /etc/suricata/suricata.yaml; then
-        # Use a different delimiter (|) to avoid issues with slashes in IP/CIDR
-        sed -i "s|^    HOME_NET: .*$|    HOME_NET: "$ip_addr"|" /etc/suricata/suricata.yaml
-    else
-        # Add HOME_NET if it doesn't exist
-        sed -i "/^vars:/a \    HOME_NET: "$ip_addr"" /etc/suricata/suricata.yaml
-    fi
+    # Process the configuration file line by line
+    while IFS= read -r line; do
+        # Update interface
+        if [[ "$line" =~ ^[[:space:]]*-[[:space:]]*interface: ]]; then
+            echo "  - interface: $interface" >> "$temp_config"
+        # Update HOME_NET
+        elif [[ "$line" =~ ^[[:space:]]*HOME_NET:[[:space:]] ]]; then
+            echo "    HOME_NET: \"$ip_addr\"" >> "$temp_config"
+        else
+            echo "$line" >> "$temp_config"
+        fi
+    done < /etc/suricata/suricata.yaml
+
+    # Replace the original file with our modified version
+    mv "$temp_config" /etc/suricata/suricata.yaml
+
+    # Set proper permissions
+    chmod 644 /etc/suricata/suricata.yaml
 
     return 0
 }
