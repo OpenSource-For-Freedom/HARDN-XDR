@@ -1,6 +1,5 @@
 #!/bin/bash
 HARDN_STATUS "error" "Enabling process accounting (acct) and system statistics (sysstat)..."
-local changed_acct changed_sysstat
 changed_acct=false
 changed_sysstat=false
 
