@@ -68,7 +68,7 @@ jobs:
           ref: ${{ needs.bump-version.outputs.new_tag }}
 
       - name: Install build dependencies
-        run: sudo apt-get update && sudo apt-get install -y dpkg-dev debhelper fakeroot
+        run: sudo apt-get update && sudo apt-get install -y dpkg-dev debhelper fakeroot build-essential devscripts
 
       - name: Build Debian package
         run: dpkg-buildpackage -us -uc
