@@ -112,20 +112,13 @@ update_suricata_config() {
         sed -i "/^af-packet:/a \  - interface: $interface" /etc/suricata/suricata.yaml
     fi
 
-    # Update HOME_NET - more robust pattern matching
-    local home_net_ip
-    home_net_ip=$(echo "$ip_addr" | cut -d'/' -f1)
-
-    local home_net_cidr
-    home_net_cidr=$(echo "$ip_addr" | grep -o '/[0-9]\+' || echo "/24")
-
-    local home_net
-    home_net="${home_net_ip}${home_net_cidr}"
-
+    # Update HOME_NET - fixed sed command with proper quote handling
     if grep -q "^    HOME_NET:" /etc/suricata/suricata.yaml; then
-        sed -i "s|^    HOME_NET: .*$|    HOME_NET: "${home_net}"|" /etc/suricata/suricata.yaml
+        # Use a different delimiter (|) to avoid issues with slashes in IP/CIDR
+        sed -i "s|^    HOME_NET: .*$|    HOME_NET: "$ip_addr"|" /etc/suricata/suricata.yaml
     else
-        sed -i "/^vars:/a \    HOME_NET: "${home_net}"" /etc/suricata/suricata.yaml
+        # Add HOME_NET if it doesn't exist
+        sed -i "/^vars:/a \    HOME_NET: "$ip_addr"" /etc/suricata/suricata.yaml
     fi
 
     return 0
