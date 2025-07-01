@@ -1,21 +1,25 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 set -e
 
-echo "[*] Updating package index..."
+HARDN_STATUS() {
+    echo "$@"
+}
+
+HARDN_STATUS "[*] Updating package index..."
 sudo apt update
 
-echo "[*] Installing unhide..."
+HARDN_STATUS "[*] Installing unhide..."
 sudo apt install -y unhide
 
-echo "[*] Verifying installation..."
+HARDN_STATUS "[*] Verifying installation..."
 if command -v unhide >/dev/null 2>&1; then
-    echo "[+] Unhide installed successfully: $(unhide -v 2>&1 | head -n1)"
+    HARDN_STATUS "[+] Unhide installed successfully: $(unhide -v 2>&1 | head -n1)"
 else
-    echo "[!] Failed to install unhide." >&2
+    HARDN_STATUS "[!] Failed to install unhide." >&2
     exit 1
 fi
 
-echo "[*] Usage example:"
-echo "    sudo unhide proc"
-echo "    sudo unhide sys"
+HARDN_STATUS "[*] Usage example:"
+HARDN_STATUS "    sudo unhide proc"
+HARDN_STATUS "    sudo unhide sys"

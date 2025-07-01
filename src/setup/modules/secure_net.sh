@@ -1,4 +1,4 @@
-########################### Secure network parameters
+#!/bin/bash
 HARDN_STATUS "info" "Configuring secure network parameters..."
 {
 	echo "net.ipv4.ip_forward = 0"

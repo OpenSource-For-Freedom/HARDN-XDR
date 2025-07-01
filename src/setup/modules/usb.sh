@@ -1,5 +1,4 @@
-# HARDN-XDR USB Security Configuration
-# Block USB storage devices while allowing keyboards and mice
+#!/bin/bash
 cat > /etc/modprobe.d/99-usb-storage.conf << 'EOF'
 blacklist usb-storage
 blacklist uas          # Block USB Attached SCSI (another storage protocol)

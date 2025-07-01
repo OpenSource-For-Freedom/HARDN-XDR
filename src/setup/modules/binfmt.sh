@@ -1,4 +1,4 @@
-# Binary Format Support (binfmt). Disable running non-native binaries
+#!/bin/bash
 disable_binfmt_misc() {
     HARDN_STATUS "error" "Checking/Disabling non-native binary format support (binfmt_misc)..."
     if mount | grep -q 'binfmt_misc'; then

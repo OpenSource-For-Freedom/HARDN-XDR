@@ -1,3 +1,4 @@
+#!/bin/bash
 HARDN_STATUS "info" "Configuring DNS nameservers..."
 
 # Define DNS providers with their primary and secondary servers
@@ -157,19 +158,6 @@ if [[ "$configured_persistently" = false ]]; then
 		HARDN_STATUS "warning" "Warning: Direct changes to $resolv_conf might be overwritten by network management tools."
 		changes_made=true
 
-		# Make resolv.conf immutable to prevent overwriting
-		if whiptail --title "Protect DNS Configuration" --yesno "Would you like to make $resolv_conf immutable to prevent other services from changing it?\n\nNote: This may interfere with DHCP or VPN services." 10 78; then
-			if chattr +i "$resolv_conf" 2>/dev/null; then
-				HARDN_STATUS "pass" "Made $resolv_conf immutable to prevent changes."
-			else
-				HARDN_STATUS "error" "Failed to make $resolv_conf immutable. Manual protection may be needed."
-			fi
-		fi
-	else
-		HARDN_STATUS "error" "Could not modify $resolv_conf (file not found or not writable)."
-	fi
-fi
-
 # Create a persistent hook for dhclient if it exists
 if command -v dhclient >/dev/null 2>&1; then
 	local dhclient_dir="/etc/dhcp/dhclient-enter-hooks.d"
@@ -212,6 +200,7 @@ if [[ "$changes_made" = true ]]; then
 else
 	whiptail --infobox "DNS configuration checked. No changes made or needed." 8 70
 fi
-
-# Test DNS resolution
-HARDN_STATUS "info"
+else
+		HARDN_STATUS "error" "Failed to write to $resolv_conf. Manual configuration required."
+	fi
+fi	

@@ -1,4 +1,4 @@
-########################### Disable core dumps for security
+#!/bin/bash
 HARDN_STATUS "info" "Disabling core dumps..."
 if ! grep -q "hard core" /etc/security/limits.conf; then
 	echo "* hard core 0" >> /etc/security/limits.conf

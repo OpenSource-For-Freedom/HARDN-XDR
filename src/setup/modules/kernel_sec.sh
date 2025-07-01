@@ -1,3 +1,4 @@
+#!/bin/bash
 HARDN_STATUS "info" "Applying kernel security settings..."
 
 declare -A kernel_params=(
@@ -14,6 +15,8 @@ declare -A kernel_params=(
 	["kernel.ctrl-alt-del"]="0"
 	["kernel.dmesg_restrict"]="1"
 	["kernel.kptr_restrict"]="2"
+	["kernel.modules_disabled"]="1"
+	["kernel.yama.ptrace_scope"]="1"
 
 	# === Performance & BPF ===
 	["kernel.perf_event_paranoid"]="2"
@@ -54,18 +57,13 @@ for param in "${!kernel_params[@]}"; do
 	current_value=$(sysctl -n "$param" 2>/dev/null)
 
 	if [[ -z "$current_value" ]]; then
-		HARDN_STATUS "warning" "Kernel parameter '$param' not found. Skipping."
 		continue
 	fi
 
 	if [[ "$current_value" != "$expected_value" ]]; then
-		HARDN_STATUS "info" "Setting '$param' to '$expected_value' (was '$current_value')..."
 		sed -i "/^$param\s*=/d" /etc/sysctl.conf
 		echo "$param = $expected_value" >> /etc/sysctl.conf
 		sysctl -w "$param=$expected_value" >/dev/null 2>&1
-		HARDN_STATUS "pass" "'$param' set to '$expected_value'."
-	else
-		HARDN_STATUS "info" "'$param' is already set to '$expected_value'."
 	fi
 done
 

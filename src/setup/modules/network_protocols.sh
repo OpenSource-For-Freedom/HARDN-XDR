@@ -1,4 +1,4 @@
-############################ Disable unnecessary network protocols in kernel
+#!/bin/bash
 HARDN_STATUS "error" "Disabling unnecessary network protocols..."
 
 # warn network interfaces in promiscuous mode
@@ -7,7 +7,7 @@ for interface in $(/sbin/ip link show | awk '$0 ~ /: / {print $2}' | sed 's/://g
 		HARDN_STATUS "warning" "Interface $interface is in promiscuous mode. Review Interface."
 	fi
 done
-# Create comprehensive blacklist file for network protocols
+
 cat > /etc/modprobe.d/blacklist-rare-network.conf << 'EOF'
 # HARDN-XDR Blacklist for Rare/Unused Network Protocols
 # Disabled for compliance and attack surface reduction

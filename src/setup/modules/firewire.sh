@@ -1,4 +1,4 @@
-# Disable firewire if its in the system.
+#!/bin/bash
 HARDN_STATUS "error" "Checking/Disabling FireWire (IEEE 1394) drivers..."
 local firewire_modules changed blacklist_file
 firewire_modules="firewire_core firewire_ohci firewire_sbp2"

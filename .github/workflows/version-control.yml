@@ -1,89 +1,89 @@
-name: Build and Release Debian Package 
+name: Build and Release Debian Package
 
 on:
   push:
     branches:
       - main
 
-jobs:
-  build-and-release:
-    runs-on: ubuntu-latest
-    name: Bump version, update changelog, build .deb, and release
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  statuses: write
+  checks: write
+  deployments: write
+  discussions: write
 
+jobs:
+  bump-version:
+    runs-on: ubuntu-latest
+    outputs:
+      new_tag: ${{ steps.bump.outputs.new_tag }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Fetch all tags
-        run: git fetch --tags
+        with:
+          fetch-depth: 0 
 
       - name: Get latest v1.1.x tag
         id: get_tag
         run: |
           latest_tag=$(git tag -l "v1.1.*" --sort=-v:refname | head -n 1)
+          if [ -z "$latest_tag" ]; then
+            # If no v1.1.x tag exists, start from v1.1.0
+            latest_tag="v1.1.0"
+          fi
           echo "latest_tag=$latest_tag" >> $GITHUB_OUTPUT
 
-      - name: Bump patch version
+      - name: Extract patch version and bump
         id: bump
         run: |
           tag="${{ steps.get_tag.outputs.latest_tag }}"
-          if [[ -z "$tag" ]]; then
-            new_tag="v1.1.0"
-          else
-            patch=${tag##*.}
-            new_patch=$((patch + 1))
-            new_tag="v1.1.$new_patch"
-          fi
+          # Extract the part after the last dot
+          patch=$(echo "$tag" | sed 's/.*\.//')
+          # Increment the patch version
+          new_patch=$((patch + 1))
+          # Construct the new tag
+          new_tag="v1.1.$new_patch"
           echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
 
-      - name: Install devscripts
-        run: sudo apt update && sudo apt install -y devscripts
-
-      - name: Update debian/changelog
+      - name: Create and push new tag
         run: |
-          version="${{ steps.bump.outputs.new_tag }}"
-          clean_version="${version#v}"
-          dch --create -v "$clean_version" --package hardn "Automated version bump from GitHub Actions"
-          dch --release --distribution unstable ""
-
-      - name: Commit changelog and push changes
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git add debian/changelog
-          git commit -m "Update changelog for ${{ steps.bump.outputs.new_tag }}"
-          git push origin main
-
-      - name: Tag new version and push
-        run: |
-          git tag "${{ steps.bump.outputs.new_tag }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "${{ steps.bump.outputs.new_tag }}" -m "Release ${{ steps.bump.outputs.new_tag }}"
           git push origin "${{ steps.bump.outputs.new_tag }}"
 
-      - name: Set up Debian packaging environment
+  build-and-release:
+    needs: bump-version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write 
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+         
+          ref: ${{ needs.bump-version.outputs.new_tag }}
+
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y dpkg-dev debhelper fakeroot
+
+      - name: Build Debian package
+        run: dpkg-buildpackage -us -uc
+
+      - name: Find package name
+        id: find_package
         run: |
-          sudo apt install -y build-essential debhelper dpkg-dev fakeroot
-
-      - name: Build source package
-        run: debuild -S -sa
-
-      - name: Build binary package
-        run: debuild -b -us -uc
+          # The .deb file is created in the parent directory
+          pkg_path=$(ls ../*.deb)
+          echo "pkg_path=$pkg_path" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ steps.bump.outputs.new_tag }}
-          name: Release ${{ steps.bump.outputs.new_tag }}
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload .deb and .tar.gz
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            ../*.deb
-            ../*.tar.*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: ${{ needs.bump-version.outputs.new_tag }}
+          name: "Release ${{ needs.bump-version.outputs.new_tag }}"
+          body: "Automated release for version ${{ needs.bump-version.outputs.new_tag }}"
+          files: "${{ steps.find_package.outputs.pkg_path }}"

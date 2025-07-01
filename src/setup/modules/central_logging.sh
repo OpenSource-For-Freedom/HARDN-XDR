@@ -1,19 +1,36 @@
-HARDN_STATUS "error" "Setting up central logging for security tools..."
+#!/bin/bash
+HARDN_STATUS "info" "Setting up central logging for security tools..."
+
+# Universal package installer
+is_installed() {
+    command -v "$1" &>/dev/null
+}
 
 # Check and install rsyslog and logrotate if necessary
-local logging_packages="rsyslog logrotate"
-HARDN_STATUS "info" "Checking and installing logging packages ($logging_packages)..."
-# shellcheck disable=SC2086
-if ! dpkg -s $logging_packages >/dev/null 2>&1; then
-	# shellcheck disable=SC2086
-	if apt-get update >/dev/null 2>&1 && apt-get install -y $logging_packages >/dev/null 2>&1; then
-		HARDN_STATUS "pass" "Logging packages installed successfully."
-	else
-		HARDN_STATUS "error" "Error: Failed to install logging packages. Skipping central logging configuration."
-		return 1 # Exit this section if packages fail to install
-	fi
-else
-	HARDN_STATUS "pass" "Logging packages are already installed."
+install_logging_packages() {
+    HARDN_STATUS "info" "Checking and installing logging packages (rsyslog, logrotate)..."
+    for pkg in rsyslog logrotate; do
+        if ! is_installed "$pkg"; then
+            if is_installed apt-get; then
+                sudo apt-get update >/dev/null 2>&1
+                sudo apt-get install -y "$pkg" >/dev/null 2>&1
+            elif is_installed dnf; then
+                sudo dnf install -y "$pkg" >/dev/null 2>&1
+            elif is_installed yum; then
+                sudo yum install -y "$pkg" >/dev/null 2>&1
+            else
+                HARDN_STATUS "error" "Unsupported package manager. Cannot install $pkg."
+                return 1
+            fi
+        fi
+    done
+    HARDN_STATUS "pass" "Logging packages are installed."
+    return 0
+}
+
+if ! install_logging_packages; then
+    HARDN_STATUS "error" "Failed to install essential logging packages. Skipping central logging configuration."
+    return 1
 fi
 
 
@@ -66,6 +83,15 @@ chmod 644 /etc/rsyslog.d/30-hardn-xdr.conf
 HARDN_STATUS "pass" "Rsyslog configuration created/updated."
 
 
+# Restart rsyslog to apply changes
+if systemctl is-active --quiet rsyslog; then
+    HARDN_STATUS "info" "Restarting rsyslog service..."
+    sudo systemctl restart rsyslog
+    HARDN_STATUS "pass" "Rsyslog service restarted."
+else
+    HARDN_STATUS "warning" "Rsyslog service not running. Configuration will be applied on next start."
+fi
+
 # Create logrotate configuration for the central log
 HARDN_STATUS "info" "Creating logrotate configuration file /etc/logrotate.d/hardn-xdr..."
 cat > /etc/logrotate.d/hardn-xdr << 'EOF'
@@ -100,15 +126,6 @@ EOF
 chmod 644 /etc/logrotate.d/hardn-xdr
 HARDN_STATUS "pass" "Logrotate configuration created/updated."
 
-
-
-# Restart rsyslog to apply changes
-HARDN_STATUS "info" "Restarting rsyslog service to apply configuration changes..."
-if systemctl restart rsyslog; then
-	HARDN_STATUS "pass" "Rsyslog service restarted successfully."
-else
-	HARDN_STATUS "error" "Failed to restart rsyslog service. Manual check required."
-fi
 
 # Create a symlink in /var/log for easier access
 HARDN_STATUS "info" "Creating symlink /var/log/hardn-xdr.log..."

@@ -1,0 +1,63 @@
+.TH "HARDN-XDR" 1 "July 1, 2025" "1.1.50" "HARDN-XDR User Manuals"
+.SH NAME
+hardn-xdr - A Linux Security Hardening Sentinel
+.SH SYNOPSIS
+.B hardn-xdr
+[I--versionP|I-vP]
+[I--helpP|I-hP]
+.SH DESCRIPTION
+BHARDN-XDRP is a comprehensive security hardening script for Debian-based systems. It applies a wide range of security configurations, installs monitoring tools, and configures the system to be compliant with STIG (Security Technical Implementation Guide) standards.
+The script provides a menu-driven interface to select which security modules to apply, allowing for a customized hardening process.
+.SH OPTIONS
+.TP
+B--version, -vP
+Displays the version of HARDN-XDR.
+.TP
+B--help, -hP
+Displays the help message.
+.SH MODULES
+The following modules can be selected in the main menu:
+.TP
+BConfigure UFW FirewallP
+Installs and configures UFW (Uncomplicated Firewall) with a default deny policy for incoming traffic and allows essential services.
+.TP
+BInstall and configure Fail2BanP
+Installs and configures Fail2Ban to protect against brute-force attacks.
+.TP
+BHarden SSH ServerP
+Applies security best practices to the OpenSSH server configuration.
+.TP
+BSetup Auditd for system monitoringP
+Installs and configures the Linux Audit Daemon to log security-relevant events.
+.TP
+BApply Kernel Security HardeningP
+Applies a set of security-focused kernel parameters via sysctl.
+.TP
+BEnforce STIG password qualityP
+Configures password policies to meet STIG requirements.
+.TP
+BHarden GRUB bootloaderP
+Sets a password for the GRUB bootloader to protect against unauthorized boot-time changes.
+.TP
+BInstall AIDE for file integrityP
+Installs AIDE (Advanced Intrusion Detection Environment) to monitor file integrity.
+.TP
+BInstall rkhunter (Rootkit Hunter)P
+Installs rkhunter to scan for rootkits and other malware.
+.TP
+BInstall chkrootkitP
+Installs chkrootkit, another tool to scan for rootkits.
+.TP
+BAnd many more...P
+Includes modules for automatic updates, central logging, SELinux, and more.
+.SH FILES
+.TP
+I/etc/hardn-xdr/P
+The main configuration directory for HARDN-XDR.
+.TP
+I/var/log/hardn-xdr.logP
+The main log file for the HARDN-XDR script.
+.SH BUGS
+Please report any bugs to the developers.
+.SH AUTHORS
+office@cybersynapse.ro

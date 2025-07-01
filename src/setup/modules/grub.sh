@@ -1,20 +1,21 @@
-#######################################
-# GRUB Password Protection Module; sourced an executed by hardn-main.sh.
-# Part of the HARDN-XDR security hardening framework
-#######################################
-###################################################################################THIS FILE IS NOT FULLY COMPLETE###################>>>>>>>
+#!/bin/bash
 
-# ATTN!! READ BEFORE running.
-# This script auto defaults to the non-interactive password set
-# The default credentials are hard coded into the script
-# That is just temporary, because you can change them after reboot.
-# The script technically 'works',
-# However, the credentials either do not work, or
-# unlocking GRUB gets stuck in a loop.
-# SEE the if-else statement at the bottom of the script for more details
-# Also, see the generate_password_hash() function.
-#
-#
+is_installed() {
+    if command -v apt >/dev/null 2>&1; then
+        dpkg -s "$1" >/dev/null 2>&1
+    elif command -v dnf >/dev/null 2>&1; then
+        dnf list installed "$1" >/dev/null 2>&1
+    elif command -v yum >/dev/null 2>&1; then
+        yum list installed "$1" >/dev/null 2>&1
+    elif command -v rpm >/dev/null 2>&1; then
+        rpm -q "$1" >/dev/null 2>&1
+    else
+        return 1 # Cannot determine package manager
+    fi
+}
+
+
+
 # What this script does:
 #  - Sets a password on GRUB boot loader to prevent altering boot configuration
 #  - Prevents unauthorized access to single user mode and GRUB command line
@@ -53,19 +54,13 @@ LOG_FILE="/var/log/hardn-grub-setup.log"
 VERIFICATION_LOG="/var/log/hardn-grub-verification.log"
 
 # Print formatted messages
-print_msg() {
-    local color="$1"
-    local msg="$2"
-    printf "${color}${BOLD}%s${RESET}\n" "$msg"
-}
-
 # Log functions with different severity levels
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
 }
 
 error() {
-    print_msg "$RED" "Error: $1" >&2
+    HARDN_STATUS "error" "$1"
     log "ERROR: $1"
     # If this is the main script (not sourced), then exit
     if [ "${BASH_SOURCE[0]}" = "$0" ]; then
@@ -77,17 +72,17 @@ error() {
 }
 
 success() {
-    print_msg "$GREEN" "Success: $1"
+    HARDN_STATUS "pass" "$1"
     log "SUCCESS: $1"
 }
 
 info() {
-    print_msg "$BLUE" "Info: $1"
+    HARDN_STATUS "info" "$1"
     log "INFO: $1"
 }
 
 warning() {
-    print_msg "$YELLOW" "Warning: $1"
+    HARDN_STATUS "warning" "$1"
     log "WARNING: $1"
 }
 
@@ -248,7 +243,7 @@ generate_password_hash() {
             # Fallback to a default password with warning
             warning "No interactive terminal and no dialog utility available."
             warning "Using default password 'HardnGrubPassword123!' for GRUB."
-            warning "SECURITY RISK: Please change this password after installation!"
+            warning "SECURITY RISK: Please change this password after reboot!"
 
             local default_password="HardnGrubPassword123!"
             local password_hash
@@ -623,7 +618,7 @@ secure_grub() {
         info "Running in non-interactive mode"
         [ -z "$default_password" ] && error "Non-interactive mode requires a default password parameter"
     else
-        # Ask user if they want to enable GRUB password protection
+        # Ask user if they want to enable GRUB pass
         if command -v whiptail >/dev/null 2>&1; then
             if ! whiptail --title "GRUB Password Protection" --yesno "Do you want to enable GRUB password protection?\n\nThis protects the bootloader from unauthorized changes, but is not required if Secure Boot is enabled." 12 70; then
                 info "User declined GRUB password protection. Skipping setup."
@@ -707,11 +702,6 @@ secure_grub() {
 }
 
 # Export key functions for use by the parent script
-export -f print_msg
-export -f error
-export -f success
-export -f info
-export -f warning
 export -f secure_grub
 
 

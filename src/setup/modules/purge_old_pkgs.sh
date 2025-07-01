@@ -1,4 +1,30 @@
+#!/bin/bash
+
+is_installed() {
+    if command -v apt >/dev/null 2>&1; then
+        dpkg -s "$1" >/dev/null 2>&1
+    elif command -v dnf >/dev/null 2>&1; then
+        dnf list installed "$1" >/dev/null 2>&1
+    elif command -v yum >/dev/null 2>&1; then
+        yum list installed "$1" >/dev/null 2>&1
+    elif command -v rpm >/dev/null 2>&1; then
+        rpm -q "$1" >/dev/null 2>&1
+    else
+        return 1 # Cannot determine package manager
+    fi
+}
+
 HARDN_STATUS "error" "Purging configuration files of old/removed packages..."
+
+if ! command -v dpkg >/dev/null 2>&1; then
+    HARDN_STATUS "warning" "This script is intended for Debian-based systems. Skipping."
+    exit 0
+fi
+
+if ! is_installed whiptail; then
+    apt-get install -y whiptail >/dev/null 2>&1
+fi
+
 local packages_to_purge
 packages_to_purge=$(dpkg -l | grep '^rc' | awk '{print $2}')
 

@@ -1,7 +1,7 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: hardn-xdr
 Upstream-Contact: SIG <office@cybersynapse.ro>
-Source: https://github.com/Security-International-Group/HARDN-XDR
+Source: https://github.com/opensource-for-freedom/HARDN-XDR
 
 Files: *
 Copyright: 2024 SIG

@@ -1,4 +1,5 @@
-local service_name
+#!/bin/bash
+HARDN_STATUS "info" "Disabling specified services..."
 service_name="$1"
 if systemctl is-active --quiet "$service_name"; then
 	HARDN_STATUS "error" "Disabling active service: $service_name..."

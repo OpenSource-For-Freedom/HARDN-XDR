@@ -1,4 +1,19 @@
-################################## ntp daemon
+#!/bin/bash
+
+is_installed() {
+    if command -v apt >/dev/null 2>&1; then
+        dpkg -s "$1" >/dev/null 2>&1
+    elif command -v dnf >/dev/null 2>&1; then
+        dnf list installed "$1" >/dev/null 2>&1
+    elif command -v yum >/dev/null 2>&1; then
+        yum list installed "$1" >/dev/null 2>&1
+    elif command -v rpm >/dev/null 2>&1; then
+        rpm -q "$1" >/dev/null 2>&1
+    else
+        return 1 # Cannot determine package manager
+    fi
+}
+
 HARDN_STATUS "info" "Setting up NTP daemon..."
 
 local ntp_servers="0.debian.pool.ntp.org 1.debian.pool.ntp.org 2.debian.pool.ntp.org 3.debian.pool.ntp.org"
@@ -60,13 +75,21 @@ HARDN_STATUS "info" "systemd-timesyncd is not active. Checking/Configuring ntpd.
 
 local ntp_package_installed=false
 # Ensure ntp package is installed
-if dpkg -s ntp >/dev/null 2>&1; then
+if is_installed ntp; then
      HARDN_STATUS "pass" "ntp package is already installed."
      ntp_package_installed=true
 else
      HARDN_STATUS "info" "ntp package not found. Attempting to install..."
      # Attempt installation, check exit status
-     if apt-get update >/dev/null 2>&1 && apt-get install -y ntp >/dev/null 2>&1; then
+     if command -v apt >/dev/null 2>&1; then
+        apt-get update >/dev/null 2>&1 && apt-get install -y ntp >/dev/null 2>&1
+     elif command -v dnf >/dev/null 2>&1; then
+        dnf install -y ntp >/dev/null 2>&1
+     elif command -v yum >/dev/null 2>&1; then
+        yum install -y ntp >/dev/null 2>&1
+     fi
+
+     if is_installed ntp; then
 	 HARDN_STATUS "pass" "ntp package installed successfully."
 	 ntp_package_installed=true
      else
