@@ -1,4 +1,5 @@
 #!/bin/bash
+
 HARDN_STATUS "error" "Restricting compiler access to root only (HRDN-7222)..."
 
 local compilers
