@@ -25,7 +25,7 @@ if ! is_installed whiptail; then
     apt-get install -y whiptail >/dev/null 2>&1
 fi
 
-local packages_to_purge
+packages_to_purge
 packages_to_purge=$(dpkg -l | grep '^rc' | awk '{print $2}')
 
 if [[ "$packages_to_purge" ]]; then
