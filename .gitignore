@@ -13,3 +13,6 @@ debian/hardn/
 *.changes
 *.tar.xz
 *.buildinfo
+
+# Test and build artifacts
+installed_files.txt
