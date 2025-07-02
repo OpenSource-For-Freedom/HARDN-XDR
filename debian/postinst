@@ -3,11 +3,16 @@ set -e
 
 case "$1" in
     configure)
-        chmod +x /usr/share/hardn-xdr/install.sh 2>/dev/null || true
-        chmod +x /usr/share/hardn-xdr/src/setup/hardn-main.sh 2>/dev/null || true
-        chmod +x /usr/share/hardn-xdr/src/setup/modules/*.sh 2>/dev/null || true
-        echo "HARDN-XDR has been installed."
-        echo "To begin system hardening, run: sudo /usr/share/hardn-xdr/install.sh"
+        echo "[postinst] Marking install scripts executable..."
+        chmod +x /usr/share/hardn-xdr/install.sh || true
+        chmod +x /usr/share/hardn-xdr/hardn-main.sh || true
+        chmod +x /usr/share/hardn-xdr/modules/*.sh || true
+
+        echo "[postinst] Running install.sh to finish setup..."
+        bash /usr/share/hardn-xdr/install.sh || true
+
+        echo "HARDN-XDR installation complete."
+        echo "Run: sudo hardn-xdr"
         ;;
 esac
 

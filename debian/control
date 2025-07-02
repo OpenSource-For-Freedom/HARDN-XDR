@@ -8,8 +8,8 @@ Build-Depends: debhelper-compat (= 13),
  fakeroot,
  build-essential,
  python3,
- bash, 
- whiptail, 
+ bash,
+ whiptail,
  debconf
 Standards-Version: 4.6.2
 Rules-Requires-Root: no
@@ -25,7 +25,8 @@ Depends: ${misc:Depends},
  needrestart, apt-listchanges, apt-listbugs, unattended-upgrades, apt-transport-https,
  ca-certificates, software-properties-common, lsb-release, gnupg, openssh-server, openssh-client,
  ufw, systemd-timesyncd, apparmor, apparmor-profiles, apparmor-utils, firejail,
- libpam-pwquality, libpam-google-authenticator, libpam-tmpdir, curl, wget, lsof, psmisc, procps, git,
+ libpam-pwquality, libpam-google-authenticator, libpam-tmpdir, curl, wget, lsof, psmisc, procps, git
+Pre-Depends: bash
 Description: Linux Security Hardening Extended Detection and Response
  HARDN is a comprehensive Linux security hardening and endpoint defense toolkit.
  It integrates auditing tools, antivirus scanners, system integrity checkers, and
@@ -39,3 +40,4 @@ Description: Linux Security Hardening Extended Detection and Response
   - Integration with systemd and secure defaults
  .
  Suitable for Debian-based servers, desktops, and headless endpoints in high-security environments.
+

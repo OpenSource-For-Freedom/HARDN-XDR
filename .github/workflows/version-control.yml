@@ -2,8 +2,8 @@ name: Build and Release Debian Package
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -15,15 +15,25 @@ permissions:
   discussions: write
 
 jobs:
-  bump-version:
+  build-and-test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64]
+      max-parallel: 1
     outputs:
       new_tag: ${{ steps.bump.outputs.new_tag }}
+      deb_out: ${{ steps.rename.outputs.deb_out }}
+
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+
+      - name: Setup architecture
+        run: echo "Building for ${{ matrix.arch }}"
+
+      - name: Fetch all tags
+        run: git fetch --tags
 
       - name: Get latest v1.1.x tag
         id: get_tag
@@ -44,30 +54,8 @@ jobs:
           echo "new_tag=$new_tag"
           echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
 
-      - name: Create and push new tag
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "${{ steps.bump.outputs.new_tag }}" -m "Release ${{ steps.bump.outputs.new_tag }}"
-          git push origin "${{ steps.bump.outputs.new_tag }}"
-
-  build-and-release:
-    needs: bump-version
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        arch: [amd64, arm64]
-    permissions:
-      contents: write
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.bump-version.outputs.new_tag }}
-
       - name: Install build dependencies
-        run: sudo apt-get update && sudo apt-get install -y dpkg-dev debhelper fakeroot build-essential devscripts
+        run: sudo apt-get update && sudo apt-get install -y dpkg-dev debhelper fakeroot build-essential devscripts lintian gnupg
 
       - name: Build Debian package
         run: |
@@ -77,18 +65,55 @@ jobs:
       - name: Rename .deb to include arch and version
         id: rename
         run: |
-          full_tag="${{ needs.bump-version.outputs.new_tag }}"
-          version="${full_tag#v}"  # remove leading 'v'
+          full_tag="${{ steps.bump.outputs.new_tag }}"
+          version="${full_tag#v}"
           arch="${{ matrix.arch }}"
           deb_file=$(ls ../*.deb | head -n 1)
           new_name="hardn_${version}_${arch}.deb"
           mv "$deb_file" "../$new_name"
-          echo "deb_out=../$new_name" >> $GITHUB_OUTPUT
+          echo "deb_out=${{ github.workspace }}/../$new_name" >> $GITHUB_OUTPUT
+
+      - name: Test install of .deb and execution
+        run: |
+          sudo apt-get update
+          sudo dpkg -i $(basename "${{ steps.rename.outputs.deb_out }}") || sudo apt-get install -f -y
+          echo "Verifying 'hardn-xdr' command"
+          sudo hardn-xdr --version || (echo "Execution failed" && exit 1)
+          dpkg -L hardn | tee installed_files.txt
+
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb-install-debug
+          path: installed_files.txt
+
+  tag-and-release:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: success()
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch all tags
+        run: git fetch --tags
+
+      - name: Create and push new tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "${{ needs.build-and-test.outputs.new_tag }}" -m "Release ${{ needs.build-and-test.outputs.new_tag }}"
+          git push origin "${{ needs.build-and-test.outputs.new_tag }}"
 
       - name: Upload release asset
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ needs.bump-version.outputs.new_tag }}
-          name: "Release ${{ needs.bump-version.outputs.new_tag }}"
-          body: "Automated release for version ${{ needs.bump-version.outputs.new_tag }}"
-          files: "${{ steps.rename.outputs.deb_out }}"
+          tag_name: ${{ needs.build-and-test.outputs.new_tag }}
+          name: "Release ${{ needs.build-and-test.outputs.new_tag }}"
+          body: "Automated release for version ${{ needs.build-and-test.outputs.new_tag }}"
+          files: ${{ needs.build-and-test.outputs.deb_out }}
+
