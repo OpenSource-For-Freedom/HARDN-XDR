@@ -27,7 +27,15 @@ install_man_page() {
     echo -e "\033[1;32m[+] Man page installed successfully.\033[0m"
 }
 
+install_source_files() {
+  echo -e "\033[1;31m[+] Installing source files...\033[0m"
+  install -d -m 755 "$PREFIX"
+  cp -r src "$PREFIX/"
+  echo -e "\033[1;32m[+] Source files installed successfully.\033[0m"
+}
+
 install_wrapper() {
+  echo -e "\033[1;31m[+] Installing command wrapper...\033[0m"
   cat > "$WRAPPER" <<EOF
 #!/usr/bin/env bash
 # hardn-xdr command wrapper
@@ -41,6 +49,7 @@ else
 fi
 EOF
   chmod +x "$WRAPPER"
+  echo -e "\033[1;32m[+] Command wrapper installed successfully.\033[0m"
 }
 verify_dependencies() {
   echo -e "\033[1;31m[+] Verifying dependencies...\033[0m"
@@ -58,6 +67,7 @@ main() {
   check_root
   verify_dependencies
   update_system
+  install_source_files
   install_wrapper
   install_man_page
 
