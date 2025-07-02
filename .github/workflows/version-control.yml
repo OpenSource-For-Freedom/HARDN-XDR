@@ -23,14 +23,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 
+          fetch-depth: 0
 
       - name: Get latest v1.1.x tag
         id: get_tag
         run: |
           latest_tag=$(git tag -l "v1.1.*" --sort=-v:refname | head -n 1)
           if [ -z "$latest_tag" ]; then
-            # If no v1.1.x tag exists, start from v1.1.0
             latest_tag="v1.1.0"
           fi
           echo "latest_tag=$latest_tag" >> $GITHUB_OUTPUT
@@ -39,12 +38,10 @@ jobs:
         id: bump
         run: |
           tag="${{ steps.get_tag.outputs.latest_tag }}"
-          # Extract the part after the last dot
           patch=$(echo "$tag" | sed 's/.*\.//')
-          # Increment the patch version
           new_patch=$((patch + 1))
-          # Construct the new tag
           new_tag="v1.1.$new_patch"
+          echo "new_tag=$new_tag"
           echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
 
       - name: Create and push new tag
@@ -57,34 +54,41 @@ jobs:
   build-and-release:
     needs: bump-version
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
     permissions:
-      contents: write 
+      contents: write
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-         
           ref: ${{ needs.bump-version.outputs.new_tag }}
 
       - name: Install build dependencies
-
         run: sudo apt-get update && sudo apt-get install -y dpkg-dev debhelper fakeroot build-essential devscripts
 
       - name: Build Debian package
-        run: dpkg-buildpackage -us -uc
-
-      - name: Find package name
-        id: find_package
         run: |
-          # The .deb file is created in the parent directory
-          pkg_path=$(ls ../*.deb)
-          echo "pkg_path=$pkg_path" >> $GITHUB_OUTPUT
+          export DEB_BUILD_ARCH=${{ matrix.arch }}
+          dpkg-buildpackage -us -uc
 
-      - name: Create GitHub Release
+      - name: Rename .deb to include arch and version
+        id: rename
+        run: |
+          full_tag="${{ needs.bump-version.outputs.new_tag }}"
+          version="${full_tag#v}"  # remove leading 'v'
+          arch="${{ matrix.arch }}"
+          deb_file=$(ls ../*.deb | head -n 1)
+          new_name="hardn_${version}_${arch}.deb"
+          mv "$deb_file" "../$new_name"
+          echo "deb_out=../$new_name" >> $GITHUB_OUTPUT
+
+      - name: Upload release asset
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ needs.bump-version.outputs.new_tag }}
           name: "Release ${{ needs.bump-version.outputs.new_tag }}"
           body: "Automated release for version ${{ needs.bump-version.outputs.new_tag }}"
-          files: "${{ steps.find_package.outputs.pkg_path }}"
+          files: "${{ steps.rename.outputs.deb_out }}"

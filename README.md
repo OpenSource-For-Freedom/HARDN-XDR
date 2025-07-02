@@ -61,20 +61,31 @@
 - You will find the most recent Debian release here:
     [HARDN-XDR Debian Package](https://github.com/OpenSource-For-Freedom/HARDN-XDR/releases)
 - Next:
+- Automatically Detects Architecture
 ```bash
-sudo dpkg -i hardn_1.1.X_all.deb
-sudo chmod hardn-xdr
+ARCH=$(dpkg --print-architecture)
+VERSION=$(curl -s https://api.github.com/repos/OpenSource-For-Freedom/HARDN-XDR/releases/latest | grep tag_name | cut -d '"' -f4)
+DEB_URL="https://github.com/OpenSource-For-Freedom/HARDN-XDR/releases/download/$VERSION/hardn_${VERSION#v}_${ARCH}.deb"
+
+echo "Downloading: $DEB_URL"
+wget "$DEB_URL" -O hardn-latest.deb
+sudo apt install ./hardn-latest.deb
 ```
 
 ## Usage
 
-After installation, you can run the hardening script:
+After installation:
 ```bash
+dpkg -l | grep hardn
 sudo hardn-xdr
 ```
-This will launch an interactive menu where you can select the security modules you wish to apply.
+Options:
+```bash
+hardn-xdr --help
+hardn-xdr --version
+```
 
-For detailed information and command-line options, consult the man page:
+For detailed info and command-line options, consult the man page:
 ```bash
 man hardn-xdr
 ```
