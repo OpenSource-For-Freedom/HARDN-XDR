@@ -1,6 +1,5 @@
 #!/bin/bash
 
-#!/bin/bash
 
 # Debsums Optimization Improvements for performance:
 # 1. Process Prioritization: Using nice/ionice to reduce system impact during checks
@@ -123,8 +122,8 @@ setup_logging() {
 
     # Set up log rotation
     if [ -f "$log_file" ]; then
-        # Rotate logs - more efficient than logrotate for simple cases
-        for i in $(seq $max_logs -1 1); do
+        # C-Style for loop, Rotate logs - more efficient than logrotate for simple cases
+        for((i=max_logs;i>=1;i--)); do
             [ -f "${log_file}.$i" ] && mv "${log_file}.$i" "${log_file}.$((i+1))"
         done
         mv "$log_file" "${log_file}.1"
