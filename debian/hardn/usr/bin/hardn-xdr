@@ -1,4 +1,0 @@
-#!/bin/bash
-# Entry point 
-
-exec /usr/share/hardn-xdr/hardn-main.sh "$@"
