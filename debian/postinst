@@ -4,12 +4,12 @@ set -e
 case "$1" in
     configure)
         echo "[postinst] Marking install scripts executable..."
-        chmod +x /usr/share/hardn-xdr/install.sh || true
-        chmod +x /usr/share/hardn-xdr/hardn-main.sh || true
-        chmod +x /usr/share/hardn-xdr/modules/*.sh || true
+        chmod +x /usr/lib/hardn-xdr/install.sh || true
+        chmod +x /usr/lib/hardn-xdr/src/setup/hardn-main.sh || true
+        chmod +x /usr/lib/hardn-xdr/src/setup/modules/*.sh || true
 
         echo "[postinst] Running install.sh to finish setup..."
-        bash /usr/share/hardn-xdr/install.sh || true
+        bash /usr/lib/hardn-xdr/install.sh || true
 
         echo "HARDN-XDR installation complete."
         echo "Run: sudo hardn-xdr"
