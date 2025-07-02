@@ -76,7 +76,7 @@ jobs:
       - name: Test install of .deb and execution
         run: |
           sudo apt-get update
-          sudo dpkg -i $(basename "${{ steps.rename.outputs.deb_out }}") || sudo apt-get install -f -y
+          sudo dpkg -i "${{ steps.rename.outputs.deb_out }}" || sudo apt-get install -f -y
           echo "Verifying 'hardn-xdr' command"
           sudo hardn-xdr --version || (echo "Execution failed" && exit 1)
           dpkg -L hardn | tee installed_files.txt

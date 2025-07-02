@@ -1,4 +1,4 @@
-src/setup/hardn-main.sh        usr/share/hardn/
-src/setup/modules/*            usr/share/hardn/modules/
-install.sh                     usr/share/hardn/
+src/setup/hardn-main.sh        usr/lib/hardn-xdr/src/setup/
+src/setup/modules/*            usr/lib/hardn-xdr/src/setup/modules/
+install.sh                     usr/lib/hardn-xdr/
 hardn-xdr                      usr/bin/
