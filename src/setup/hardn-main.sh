@@ -101,7 +101,7 @@ install_package_dependencies() {
         build-essential
         debsums
     )
-  
+
     if apt-get install -y ${packages[@]}; then
         HARDN_STATUS "pass" "Package dependencies installed successfully."
     else
