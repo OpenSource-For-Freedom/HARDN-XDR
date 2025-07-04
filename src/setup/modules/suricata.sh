@@ -122,7 +122,6 @@ download_rules_manually() {
     fi
 }
 
-#### Update Suricata config
 update_suricata_config() {
     local config_file="/etc/suricata/suricata.yaml"
     HARDN_STATUS "info" "Updating Suricata configuration..."
@@ -169,7 +168,6 @@ update_suricata_config() {
 }
 
 # perform more comprehensive YAML validation and fixes
-######
 validate_suricata_yaml() {
     local config_file="/etc/suricata/suricata.yaml"
     HARDN_STATUS "info" "Performing comprehensive YAML validation..."
@@ -241,8 +239,6 @@ manage_suricata_service() {
         esac
 }
 
-
-#####################
 debug_suricata_config() {
     local config_file="/etc/suricata/suricata.yaml"
     local performance_file="/etc/suricata/suricata-performance.yaml"
@@ -338,10 +334,6 @@ EOF
         return 0
     fi
 }
-
-
-
-#### end of debug_suricata_config function ####
 
 
 # handle_service_failure
@@ -612,7 +604,6 @@ suricata_module() {
             HARDN_STATUS "info" "Suricata is already installed."
         fi
 
-        # Update Suricata rules
         HARDN_STATUS "info" "Updating Suricata rules..."
 
         if command -v suricata-update &> /dev/null; then
