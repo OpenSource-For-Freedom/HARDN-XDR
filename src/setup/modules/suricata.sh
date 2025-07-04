@@ -199,66 +199,91 @@ manage_suricata_service() {
         esac
 }
 
+
+# handle_service_failure
 handle_service_failure() {
-        HARDN_STATUS "warning" "Failed to restart suricata.service. Checking if it's installed correctly..."
+    HARDN_STATUS "warning" "Failed to restart suricata.service. Checking if it's installed correctly..."
 
-        # Check for different service files that might be used
-        local service_files=(
-            "/lib/systemd/system/suricata.service"
-            "/etc/systemd/system/suricata.service"
-            "/lib/systemd/system/suricata-ids.service"
-            "/etc/systemd/system/suricata-ids.service"
-        )
+    # Check for different service files that might be used
+    local service_files=(
+        "/lib/systemd/system/suricata.service"
+        "/etc/systemd/system/suricata.service"
+        "/lib/systemd/system/suricata-ids.service"
+        "/etc/systemd/system/suricata-ids.service"
+    )
 
-        local service_found=false
-        local service_name="suricata.service"
-        local file=""
+    local service_found=false
+    local service_name="suricata.service"
+    local file=""
 
-        for ((i=0; i<${#service_files[@]}; i++)); do
-            file="${service_files[i]}"
+    for ((i=0; i<${#service_files[@]}; i++)); do
+        file="${service_files[i]}"
 
-            if [ -f "$file" ]; then
-                service_found=true
-                service_name=$(basename "$file")
-                HARDN_STATUS "info" "Found Suricata service file: $service_name"
-                break
-            fi
-        done
-
-        if ! $service_found; then
-            HARDN_STATUS "warning" "Suricata service file not found. Attempting to reinstall..."
-            apt-get purge -y suricata; apt-get install -y suricata; systemctl daemon-reload
-            # Try to start service again
-            systemctl enable suricata.service || true systemctl start suricata.service
-
-            case $? in
-                0)
-                    HARDN_STATUS "pass" "Suricata service started after reinstallation."
-                    return 0
-                    ;;
-                *)
-                    HARDN_STATUS "error" "Failed to start Suricata service after reinstall."
-                    return 1
-                    ;;
-            esac
-        else
-            systemctl daemon-reload; systemctl enable "$service_name" || true ; systemctl start "$service_name"
-
-            case $? in
-                0)
-                    HARDN_STATUS "pass" "Suricata service started using $service_name."
-                    return 0
-                    ;;
-                *)
-                    HARDN_STATUS "error" "Service file exists but service failed to start."
-                    # Check logs for more information
-                    HARDN_STATUS "info" "Last 10 lines of Suricata logs:"
-                    journalctl -u "$service_name" -n 10 || true
-                    return 1
-                    ;;
-            esac
+        if [ -f "$file" ]; then
+            service_found=true
+            service_name=$(basename "$file")
+            HARDN_STATUS "info" "Found Suricata service file: $service_name"
+            break
         fi
+    done
+
+    if ! $service_found; then
+        HARDN_STATUS "warning" "Suricata service file not found. Attempting to reinstall..."
+        apt-get purge -y suricata; apt-get install -y suricata; systemctl daemon-reload
+        # Try to start service again
+        systemctl enable suricata.service || true
+        systemctl start suricata.service
+
+        case $? in
+            0)
+                HARDN_STATUS "pass" "Suricata service started after reinstallation."
+                return 0
+                ;;
+            *)
+                HARDN_STATUS "error" "Failed to start Suricata service after reinstall."
+                # Try fallback configuration
+                create_fallback_performance_config
+                if systemctl restart suricata.service; then
+                    HARDN_STATUS "pass" "Suricata service started with fallback configuration after reinstall."
+                    return 0
+                fi
+                return 1
+                ;;
+        esac
+    else
+        systemctl daemon-reload
+        systemctl enable "$service_name" || true
+
+        # Try with fallback configuration first
+        HARDN_STATUS "info" "Trying fallback configuration without CPU affinity..."
+        create_fallback_performance_config
+        if systemctl restart "$service_name"; then
+            HARDN_STATUS "pass" "Suricata service started with fallback configuration."
+            return 0
+
+        #if [ $? -eq 0 ]; then
+        else
+            HARDN_STATUS "error" "Service failed to start even with fallback configuration."
+            # Check logs for more information
+            HARDN_STATUS "info" "Last 10 lines of Suricata logs:"
+            journalctl -u "$service_name" -n 10 || true
+
+            # Try one more approach - disable performance tuning completely
+            HARDN_STATUS "warning" "Trying minimal configuration..."
+            sed -i '/include: suricata-performance.yaml/d' /etc/suricata/suricata.yaml
+           if systemctl restart "$service_name"; then
+               HARDN_STATUS "pass" "Suricata service started with minimal configuration."
+               return 0
+
+            #if [ $? -eq 0 ]; then
+            else
+                HARDN_STATUS "error" "All configuration attempts failed. Manual intervention required."
+                return 1
+            fi
+        fi
+    fi
 }
+#
 
 create_update_cron_job() {
     cat > /etc/cron.daily/update-suricata-rules << 'EOF'
@@ -470,8 +495,15 @@ suricata_module() {
 
         configure_firewall
         tune_suricata_performance
+        #manage_suricata_service || handle_service_failure
 
-        manage_suricata_service || handle_service_failure
+        if ! manage_suricata_service; then
+            HARDN_STATUS "warning" "Initial service start failed, trying fallback configurations..."
+            handle_service_failure
+        fi
+
+
+
         verify_suricata_installation
         create_update_cron_job
 
@@ -535,46 +567,88 @@ tune_suricata_performance() {
     local recv_cpus='[ "1" ]' # packet receive tasks
     local worker_cpus         # For packet processing workers
 
-    # Case Statement to allocate CPU cores based on the cpu_tier var
     case "$cpu_tier" in
-        "many") # <-- "many" tier (more than 8 cores)
-            mgmt_cpus='[ "0" ]'
-            recv_cpus='[ "1", "2" ]'
-            # Use remaining cores for workers (3 to n-1) worker cpu arrary
-            worker_cpus='[ '
-            for ((i=3; i<cpu_count; i++)); do
-                worker_cpus+=\""$i"\"
-                if [ "$i" -lt $((cpu_count-1)) ]; then
-                    worker_cpus+=", "
-                fi
-            done
-            worker_cpus+=' ]'
-            HARDN_STATUS "info" "Using optimized CPU allocation for ${cpu_count} cores"
-        ;;
-        "several") # <-- "several" tier (5 to 8 cores)
-            mgmt_cpus='[ "0" ]'
-            recv_cpus='[ "1" ]'
-            worker_cpus='[ "2", "3", "4" ]'
-            HARDN_STATUS "info" "Using standard CPU allocation for ${cpu_count} cores"
-        ;;
-        *) # <-- Default tier (4 or fewer cores
-            # Modified to use a more compatible configuration for systems with few cores
-            mgmt_cpus='[ "0" ]'
-            recv_cpus='[ "1" ]'
-            # For 4 cores, use cores 2-3 for workers
-            if [ "$cpu_count" -eq 4 ]; then
-                worker_cpus='[ "2", "3" ]'
-            # For 3 cores, use only core 2 for workers
-            elif [ "$cpu_count" -eq 3 ]; then
-                worker_cpus='[ "2" ]'
-            # For 1-2 cores, use "all" setting to let Suricata manage allocation
-            else
-                worker_cpus='[ "all" ]'
+    "many") # <-- "many" tier (more than 8 cores)
+        mgmt_cpus='[ "0" ]'
+        recv_cpus='[ "1" ]'
+        # Use a subset of remaining cores for workers (avoid using all cores)
+        worker_cpus='[ '
+        # Use at most 6 cores for workers, even on systems with many cores
+        local max_workers=$((cpu_count > 8 ? 6 : cpu_count-2))
+        for ((i=2; i<max_workers+2 && i<cpu_count; i++)); do
+            worker_cpus+=\""$i"\"
+            if [ "$i" -lt $((max_workers+1)) ] && [ "$i" -lt $((cpu_count-1)) ]; then
+           # if [ "$i" -lt $((max_workers+1)) ] && [ "$i" -lt $((cpu_count-1)) ]; then
+                worker_cpus+=", "
             fi
-            HARDN_STATUS "info" "Using basic CPU allocation for ${cpu_count} cores"
-        ;;
-    esac
+        done
+        worker_cpus+=' ]'
+        HARDN_STATUS "info" "Using optimized CPU allocation for ${cpu_count} cores"
+    ;;
+    "several") # <-- "several" tier (5 to 8 cores)
+        mgmt_cpus='[ "0" ]'
+        recv_cpus='[ "1" ]'
+        # Use only 3 cores for workers on medium systems
+        worker_cpus='[ "2", "3" ]'
+        HARDN_STATUS "info" "Using standard CPU allocation for ${cpu_count} cores"
+    ;;
+    *) # <-- Default tier (4 or fewer cores)
+        # For systems with few cores, use a very conservative approach
+        if [ "$cpu_count" -ge 3 ]; then
+            mgmt_cpus='[ "0" ]'
+            recv_cpus='[ "1" ]'
+            worker_cpus='[ "2" ]'
+        else
+            # For 1-2 core systems, disable CPU affinity completely
+            #threading_config="threading:\n  set-cpu-affinity: no"
+            mgmt_cpus='[ "all" ]'
+            recv_cpus='[ "all" ]'
+            worker_cpus='[ "all" ]'
+        fi
+        HARDN_STATUS "info" "Using basic CPU allocation for ${cpu_count} cores"
+    ;;
+esac
 
+    # Case Statement to allocate CPU cores based on the cpu_tier var
+#    case "$cpu_tier" in
+#        "many") # <-- "many" tier (more than 8 cores)
+#            mgmt_cpus='[ "0" ]'
+#            recv_cpus='[ "1", "2" ]'
+#            # Use remaining cores for workers (3 to n-1) worker cpu arrary
+#            worker_cpus='[ '
+#            for ((i=3; i<cpu_count; i++)); do
+#                worker_cpus+=\""$i"\"
+#                if [ "$i" -lt $((cpu_count-1)) ]; then
+#                    worker_cpus+=", "
+#                fi
+#            done
+#            worker_cpus+=' ]'
+#            HARDN_STATUS "info" "Using optimized CPU allocation for ${cpu_count} cores"
+#        ;;
+#        "several") # <-- "several" tier (5 to 8 cores)
+#            mgmt_cpus='[ "0" ]'
+#            recv_cpus='[ "1" ]'
+#            worker_cpus='[ "2", "3", "4" ]'
+#            HARDN_STATUS "info" "Using standard CPU allocation for ${cpu_count} cores"
+#        ;;
+#        *) # <-- Default tier (4 or fewer cores
+#            # Modified to use a more compatible configuration for systems with few cores
+#            mgmt_cpus='[ "0" ]'
+#            recv_cpus='[ "1" ]'
+#            # For 4 cores, use cores 2-3 for workers
+#            if [ "$cpu_count" -eq 4 ]; then
+#                worker_cpus='[ "2", "3" ]'
+#            # For 3 cores, use only core 2 for workers
+#            elif [ "$cpu_count" -eq 3 ]; then
+#                worker_cpus='[ "2" ]'
+#            # For 1-2 cores, use "all" setting to let Suricata manage allocation
+#            else
+#                worker_cpus='[ "all" ]'
+#            fi
+#            HARDN_STATUS "info" "Using basic CPU allocation for ${cpu_count} cores"
+#        ;;
+#    esac
+#
 
         # Create performance tuning file
         local tuning_file="/etc/suricata/suricata-performance.yaml"
@@ -639,6 +713,44 @@ EOF
 
         return 0
 }
+
+create_fallback_performance_config() {
+    HARDN_STATUS "warning" "Creating fallback performance configuration without CPU affinity..."
+    local tuning_file="/etc/suricata/suricata-performance.yaml"
+
+    cat > "$tuning_file" << EOF
+# Suricata fallback performance tuning
+# Generated by HARDN-XDR - FALLBACK CONFIGURATION
+
+af-packet:
+  - interface: default
+    cluster-id: 99
+    cluster-type: cluster_flow
+    defrag: yes
+    use-mmap: yes
+    mmap-locked: yes
+    tpacket-v3: yes
+    ring-size: 32768
+    block-size: 32768
+    max-pending-packets: 1024
+
+threading:
+  set-cpu-affinity: no
+
+detect:
+  profile: medium
+  custom-values:
+    toclient-groups: 3
+    toserver-groups: 25
+  sgh-mpm-context: auto
+  inspection-recursion-limit: 3000
+EOF
+
+    return 0
+}
+
+
+
 
 
 # call main
