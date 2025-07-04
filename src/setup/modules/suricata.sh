@@ -4,14 +4,12 @@
 # This script is designed to be sourced as a module from hardn-main.sh
 
 install_suricata() {
-        HARDN_STATUS "info" "Installing Suricata and dependencies..."
+    HARDN_STATUS "info" "Installing Suricata and dependencies..."
 
-        # Try to install both packages at once
-        if apt-get install -y suricata python3-suricata-update; then
-            HARDN_STATUS "pass" "Installed Suricata and suricata-update successfully."
-            return 0
-        fi
-
+    # Try to install both packages at once
+    if apt-get install -y suricata python3-suricata-update; then
+        HARDN_STATUS "pass" "Installed Suricata and suricata-update successfully."
+    else
         if ! apt-get install -y suricata python3-pip; then
             HARDN_STATUS "error" "Failed to install required packages."
             return 1
@@ -20,14 +18,21 @@ install_suricata() {
         HARDN_STATUS "warning" "python3-suricata-update not found in repositories, using pip instead..."
 
         if pip3 install suricata-update --break-system-packages; then
-            if command -v suricata-update &> /dev/null; then
-                HARDN_STATUS "pass" "Installed suricata-update via pip successfully."
-                return 0
+            if ! command -v suricata-update &> /dev/null; then
+                HARDN_STATUS "error" "Failed to install suricata-update."
+                return 1
             fi
+        else
+            HARDN_STATUS "error" "Failed to install suricata-update."
+            return 1
         fi
+    fi
 
-        HARDN_STATUS "error" "Failed to install suricata-update."
-        return 1
+    # After installing Suricata, update and validate the config
+    update_suricata_config
+    validate_suricata_yaml
+
+    return 0
 }
 
 install_suricata_update() {
@@ -117,62 +122,99 @@ download_rules_manually() {
     fi
 }
 
+# Changes made to fix the issue with the YAML configuration
 update_suricata_config() {
-        local interface="$1"
-        local ip_addr="$2"
+    local config_file="/etc/suricata/suricata.yaml"
+    HARDN_STATUS "info" "Updating Suricata configuration..."
 
-        # Clean up interface and IP address values to remove any embedded log messages
-        interface=$(echo "$interface" | grep -o '[a-zA-Z0-9]\+$')
-        ip_addr=$(echo "$ip_addr" | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+\.[0-9]\+/[0-9]\+$')
+    # Create backup of original config
+    cp "$config_file" "${config_file}.bak"
 
-        if [ ! -f "/etc/suricata/suricata.yaml" ]; then
-            HARDN_STATUS "error" "Suricata configuration file not found."
-            return 1
+    # Fix HOME_NET definition - replace malformed multi-line string with proper array format
+    sed -i '/HOME_NET:/c\    HOME_NET: "[10.0.2.15/24]"' "$config_file"
+
+    # Fix interface definitions in af-packet section
+    sed -i 's/^enp0s: 3$/    cluster-id: 99/' "$config_file"
+    sed -i 's/^enp0s3$//' "$config_file"
+
+    # Fix malformed interface definitions throughout the file
+    # This pattern looks for lines that contain just "enp0s3" after an interface definition
+    sed -i '/interface: enp0s3/{n;s/^enp0s3$//}' "$config_file"
+
+    # Ensure proper indentation for af-packet configuration
+    sed -i '/af-packet:/,/pcap:/ s/^  - interface: default$/  - interface: default/' "$config_file"
+
+    # Fix pcap interface definitions
+    sed -i '/pcap:/,/pcap-file:/ s/^  - interface: default$/  - interface: default/' "$config_file"
+
+    # Update network interface to match the system's primary interface
+    local primary_interface=$(ip route | grep default | awk '{print $5}' | head -n 1)
+    if [ -n "$primary_interface" ]; then
+        HARDN_STATUS "info" "Setting primary interface to $primary_interface"
+        sed -i "s/interface: enp0s3/interface: $primary_interface/g" "$config_file"
+    fi
+
+    # Validate the configuration after changes
+    if ! suricata -T -c "$config_file" > /dev/null 2>&1; then
+        HARDN_STATUS "error" "Failed to validate Suricata configuration after updates"
+        HARDN_STATUS "info" "Restoring backup configuration"
+        mv "${config_file}.bak" "$config_file"
+        return 1
+    else
+        HARDN_STATUS "pass" "Suricata configuration updated successfully"
+        rm -f "${config_file}.bak"
+    fi
+
+    return 0
+}
+
+# Changes made to fix the issue with the YAML configuration
+# This function is performing a more comprehensive YAML validation and fixes
+validate_suricata_yaml() {
+    local config_file="/etc/suricata/suricata.yaml"
+    HARDN_STATUS "info" "Performing comprehensive YAML validation..."
+
+    # Check for common YAML syntax errors
+    if ! suricata -T -c "$config_file" > /tmp/suricata_validation.log 2>&1; then
+        HARDN_STATUS "warn" "Found issues in Suricata configuration"
+
+        # Extract error information
+        local error_line
+        error_line=$(grep -oP "at line \K[0-9]+" /tmp/suricata_validation.log | head -1)
+
+        local error_msg
+        error_msg=$(grep "Failed to parse" /tmp/suricata_validation.log)
+
+        if [ -n "$error_line" ]; then
+            HARDN_STATUS "info" "Error detected at line $error_line: $error_msg"
+            HARDN_STATUS "info" "Attempting to fix YAML syntax..."
+
+            # Show context around the error
+            sed -n "$((error_line-2)),$((error_line+2))p" "$config_file"
+
+            # Fix missing colons (common YAML syntax error)
+            sed -i "${error_line}s/\([a-zA-Z0-9_-]*\)[[:space:]]*\([^:]\)/\1: \2/" "$config_file"
+
+            # Fix unbalanced quotes
+            sed -i "${error_line}s/\"\([^\"]\)/\\\"\1/g" "$config_file"
+
+            # Fix indentation issues
+            sed -i "${error_line}s/^[[:space:]]*\([a-zA-Z]\)/  \1/" "$config_file"
+
+            # Validate again after fixes
+            if suricata -T -c "$config_file" > /dev/null 2>&1; then
+                HARDN_STATUS "pass" "YAML syntax fixed successfully"
+            else
+                HARDN_STATUS "error" "Could not automatically fix YAML syntax"
+                HARDN_STATUS "info" "Manual intervention required at line $error_line"
+                return 1
+            fi
         fi
+    else
+        HARDN_STATUS "pass" "Suricata configuration is valid"
+    fi
 
-        HARDN_STATUS "info" "Updating Suricata configuration..."
-        HARDN_STATUS "info" "  - Setting interface to: $interface"
-        HARDN_STATUS "info" "  - Setting HOME_NET to: $ip_addr"
-
-        # Backup original config
-        cp /etc/suricata/suricata.yaml /etc/suricata/suricata.yaml.bak
-
-        temp_config=$(mktemp)
-
-        # Process the configuration file line by line
-        local in_file="/etc/suricata/suricata.yaml"
-        local out_file="$temp_config"
-
-        process_config_file() {
-            # Usage: process_config_file input_file output_file
-            local input_file="$1"
-            local output_file="$2"
-
-            while IFS= read -r line; do
-                if [[ "$line" =~ ^[[:space:]]*-[[:space:]]*interface: ]]; then
-                    echo "  - interface: $interface" >> "$output_file"
-                elif [[ "$line" =~ ^[[:space:]]*HOME_NET:[[:space:]] ]]; then
-                    echo "    HOME_NET: \"$ip_addr\"" >> "$output_file"
-                else
-                    echo "$line" >> "$output_file"
-                fi
-            done < "$input_file"
-
-            return 0
-        }
-
-        process_config_file "$in_file" "$out_file"
-
-        # Replace the original file with our modified version
-        # & Set proper permissions
-        if mv "$temp_config" "/etc/suricata/suricata.yaml"; then
-            chmod 644 /etc/suricata/suricata.yaml
-            HARDN_STATUS "pass" "Successfully updated Suricata configuration."
-            return 0
-        else
-            HARDN_STATUS "error" "Failed to update Suricata configuration."
-            return 1
-        fi
+    return 0
 }
 
 manage_suricata_service() {
@@ -199,65 +241,190 @@ manage_suricata_service() {
         esac
 }
 
-handle_service_failure() {
-        HARDN_STATUS "warning" "Failed to restart suricata.service. Checking if it's installed correctly..."
+debug_suricata_config() {
+    local config_file="/etc/suricata/suricata.yaml"
+    local performance_file="/etc/suricata/suricata-performance.yaml"
 
-        # Check for different service files that might be used
-        local service_files=(
-            "/lib/systemd/system/suricata.service"
-            "/etc/systemd/system/suricata.service"
-            "/lib/systemd/system/suricata-ids.service"
-            "/etc/systemd/system/suricata-ids.service"
-        )
+    HARDN_STATUS "info" "Debugging Suricata configuration..."
 
-        local service_found=false
-        local service_name="suricata.service"
-        local file=""
+    # Check if config files exist
+    if [ ! -f "$config_file" ]; then
+        HARDN_STATUS "error" "Main configuration file not found: $config_file"
+        return 1
+    fi
 
-        for ((i=0; i<${#service_files[@]}; i++)); do
-            file="${service_files[i]}"
+    # Check for syntax errors in main config
+    if ! suricata -T -c "$config_file" 2>/tmp/suricata_config_check.log; then
+        HARDN_STATUS "error" "Syntax error in Suricata configuration:"
+        cat /tmp/suricata_config_check.log
 
-            if [ -f "$file" ]; then
-                service_found=true
-                service_name=$(basename "$file")
-                HARDN_STATUS "info" "Found Suricata service file: $service_name"
-                break
-            fi
-        done
+        # Extract line number from error message if available
+        local error_line
+        error_line=$(grep -oP "at line \K[0-9]+" /tmp/suricata_config_check.log | head -1)
 
-        if ! $service_found; then
-            HARDN_STATUS "warning" "Suricata service file not found. Attempting to reinstall..."
-            apt-get purge -y suricata; apt-get install -y suricata; systemctl daemon-reload
-            # Try to start service again
-            systemctl enable suricata.service || true systemctl start suricata.service
+        if [ -n "$error_line" ]; then
+            HARDN_STATUS "info" "Error detected at line $error_line, showing context:"
+            # Show the problematic line and surrounding context
+            sed -n "$((error_line-2)),$((error_line+2))p" "$config_file"
 
-            case $? in
-                0)
-                    HARDN_STATUS "pass" "Suricata service started after reinstallation."
-                    return 0
-                    ;;
-                *)
-                    HARDN_STATUS "error" "Failed to start Suricata service after reinstall."
-                    return 1
-                    ;;
-            esac
-        else
-            systemctl daemon-reload; systemctl enable "$service_name" || true ; systemctl start "$service_name"
+            # Fix specific YAML syntax issues
+            HARDN_STATUS "info" "Attempting to fix YAML syntax issues..."
 
-            case $? in
-                0)
-                    HARDN_STATUS "pass" "Suricata service started using $service_name."
-                    return 0
-                    ;;
-                *)
-                    HARDN_STATUS "error" "Service file exists but service failed to start."
-                    # Check logs for more information
-                    HARDN_STATUS "info" "Last 10 lines of Suricata logs:"
-                    journalctl -u "$service_name" -n 10 || true
-                    return 1
-                    ;;
-            esac
+            # Fix missing colons (common YAML syntax error)
+            sed -i "${error_line}s/\([a-zA-Z0-9_-]*\)[[:space:]]*\([^:]\)/\1: \2/" "$config_file"
+
+            # Fix unbalanced quotes
+            sed -i "${error_line}s/\"\([^\"]\)/\\\"\1/g" "$config_file"
+            #sed -i "${error_line}s/\([^"]\)"/\1\"/g" "$config_file"
+            sed -i "${error_line}s/"\([^"]\)/\"\1/g" "$config_file"
         fi
+
+        # Try to fix common issues in the performance file
+        if [ -f "$performance_file" ]; then
+            HARDN_STATUS "info" "Checking performance configuration file..."
+
+            # Fix potential issues with quotes in CPU arrays
+            sed -i 's/\[\s*"/[ "/g' "$performance_file"
+            sed -i 's/"\s*\]/" ]/g' "$performance_file"
+            sed -i 's/",\s*"/", "/g' "$performance_file"
+
+            # Fix potential YAML indentation issues
+            sed -i 's/^[[:space:]]*\([a-zA-Z]\)/  \1/g' "$performance_file"
+
+            # Ensure proper YAML formatting for key sections
+            sed -i 's/^threading:/threading:/g' "$performance_file"
+            sed -i 's/^af-packet:/af-packet:/g' "$performance_file"
+            sed -i 's/^detect:/detect:/g' "$performance_file"
+
+            HARDN_STATUS "info" "Fixed potential YAML syntax issues in performance file"
+        fi
+
+        # Create a minimal working configuration as fallback
+        HARDN_STATUS "info" "Creating minimal working configuration..."
+        cat > "$performance_file" << EOF
+# Minimal Suricata performance configuration
+# Generated by HARDN-XDR debug function
+
+af-packet:
+  - interface: default
+    cluster-id: 99
+    cluster-type: cluster_flow
+    defrag: yes
+
+threading:
+  set-cpu-affinity: no
+
+detect:
+  profile: medium
+EOF
+
+        # Remove include line if it exists and add it back properly formatted
+        sed -i '/include: suricata-performance.yaml/d' "$config_file"
+        echo "include: suricata-performance.yaml" >> "$config_file"
+
+        # Test the configuration again
+        if suricata -T -c "$config_file" 2>/tmp/suricata_config_check.log; then
+            HARDN_STATUS "pass" "Configuration fixed successfully"
+            return 0
+        else
+            HARDN_STATUS "error" "Could not fix configuration automatically. Manual intervention required."
+            cat /tmp/suricata_config_check.log
+            return 1
+        fi
+    else
+        HARDN_STATUS "pass" "Suricata configuration syntax is valid"
+        return 0
+    fi
+}
+
+
+# handle_service_failure
+handle_service_failure() {
+    HARDN_STATUS "warning" "Failed to restart suricata.service. Checking if it's installed correctly..."
+
+    # Check for different service files that might be used
+    local service_files=(
+        "/lib/systemd/system/suricata.service"
+        "/etc/systemd/system/suricata.service"
+        "/lib/systemd/system/suricata-ids.service"
+        "/etc/systemd/system/suricata-ids.service"
+    )
+
+    local service_found=false
+    local service_name="suricata.service"
+    local file=""
+
+    for ((i=0; i<${#service_files[@]}; i++)); do
+        file="${service_files[i]}"
+
+        if [ -f "$file" ]; then
+            service_found=true
+            service_name=$(basename "$file")
+            HARDN_STATUS "info" "Found Suricata service file: $service_name"
+            break
+        fi
+    done
+
+    if ! $service_found; then
+        HARDN_STATUS "warning" "Suricata service file not found. Attempting to reinstall..."
+        apt-get purge -y suricata; apt-get install -y suricata; systemctl daemon-reload
+        # Try to start service again
+        systemctl enable suricata.service || true
+        systemctl start suricata.service
+
+        case $? in
+            0)
+                HARDN_STATUS "pass" "Suricata service started after reinstallation."
+                return 0
+                ;;
+            *)
+                HARDN_STATUS "error" "Failed to start Suricata service after reinstall."
+                # Try fallback configuration
+                create_fallback_performance_config
+                if systemctl restart suricata.service; then
+                    HARDN_STATUS "pass" "Suricata service started with fallback configuration after reinstall."
+                    return 0
+                fi
+                return 1
+                ;;
+        esac
+    else
+        systemctl daemon-reload
+        systemctl enable "$service_name" || true
+
+        # Try with fallback configuration first
+        HARDN_STATUS "info" "Trying fallback configuration without CPU affinity..."
+        create_fallback_performance_config
+        if systemctl restart "$service_name"; then
+            HARDN_STATUS "pass" "Suricata service started with fallback configuration."
+            return 0
+        else
+            HARDN_STATUS "error" "Service failed to start even with fallback configuration."
+            # Check logs for more information
+            HARDN_STATUS "info" "Last 10 lines of Suricata logs:"
+            journalctl -u "$service_name" -n 10 || true
+
+            # Debug and try to fix configuration
+            HARDN_STATUS "warning" "Attempting to debug and fix configuration..."
+            if debug_suricata_config; then
+                if systemctl restart "$service_name"; then
+                    HARDN_STATUS "pass" "Suricata service started after configuration debugging."
+                    return 0
+                fi
+            fi
+
+            # Try one more approach - disable performance tuning completely
+            HARDN_STATUS "warning" "Trying minimal configuration..."
+            sed -i '/include: suricata-performance.yaml/d' /etc/suricata/suricata.yaml
+            if systemctl restart "$service_name"; then
+                HARDN_STATUS "pass" "Suricata service started with minimal configuration."
+                return 0
+            else
+                HARDN_STATUS "error" "All configuration attempts failed. Manual intervention required."
+                return 1
+            fi
+        fi
+    fi
 }
 
 create_update_cron_job() {
@@ -438,7 +605,6 @@ suricata_module() {
             HARDN_STATUS "info" "Suricata is already installed."
         fi
 
-        # Update Suricata rules
         HARDN_STATUS "info" "Updating Suricata rules..."
 
         if command -v suricata-update &> /dev/null; then
@@ -470,8 +636,15 @@ suricata_module() {
 
         configure_firewall
         tune_suricata_performance
+        #manage_suricata_service || handle_service_failure
 
-        manage_suricata_service || handle_service_failure
+        if ! manage_suricata_service; then
+            HARDN_STATUS "warning" "Initial service start failed, trying fallback configurations..."
+            handle_service_failure
+        fi
+
+
+
         verify_suricata_installation
         create_update_cron_job
 
@@ -531,37 +704,52 @@ tune_suricata_performance() {
             cpu_tier="few"
         fi
 
-        local mgmt_cpus='[ "0" ]' # for mgmt tasks
-        local recv_cpus='[ "1" ]' # packet receive tasks
-        local worker_cpus         # For packet processing workers
+    local mgmt_cpus='[ "0" ]' # for mgmt tasks
+    local recv_cpus='[ "1" ]' # packet receive tasks
+    local worker_cpus         # For packet processing workers
 
-        # Case Statement to allocate CPU cores based on the cpu_tier var
-        case "$cpu_tier" in
-            "many") # <-- "many" tier (more than 8 cores)
-                mgmt_cpus='[ "0" ]'
-                recv_cpus='[ "1", "2" ]'
-                # Use remaining cores for workers (3 to n-1) worker cpu arrary
-                worker_cpus='[ '
-                for ((i=3; i<cpu_count; i++)); do
-                    worker_cpus+=\""$i\""
-                    if [ "$i" -lt $((cpu_count-1)) ]; then
-                        worker_cpus+=", "
-                    fi
-                done
-                worker_cpus+=' ]'
-                HARDN_STATUS "info" "Using optimized CPU allocation for ${cpu_count} cores"
-            ;;
-            "several") # <-- "several" tier (5 to 8 cores)
-                mgmt_cpus='[ "0" ]'
-                recv_cpus='[ "1" ]'
-                worker_cpus='[ "2", "3", "4" ]'
-                HARDN_STATUS "info" "Using standard CPU allocation for ${cpu_count} cores"
-            ;;
-            *) # <-- Default tier (4 or fewer cores
-                worker_cpus='[ "all" ]'
-                HARDN_STATUS "info" "Using basic CPU allocation for ${cpu_count} cores"
-            ;;
-        esac
+    case "$cpu_tier" in
+    "many") # <-- "many" tier (more than 8 cores)
+        mgmt_cpus='[ "0" ]'
+        recv_cpus='[ "1" ]'
+        # Use a subset of remaining cores for workers (avoid using all cores)
+        worker_cpus='[ '
+        # Use at most 6 cores for workers, even on systems with many cores
+        local max_workers=$((cpu_count > 8 ? 6 : cpu_count-2))
+        for ((i=2; i<max_workers+2 && i<cpu_count; i++)); do
+            worker_cpus+=\""$i\""
+            if [ "$i" -lt $((max_workers+1)) ] && [ "$i" -lt $((cpu_count-1)) ]; then
+           # if [ "$i" -lt $((max_workers+1)) ] && [ "$i" -lt $((cpu_count-1)) ]; then
+                worker_cpus+=", "
+            fi
+        done
+        worker_cpus+=' ]'
+        HARDN_STATUS "info" "Using optimized CPU allocation for ${cpu_count} cores"
+    ;;
+    "several") # <-- "several" tier (5 to 8 cores)
+        mgmt_cpus='[ "0" ]'
+        recv_cpus='[ "1" ]'
+        # Use only 3 cores for workers on medium systems
+        worker_cpus='[ "2", "3" ]'
+        HARDN_STATUS "info" "Using standard CPU allocation for ${cpu_count} cores"
+    ;;
+    *) # <-- Default tier (4 or fewer cores)
+        # For systems with few cores, use a very conservative approach
+        if [ "$cpu_count" -ge 3 ]; then
+            mgmt_cpus='[ "0" ]'
+            recv_cpus='[ "1" ]'
+            worker_cpus='[ "2" ]'
+        else
+            # For 1-2 core systems, disable CPU affinity completely
+            #threading_config="threading:\n  set-cpu-affinity: no"
+            mgmt_cpus='[ "all" ]'
+            recv_cpus='[ "all" ]'
+            worker_cpus='[ "all" ]'
+        fi
+        HARDN_STATUS "info" "Using basic CPU allocation for ${cpu_count} cores"
+    ;;
+esac
+
 
         # Create performance tuning file
         local tuning_file="/etc/suricata/suricata-performance.yaml"
@@ -627,6 +815,37 @@ EOF
         return 0
 }
 
+create_fallback_performance_config() {
+    HARDN_STATUS "warning" "Creating fallback performance configuration without CPU affinity..."
+    local tuning_file="/etc/suricata/suricata-performance.yaml"
+
+    cat > "$tuning_file" << EOF
+# Suricata fallback performance tuning
+# Generated by HARDN-XDR - FALLBACK CONFIGURATION
+
+af-packet:
+  - interface: default
+    cluster-id: 99
+    cluster-type: cluster_flow
+    defrag: yes
+    use-mmap: yes
+    mmap-locked: yes
+    tpacket-v3: yes
+    ring-size: 32768
+    block-size: 32768
+    max-pending-packets: 1024
+
+threading:
+  set-cpu-affinity: no
+
+detect:
+  profile: medium
+EOF
+
+    return 0
+}
+
 
 # call main
 suricata_module
+
