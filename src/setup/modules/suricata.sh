@@ -122,6 +122,7 @@ download_rules_manually() {
     fi
 }
 
+# Changes made to fix the issue with the YAML configuration
 update_suricata_config() {
     local config_file="/etc/suricata/suricata.yaml"
     HARDN_STATUS "info" "Updating Suricata configuration..."
@@ -167,7 +168,8 @@ update_suricata_config() {
     return 0
 }
 
-# perform more comprehensive YAML validation and fixes
+# Changes made to fix the issue with the YAML configuration
+# This function is performing a more comprehensive YAML validation and fixes
 validate_suricata_yaml() {
     local config_file="/etc/suricata/suricata.yaml"
     HARDN_STATUS "info" "Performing comprehensive YAML validation..."
@@ -424,7 +426,6 @@ handle_service_failure() {
         fi
     fi
 }
-#
 
 create_update_cron_job() {
     cat > /etc/cron.daily/update-suricata-rules << 'EOF'
