@@ -31,7 +31,6 @@ install_suricata() {
         return 1
 }
 
-# Function to install suricata-update tool
 install_suricata_update() {
         HARDN_STATUS "warning" "suricata-update command not found. Installing it now..."
 
@@ -367,7 +366,7 @@ get_interface() {
             interface=$(ip -o link show | grep -v "lo:" | awk -F': ' '{print $2}' | head -n 1)
         fi
 
-        # Determine interface status using case statement
+        # use case to enumerate the interface status
         case "$interface" in
             "")
                 : "Could not determine primary network interface. Using 'eth0' as fallback."
@@ -384,7 +383,6 @@ get_interface() {
         echo "$interface"
 }
 
-# Get the IP address of the primary interface
 get_ip_address() {
         local interface
         interface=$(get_interface)
@@ -408,7 +406,6 @@ get_ip_address() {
         echo "$ip_addr"
 }
 
-# Configure the firewall for Suricata
 configure_firewall() {
         HARDN_STATUS "info" "Configuring firewall for Suricata..."
 
@@ -430,7 +427,7 @@ configure_firewall() {
         return 0
 }
 
-# Main: Source the module
+# Source the module
 suricata_module() {
         HARDN_STATUS "info" "Checking and configuring Suricata..."
 
@@ -632,5 +629,5 @@ EOF
 }
 
 
-# call the module function
+# call main
 suricata_module
