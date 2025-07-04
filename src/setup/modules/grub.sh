@@ -10,6 +10,7 @@ RESET='\033[0m'
 
 LOG_DIR="/var/log/hardn"
 LOG_FILE="$LOG_DIR/grub_hardening.log"
+VERIFICATION_LOG="$LOG_DIR/grub_verification.log"
 
 HARDN_STATUS() {
     local status="$1"
@@ -33,11 +34,11 @@ error() {
     HARDN_STATUS "error" "$1"
     log "ERROR: $1"
 
-   
+
     if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
         exit 1
     else
-      
+
         return 0
     fi
 }
