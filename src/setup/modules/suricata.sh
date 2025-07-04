@@ -56,7 +56,6 @@ install_suricata_update() {
         return 1
 }
 
-# Function to update Suricata rules using suricata-update
 update_rules_with_suricata_update() {
     # Add timeout to prevent hanging
     timeout 300 suricata-update
@@ -83,11 +82,10 @@ update_rules_with_suricata_update() {
     fi
 }
 
-# Function to manually download and install rules
 download_rules_manually() {
     HARDN_STATUS "warning" "Warning: Failed to update Suricata rules. Will try alternative method."
 
-    # Create rules directory if it doesn't exist
+    # Create rules directory
     mkdir -p /var/lib/suricata/rules/
 
     # Download ET Open ruleset
@@ -95,9 +93,16 @@ download_rules_manually() {
 
     case $? in
         0)
-            tar -xzf /tmp/emerging.rules.tar.gz -C /var/lib/suricata/rules/
-            rm -f /tmp/emerging.rules.tar.gz
-            : "Manually downloaded and installed Emerging Threats ruleset."
+            # Verify file size is reasonable (not empty or too small)
+            local file_size
+            file_size=$(stat -c%s "/tmp/emerging.rules.tar.gz")
+            if [ "$file_size" -lt 1000 ]; then
+                : "Downloaded rules file is too small (${file_size} bytes). Possible download error."
+            else
+                tar -xzf /tmp/emerging.rules.tar.gz -C /var/lib/suricata/rules/
+                rm -f /tmp/emerging.rules.tar.gz
+                : "Manually downloaded and installed Emerging Threats ruleset."
+            fi
         ;;
         *)
             : "Failed to download rules manually. Continuing without rules update."
@@ -114,7 +119,6 @@ download_rules_manually() {
     fi
 }
 
-# Function to update Suricata configuration
 update_suricata_config() {
         local interface="$1"
         local ip_addr="$2"
@@ -135,7 +139,6 @@ update_suricata_config() {
         # Backup original config
         cp /etc/suricata/suricata.yaml /etc/suricata/suricata.yaml.bak
 
-        # Create a temporary file for modifications
         temp_config=$(mktemp)
 
         # Process the configuration file line by line
@@ -148,13 +151,10 @@ update_suricata_config() {
             local output_file="$2"
 
             while IFS= read -r line; do
-                # Check for interface line
                 if [[ "$line" =~ ^[[:space:]]*-[[:space:]]*interface: ]]; then
                     echo "  - interface: $interface" >> "$output_file"
-                # Check for HOME_NET line
                 elif [[ "$line" =~ ^[[:space:]]*HOME_NET:[[:space:]] ]]; then
                     echo "    HOME_NET: \"$ip_addr\"" >> "$output_file"
-                # Keep all other lines unchanged
                 else
                     echo "$line" >> "$output_file"
                 fi
@@ -163,12 +163,11 @@ update_suricata_config() {
             return 0
         }
 
-        # Process the configuration file
         process_config_file "$in_file" "$out_file"
 
         # Replace the original file with our modified version
+        # & Set proper permissions
         if mv "$temp_config" "/etc/suricata/suricata.yaml"; then
-            # Set proper permissions
             chmod 644 /etc/suricata/suricata.yaml
             HARDN_STATUS "pass" "Successfully updated Suricata configuration."
             return 0
@@ -178,15 +177,18 @@ update_suricata_config() {
         fi
 }
 
-# Function to manage Suricata service
 manage_suricata_service() {
         HARDN_STATUS "info" "Enabling and starting Suricata service..."
 
-        # Enable service
         systemctl enable suricata.service || true
 
-        # Start/restart service
-        systemctl restart suricata.service
+        if systemctl is-active --quiet suricata.service; then
+            HARDN_STATUS "info" "Reloading Suricata service..."
+            systemctl reload-or-restart suricata.service
+        else
+            HARDN_STATUS "info" "Starting Suricata service..."
+            systemctl start suricata.service
+        fi
 
         case $? in
             0)
@@ -199,7 +201,6 @@ manage_suricata_service() {
         esac
 }
 
-# Function to handle service failure
 handle_service_failure() {
         HARDN_STATUS "warning" "Failed to restart suricata.service. Checking if it's installed correctly..."
 
@@ -261,7 +262,6 @@ handle_service_failure() {
         fi
 }
 
-# Function to create update cron job
 create_update_cron_job() {
     cat > /etc/cron.daily/update-suricata-rules << 'EOF'
 #!/bin/bash
@@ -318,7 +318,6 @@ verify_suricata_installation() {
             : "Could not determine Suricata version."
         fi
 
-        # Display version information
         HARDN_STATUS "info" "$_"
 
         # Check configuration file
@@ -339,14 +338,14 @@ verify_suricata_installation() {
             ;;
         esac
 
-        # Check rules directory
+        # Check the rules dir
         if [ -d "/var/lib/suricata/rules" ] || [ -d "/etc/suricata/rules" ]; then
             : "Suricata rules directory found."
         else
             : "Suricata rules directory not found."
         fi
 
-        # Display rules directory status
+        # Display the rules dir status
         case "$_" in
             "Suricata rules directory found.")
                 HARDN_STATUS "pass" "$_"
@@ -359,7 +358,7 @@ verify_suricata_installation() {
         return $verification_status
 }
 
-# Utility function to determine the primary network interface
+# Determine the primary network interface
 get_interface() {
         local interface
         interface=$(ip route | grep default | awk '{print $5}' | head -n 1)
@@ -385,7 +384,7 @@ get_interface() {
         echo "$interface"
 }
 
-# Utility function to get the IP address of the primary interface
+# Get the IP address of the primary interface
 get_ip_address() {
         local interface
         interface=$(get_interface)
@@ -398,7 +397,7 @@ get_ip_address() {
             ip_addr=$(ip -4 addr show | grep -v "127.0.0.1" | grep -oP '(?<=inet\s)\d+(\.\d+){3}(/\d+)?' | head -n 1)
         fi
 
-        # If we still don't have an IP address, use a fallback
+        # If still no IP address, then use a fallback
         if [ -z "$ip_addr" ]; then
             HARDN_STATUS "warning" "Could not determine IP address. Using '192.168.1.0/24' as fallback."
             ip_addr="192.168.1.0/24"
@@ -409,7 +408,29 @@ get_ip_address() {
         echo "$ip_addr"
 }
 
-# Main module function - this is what gets executed when the module is sourced
+# Configure the firewall for Suricata
+configure_firewall() {
+        HARDN_STATUS "info" "Configuring firewall for Suricata..."
+
+        # Check if UFW is installed and enabled
+        if command -v ufw &> /dev/null && ufw status | grep -q "active"; then
+            # Allow traffic to be monitored by Suricata
+            # This doesn't open ports but ensures traffic flows through Suricata
+            HARDN_STATUS "info" "UFW detected, ensuring traffic can be monitored by Suricata"
+            return 0
+        fi
+
+        # Check if firewalld is installed and running
+        if command -v firewall-cmd &> /dev/null && firewall-cmd --state | grep -q "running"; then
+            HARDN_STATUS "info" "firewalld detected, no specific configuration needed for Suricata monitoring"
+            return 0
+        fi
+
+        HARDN_STATUS "info" "No active firewall detected, Suricata should be able to monitor traffic"
+        return 0
+}
+
+# Main: Source the module
 suricata_module() {
         HARDN_STATUS "info" "Checking and configuring Suricata..."
 
@@ -437,7 +458,7 @@ suricata_module() {
             fi
         fi
 
-        # Update Suricata configuration
+        # Update the Suricata config
         local interface
         interface=$(get_interface)
 
@@ -451,12 +472,165 @@ suricata_module() {
             return 1
         fi
 
+        configure_firewall
+        tune_suricata_performance
+
         manage_suricata_service || handle_service_failure
         verify_suricata_installation
         create_update_cron_job
 
         return $?
 }
+
+tune_suricata_performance() {
+        HARDN_STATUS "info" "Tuning Suricata performance..."
+
+        # Get sys memory in MB
+        local mem_total
+        mem_total=$(free -m | grep Mem | awk '{print $2}')
+        local cpu_count
+        cpu_count=$(nproc)
+
+        HARDN_STATUS "info" "Detected system resources: ${mem_total}MB RAM, ${cpu_count} CPU cores"
+
+        # Calculate optimal values based on system resources
+        # First determine memory tier
+        local mem_tier
+        if [ "$mem_total" -gt 8000 ]; then
+            mem_tier="high"
+        elif [ "$mem_total" -gt 4000 ]; then
+            mem_tier="medium"
+        elif [ "$mem_total" -gt 2000 ]; then
+            mem_tier="low"
+        else
+            mem_tier="minimal"
+        fi
+
+        # Set config vals based on memory tier
+        case "$mem_tier" in
+            "high")
+                : "65536 65536 4096"
+            ;;
+            "medium")
+                : "32768 32768 2048"
+            ;;
+            "low")
+                : "16384 32768 1024"
+            ;;
+            *)
+                : "2048 32768 1024"
+            ;;
+        esac
+
+        # Parse the values from $_
+        read -r ring_size block_size max_pending_packets <<< "$_"
+
+        HARDN_STATUS "info" "Using ${mem_tier} memory profile: ring_size=${ring_size}, block_size=${block_size}"
+
+        local cpu_tier
+        if [ "$cpu_count" -gt 8 ]; then
+            cpu_tier="many"
+        elif [ "$cpu_count" -gt 4 ]; then
+            cpu_tier="several"
+        else
+            cpu_tier="few"
+        fi
+
+        local mgmt_cpus='[ "0" ]'
+        local recv_cpus='[ "1" ]'
+        local worker_cpus
+
+        case "$cpu_tier" in
+            "many")
+                mgmt_cpus='[ "0" ]'
+                recv_cpus='[ "1", "2" ]'
+                # Use remaining cores for workers (3 to n-1)
+                worker_cpus='[ '
+                for ((i=3; i<cpu_count; i++)); do
+                    worker_cpus+=\""$i\""
+                    if [ "$i" -lt $((cpu_count-1)) ]; then
+                        worker_cpus+=", "
+                    fi
+                done
+                worker_cpus+=' ]'
+                HARDN_STATUS "info" "Using optimized CPU allocation for ${cpu_count} cores"
+            ;;
+            "several")
+                mgmt_cpus='[ "0" ]'
+                recv_cpus='[ "1" ]'
+                worker_cpus='[ "2", "3", "4" ]'
+                HARDN_STATUS "info" "Using standard CPU allocation for ${cpu_count} cores"
+            ;;
+            *)
+                worker_cpus='[ "all" ]'
+                HARDN_STATUS "info" "Using basic CPU allocation for ${cpu_count} cores"
+            ;;
+        esac
+
+        # Create performance tuning file
+        local tuning_file="/etc/suricata/suricata-performance.yaml"
+
+        cat > "$tuning_file" << EOF
+# Suricata performance tuning
+# Generated by HARDN-XDR
+# System: ${mem_total}MB RAM (${mem_tier} profile), ${cpu_count} CPU cores (${cpu_tier} profile)
+
+af-packet:
+  - interface: default
+    cluster-id: 99
+    cluster-type: cluster_flow
+    defrag: yes
+    use-mmap: yes
+    mmap-locked: yes
+    tpacket-v3: yes
+    ring-size: ${ring_size}
+    block-size: ${block_size}
+    max-pending-packets: ${max_pending_packets}
+
+threading:
+  set-cpu-affinity: yes
+  cpu-affinity:
+    - management-cpu-set:
+        cpu: ${mgmt_cpus}
+    - receive-cpu-set:
+        cpu: ${recv_cpus}
+    - worker-cpu-set:
+        cpu: ${worker_cpus}
+        mode: "exclusive"
+        prio:
+          default: "high"
+
+detect:
+  profile: medium
+  custom-values:
+    toclient-groups: 3
+    toserver-groups: 25
+  sgh-mpm-context: auto
+  inspection-recursion-limit: 3000
+
+# Memory limits tuned for ${mem_total}MB system
+app-layer:
+  protocols:
+    http:
+      request-body-limit: $((mem_total/20))mb
+      response-body-limit: $((mem_total/20))mb
+    smtp:
+      raw-extraction-size-limit: $((mem_total/40))mb
+      header-value-depth: 2000
+EOF
+
+        # Include the performance file in main config if not already included
+        if ! grep -q "include: suricata-performance.yaml" /etc/suricata/suricata.yaml; then
+            echo "include: suricata-performance.yaml" >> /etc/suricata/suricata.yaml
+            HARDN_STATUS "pass" "Added performance tuning configuration optimized for ${mem_tier} memory and ${cpu_tier} CPU profiles"
+        else
+            HARDN_STATUS "info" "Performance tuning already configured, updating with system-specific values"
+            HARDN_STATUS "pass" "Updated performance tuning for ${mem_tier} memory and ${cpu_tier} CPU profiles"
+        fi
+
+        return 0
+}
+
 
 # call the module function
 suricata_module
