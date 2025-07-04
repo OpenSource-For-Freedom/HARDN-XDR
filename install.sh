@@ -81,7 +81,6 @@ install_files() {
         # Create destination directory
         # Copy all project files to the destination
         # Set appropriate permissions
-        echo -e "\033[1;31m[/home/linux/Pictures/last-thing-for-merge.png +] Installing HARDN-XDR files...\033[0m"
         install -d -m 755 "$PREFIX" && cp -r src "$PREFIX/" && chmod -R 755 "$PREFIX/src"
         echo -e "\033[1;32m[+] HARDN-XDR files installed successfully.\033[0m"
 }
@@ -93,7 +92,7 @@ main() {
         install_files
         install_wrapper
         install_man_page
-        
+
         echo "hardn-xdr installer is ready. Run 'sudo hardn-xdr' to begin."
 }
 
