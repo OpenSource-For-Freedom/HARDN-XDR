@@ -531,37 +531,50 @@ tune_suricata_performance() {
             cpu_tier="few"
         fi
 
-        local mgmt_cpus='[ "0" ]' # for mgmt tasks
-        local recv_cpus='[ "1" ]' # packet receive tasks
-        local worker_cpus         # For packet processing workers
+    local mgmt_cpus='[ "0" ]' # for mgmt tasks
+    local recv_cpus='[ "1" ]' # packet receive tasks
+    local worker_cpus         # For packet processing workers
 
-        # Case Statement to allocate CPU cores based on the cpu_tier var
-        case "$cpu_tier" in
-            "many") # <-- "many" tier (more than 8 cores)
-                mgmt_cpus='[ "0" ]'
-                recv_cpus='[ "1", "2" ]'
-                # Use remaining cores for workers (3 to n-1) worker cpu arrary
-                worker_cpus='[ '
-                for ((i=3; i<cpu_count; i++)); do
-                    worker_cpus+=\""$i\""
-                    if [ "$i" -lt $((cpu_count-1)) ]; then
-                        worker_cpus+=", "
-                    fi
-                done
-                worker_cpus+=' ]'
-                HARDN_STATUS "info" "Using optimized CPU allocation for ${cpu_count} cores"
-            ;;
-            "several") # <-- "several" tier (5 to 8 cores)
-                mgmt_cpus='[ "0" ]'
-                recv_cpus='[ "1" ]'
-                worker_cpus='[ "2", "3", "4" ]'
-                HARDN_STATUS "info" "Using standard CPU allocation for ${cpu_count} cores"
-            ;;
-            *) # <-- Default tier (4 or fewer cores
+    # Case Statement to allocate CPU cores based on the cpu_tier var
+    case "$cpu_tier" in
+        "many") # <-- "many" tier (more than 8 cores)
+            mgmt_cpus='[ "0" ]'
+            recv_cpus='[ "1", "2" ]'
+            # Use remaining cores for workers (3 to n-1) worker cpu arrary
+            worker_cpus='[ '
+            for ((i=3; i<cpu_count; i++)); do
+                worker_cpus+=\""$i"\"
+                if [ "$i" -lt $((cpu_count-1)) ]; then
+                    worker_cpus+=", "
+                fi
+            done
+            worker_cpus+=' ]'
+            HARDN_STATUS "info" "Using optimized CPU allocation for ${cpu_count} cores"
+        ;;
+        "several") # <-- "several" tier (5 to 8 cores)
+            mgmt_cpus='[ "0" ]'
+            recv_cpus='[ "1" ]'
+            worker_cpus='[ "2", "3", "4" ]'
+            HARDN_STATUS "info" "Using standard CPU allocation for ${cpu_count} cores"
+        ;;
+        *) # <-- Default tier (4 or fewer cores
+            # Modified to use a more compatible configuration for systems with few cores
+            mgmt_cpus='[ "0" ]'
+            recv_cpus='[ "1" ]'
+            # For 4 cores, use cores 2-3 for workers
+            if [ "$cpu_count" -eq 4 ]; then
+                worker_cpus='[ "2", "3" ]'
+            # For 3 cores, use only core 2 for workers
+            elif [ "$cpu_count" -eq 3 ]; then
+                worker_cpus='[ "2" ]'
+            # For 1-2 cores, use "all" setting to let Suricata manage allocation
+            else
                 worker_cpus='[ "all" ]'
-                HARDN_STATUS "info" "Using basic CPU allocation for ${cpu_count} cores"
-            ;;
-        esac
+            fi
+            HARDN_STATUS "info" "Using basic CPU allocation for ${cpu_count} cores"
+        ;;
+    esac
+
 
         # Create performance tuning file
         local tuning_file="/etc/suricata/suricata-performance.yaml"
