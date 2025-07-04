@@ -484,8 +484,7 @@ suricata_module() {
 
 tune_suricata_performance() {
         HARDN_STATUS "info" "Tuning Suricata performance..."
-
-        # Get sys memory in MB
+        # Dynamic resource detection to adapt to the host system
         local mem_total
         mem_total=$(free -m | grep Mem | awk '{print $2}')
         local cpu_count
@@ -493,8 +492,7 @@ tune_suricata_performance() {
 
         HARDN_STATUS "info" "Detected system resources: ${mem_total}MB RAM, ${cpu_count} CPU cores"
 
-        # Calculate optimal values based on system resources
-        # First determine memory tier
+        # Tiered configuration: scales with available resources
         local mem_tier
         if [ "$mem_total" -gt 8000 ]; then
             mem_tier="high"
@@ -507,6 +505,7 @@ tune_suricata_performance() {
         fi
 
         # Set config vals based on memory tier
+        # Bash trick with the `:` command (a no-op that sets `$_` to its argument)
         case "$mem_tier" in
             "high")
                 : "65536 65536 4096"
@@ -536,15 +535,16 @@ tune_suricata_performance() {
             cpu_tier="few"
         fi
 
-        local mgmt_cpus='[ "0" ]'
-        local recv_cpus='[ "1" ]'
-        local worker_cpus
+        local mgmt_cpus='[ "0" ]' # for mgmt tasks
+        local recv_cpus='[ "1" ]' # packet receive tasks
+        local worker_cpus         # For packet processing workers
 
+        # Case Statement to allocate CPU cores based on the cpu_tier var
         case "$cpu_tier" in
-            "many")
+            "many") # <-- "many" tier (more than 8 cores)
                 mgmt_cpus='[ "0" ]'
                 recv_cpus='[ "1", "2" ]'
-                # Use remaining cores for workers (3 to n-1)
+                # Use remaining cores for workers (3 to n-1) worker cpu arrary
                 worker_cpus='[ '
                 for ((i=3; i<cpu_count; i++)); do
                     worker_cpus+=\""$i\""
@@ -555,13 +555,13 @@ tune_suricata_performance() {
                 worker_cpus+=' ]'
                 HARDN_STATUS "info" "Using optimized CPU allocation for ${cpu_count} cores"
             ;;
-            "several")
+            "several") # <-- "several" tier (5 to 8 cores)
                 mgmt_cpus='[ "0" ]'
                 recv_cpus='[ "1" ]'
                 worker_cpus='[ "2", "3", "4" ]'
                 HARDN_STATUS "info" "Using standard CPU allocation for ${cpu_count} cores"
             ;;
-            *)
+            *) # <-- Default tier (4 or fewer cores
                 worker_cpus='[ "all" ]'
                 HARDN_STATUS "info" "Using basic CPU allocation for ${cpu_count} cores"
             ;;
