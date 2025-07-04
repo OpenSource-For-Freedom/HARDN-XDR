@@ -18,7 +18,7 @@ Vcs-Git: https://github.com/OpenSource-For-Freedom/HARDN-XDR.git
 Vcs-Browser: https://github.com/OpenSource-For-Freedom/HARDN-XDR
 
 Package: hardn
-Architecture: all
+Architecture: any
 Depends: ${misc:Depends},
  auditd, audispd-plugins, suricata, fail2ban, rkhunter, chkrootkit, unhide, debsums, lynis,
  clamav, clamav-daemon, clamav-freshclam, yara, aide, aide-common, rsyslog, logrotate,
