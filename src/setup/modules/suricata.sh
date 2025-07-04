@@ -200,7 +200,7 @@ manage_suricata_service() {
 }
 
 
-# Add this function before the handle_service_failure function
+#####################
 debug_suricata_config() {
     local config_file="/etc/suricata/suricata.yaml"
     local performance_file="/etc/suricata/suricata-performance.yaml"
@@ -214,28 +214,51 @@ debug_suricata_config() {
     fi
 
     # Check for syntax errors in main config
-    suricata -T -c "$config_file" 2>/tmp/suricata_config_check.log
     if ! suricata -T -c "$config_file" 2>/tmp/suricata_config_check.log; then
         HARDN_STATUS "error" "Syntax error in Suricata configuration:"
         cat /tmp/suricata_config_check.log
 
-        # Try to fix common issues
-        HARDN_STATUS "info" "Attempting to fix configuration issues..."
+        # Extract line number from error message if available
+        local error_line
+        error_line=$(grep -oP "at line \K[0-9]+" /tmp/suricata_config_check.log | head -1)
 
-        # Check for unbalanced quotes in the performance file
+        if [ -n "$error_line" ]; then
+            HARDN_STATUS "info" "Error detected at line $error_line, showing context:"
+            # Show the problematic line and surrounding context
+            sed -n "$((error_line-2)),$((error_line+2))p" "$config_file"
+
+            # Fix specific YAML syntax issues
+            HARDN_STATUS "info" "Attempting to fix YAML syntax issues..."
+
+            # Fix missing colons (common YAML syntax error)
+            sed -i "${error_line}s/\([a-zA-Z0-9_-]*\)[[:space:]]*\([^:]\)/\1: \2/" "$config_file"
+
+            # Fix unbalanced quotes
+            sed -i "${error_line}s/\([^\"]\)\"/\1\\\"/g" "$config_file"
+            sed -i "${error_line}s/\"\([^\"]\)/\\\"\1/g" "$config_file"
+        fi
+
+        # Try to fix common issues in the performance file
         if [ -f "$performance_file" ]; then
+            HARDN_STATUS "info" "Checking performance configuration file..."
+
             # Fix potential issues with quotes in CPU arrays
             sed -i 's/\[\s*"/[ "/g' "$performance_file"
             sed -i 's/"\s*\]/" ]/g' "$performance_file"
             sed -i 's/",\s*"/", "/g' "$performance_file"
 
-            # Ensure proper YAML formatting
-            sed -i 's/^threading:/threading:/g' "$performance_file"
+            # Fix potential YAML indentation issues
+            sed -i 's/^[[:space:]]*\([a-zA-Z]\)/  \1/g' "$performance_file"
 
-            HARDN_STATUS "info" "Fixed potential quote issues in performance file"
+            # Ensure proper YAML formatting for key sections
+            sed -i 's/^threading:/threading:/g' "$performance_file"
+            sed -i 's/^af-packet:/af-packet:/g' "$performance_file"
+            sed -i 's/^detect:/detect:/g' "$performance_file"
+
+            HARDN_STATUS "info" "Fixed potential YAML syntax issues in performance file"
         fi
 
-        # Create a minimal working configuration
+        # Create a minimal working configuration as fallback
         HARDN_STATUS "info" "Creating minimal working configuration..."
         cat > "$performance_file" << EOF
 # Minimal Suricata performance configuration
@@ -273,8 +296,9 @@ EOF
     fi
 }
 
-#####################
 
+
+#### end of debug_suricata_config function ####
 
 
 # handle_service_failure
