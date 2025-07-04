@@ -23,6 +23,7 @@
 
 
 ## HARDN-XDR
+[![ci](https://github.com/OpenSource-For-Freedom/HARDN-XDR/actions/workflows/ci.yml/badge.svg)](https://github.com/OpenSource-For-Freedom/HARDN-XDR/actions/workflows/ci.yml)
 - **Our Goal**: 
   - Assist the open source community in building a Debian based **"GOLDEN IMAGE"** System.
 - **Our Purpose**: 
@@ -53,72 +54,32 @@
   <img src="https://img.shields.io/badge/INSTALLATION-white?style=for-the-badge&labelColor=black" alt="INSTALLATION"><br><br>
 </p>
 
+## Quick Start
 
-## Quick Start: 
+## HARDN-XDR Install
 
-### Installation
-**Access it through the latest release**
-- You will find the most recent Debian release here:
-    [HARDN-XDR Debian Package](https://github.com/OpenSource-For-Freedom/HARDN-XDR/releases)
-- Next:
+### Clone the Repo
 ```bash
-sudo dpkg -i hardn_1.1.X_all.deb
-sudo chmod hardn-xdr
+git clone https://github.com/OpenSource-For-Freedom/HARDN-XDR
+cd HARDN-XDR
 ```
-
-## Usage
-
-After installation, you can run the hardening script:
+### Build the Package
+```bash
+dpkg-buildpackage -us -uc
+cd ..
+sudo apt install ./hardn_*_amd64.deb
+```
+### Launch the Tool
 ```bash
 sudo hardn-xdr
 ```
-This will launch an interactive menu where you can select the security modules you wish to apply.
 
-For detailed information and command-line options, consult the man page:
+### To access the man page 
+
 ```bash
 man hardn-xdr
 ```
-
-### How the Interactive Menu Works
-The interactive menu is the core of the `HARDN-XDR` script's flexibility, and it's powered by a standard Linux utility called `whiptail`. Here’s a breakdown of how it works inside the `setup_security` function in `hardn-main.sh`:
-
-#### 1. Defining the Menu Items
-First, a Bash array called `modules` is created. This array holds the definition for every single item that appears in the checklist menu. Each item consists of three parts:
-- **The script filename**: e.g., `"ufw.sh"`
-- **A user-friendly description**: e.g., `"Configure UFW Firewall"`
-- **The default state**: `ON` (checked by default) or `OFF` (unchecked by default)
-
-```bash
-local modules=(
-    "ufw.sh" "Configure UFW Firewall" ON
-    "fail2ban.sh" "Install and configure Fail2Ban" ON
-    "pentest.sh" "Install penetration testing tools" OFF
-    # ... and so on
-)
-```
-
-#### 2. Displaying the Menu
-Next, the `whiptail` command is called with the `--checklist` option. It's given the title, the instructional text, and the `modules` array. `whiptail` then draws the interactive menu on the screen. When the user clicks "Ok", `whiptail` prints their selected choices as a string, which is captured in a variable.
-
-```bash
-choices=$(whiptail --title "HARDN-XDR Security Modules" --checklist \
-    "Choose which security modules to apply:" 25 85 18 \
-    "${modules[@]}" 3>&1 1>&2 2>&3)
-```
-
-#### 3. Executing the Selected Modules
-Finally, the script loops through the user's choices. For each choice, it constructs the full path to the module script (e.g., `./modules/ufw.sh`), checks if the file exists, and then executes it using the `source` command.
-
-```bash
-for choice in $choices; do
-    # ...
-    local module_path="./modules/${choice//\"/}"
-    if [ -f "$module_path" ]; then
-        source "$module_path"
-    fi
-done
-```
-This approach makes the system very modular and easy to extend. To add a new hardening option, all that's needed is to create the new module script and add a corresponding entry to the `modules` array in `hardn-main.sh`.
+---
 
 ### Installation Notes
 - HARDN-XDR is currently being developed and tested for **BARE-METAL installs of Debian based distributions and Virtual Machines**.
@@ -132,16 +93,7 @@ This approach makes the system very modular and easy to extend. To add a new har
 - For a detailed list of all that will be changed, please refer to [HARDN.md](docs/HARDN.md).
 - For an overview of HARDN-Debian STIG Compliance, please refer to [deb_stig.md](docs/deb_stig.md).
 
-
-
-<br>
-
-
-## Actions
-
-[![CI](https://github.com/OpenSource-For-Freedom/HARDN-XDR/actions/workflows/version-control.yml/badge.svg?branch=Securejump)](https://github.com/OpenSource-For-Freedom/HARDN-XDR/actions/workflows/version-control.yml)
-
-<br>
+---
 
 ## File Structure
 
@@ -170,8 +122,6 @@ HARDN-XDR/
     ├── hardn-main.sh   # main script that launches the interactive menu.
     └── modules/        
 ```
-
-
 
 <br>
 

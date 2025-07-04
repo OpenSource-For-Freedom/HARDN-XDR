@@ -1,0 +1,133 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  statuses: write
+  checks: write
+  deployments: write
+  discussions: write
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64]
+      max-parallel: 1
+    outputs:
+      new_tag: ${{ steps.bump.outputs.new_tag }}
+      deb_out: ${{ steps.rename.outputs.deb_out }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup architecture
+        run: echo "Building for ${{ matrix.arch }}"
+
+      - name: Fetch all tags
+        run: git fetch --tags
+
+      - name: Get latest v1.1.x tag
+        id: get_tag
+        run: |
+          latest_tag=$(git tag -l "v1.1.*" --sort=-v:refname | head -n 1)
+          if [ -z "$latest_tag" ]; then
+            latest_tag="v1.1.0"
+          fi
+          echo "latest_tag=$latest_tag" >> $GITHUB_OUTPUT
+
+      - name: Extract patch version and bump
+        id: bump
+        run: |
+          tag="${{ steps.get_tag.outputs.latest_tag }}"
+          patch=$(echo "$tag" | sed 's/.*\.//')
+          new_patch=$((patch + 1))
+          new_tag="v1.1.$new_patch"
+          echo "new_tag=$new_tag"
+          echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
+
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y dpkg-dev debhelper fakeroot build-essential devscripts lintian gnupg whiptail
+
+      - name: Build Debian package
+        run: |
+          export DEB_BUILD_ARCH=${{ matrix.arch }}
+          dpkg-buildpackage -us -uc
+
+      - name: List built .deb files (debug)
+        run: |
+          echo "Contents of parent dir:"
+          ls -lh ..
+          echo "Contents of workspace:"
+          ls -lh .
+
+      - name: Rename and move .deb into workspace
+        id: rename
+        run: |
+          full_tag="${{ steps.bump.outputs.new_tag }}"
+          version="${full_tag#v}"
+          arch="${{ matrix.arch }}"
+          deb_file=$(ls ../*.deb | head -n 1)
+          if [ ! -f "$deb_file" ]; then
+            echo "::error ::No .deb file found. Package build may have failed."
+            exit 1
+          fi
+          new_name="hardn_${version}_${arch}.deb"
+          mv "$deb_file" "./$new_name"
+          echo "deb_out=${{ github.workspace }}/${new_name}" >> $GITHUB_OUTPUT
+
+      - name: Run test container with .deb and capture logs
+        run: |
+          docker run --rm -v "${{ steps.rename.outputs.deb_out }}:/tmp/hardn.deb" debian:stable-slim bash -c '
+            apt-get update &&
+            apt-get install -y whiptail sudo gnupg &&
+            dpkg -i /tmp/hardn.deb || apt-get install -f -y &&
+            echo "--- Installed Package Contents ---" &&
+            dpkg -L hardn &&
+            echo "--- Running hardn-xdr ---" &&
+            sudo hardn-xdr || echo "hardn-xdr run failed"
+          ' | tee hardn-execution.log
+
+      - name: Upload HARDN execution log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hardn-test-log
+          path: hardn-execution.log
+
+  tag-and-release:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: needs.build-and-test.outputs.deb_out != ''
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch all tags
+        run: git fetch --tags
+
+      - name: Create and push new tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "${{ needs.build-and-test.outputs.new_tag }}" -m "Release ${{ needs.build-and-test.outputs.new_tag }}"
+          git push origin "${{ needs.build-and-test.outputs.new_tag }}"
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.build-and-test.outputs.new_tag }}
+          name: "Release ${{ needs.build-and-test.outputs.new_tag }}"
+          body: "Automated release for version ${{ needs.build-and-test.outputs.new_tag }}"
+          files: ${{ needs.build-and-test.outputs.deb_out }}

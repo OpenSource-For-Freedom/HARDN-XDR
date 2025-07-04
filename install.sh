@@ -25,7 +25,15 @@ install_man_page() {
         echo -e "\033[1;32m[+] Man page installed successfully.\033[0m"
 }
 
+install_source_files() {
+  echo -e "\033[1;31m[+] Installing source files...\033[0m"
+  install -d -m 755 "$PREFIX"
+  cp -r src "$PREFIX/"
+  echo -e "\033[1;32m[+] Source files installed successfully.\033[0m"
+}
+
 install_wrapper() {
+  echo -e "\033[1;31m[+] Installing command wrapper...\033[0m"
   cat > "$WRAPPER" <<EOF
 #!/usr/bin/env bash
 # hardn-xdr command wrapper
@@ -39,6 +47,7 @@ else
 fi
 EOF
   chmod +x "$WRAPPER"
+  echo -e "\033[1;32m[+] Command wrapper installed successfully.\033[0m"
 }
 
 verify_dependencies() {
@@ -84,7 +93,7 @@ main() {
         install_files
         install_wrapper
         install_man_page
-
+        
         echo "hardn-xdr installer is ready. Run 'sudo hardn-xdr' to begin."
 }
 

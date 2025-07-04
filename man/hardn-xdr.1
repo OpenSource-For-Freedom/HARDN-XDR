@@ -1,61 +1,61 @@
 .TH "HARDN-XDR" 1 "July 1, 2025" "1.1.50" "HARDN-XDR User Manuals"
 .SH NAME
-hardn-xdr - A Linux Security Hardening Sentinel
+hardn-xdr \- A Linux Security Hardening Sentinel
 .SH SYNOPSIS
 .B hardn-xdr
-[I--versionP|I-vP]
-[I--helpP|I-hP]
+[\fI--version\fR | \fI-v\fR]
+[\fI--help\fR | \fI-h\fR]
 .SH DESCRIPTION
-BHARDN-XDRP is a comprehensive security hardening script for Debian-based systems. It applies a wide range of security configurations, installs monitoring tools, and configures the system to be compliant with STIG (Security Technical Implementation Guide) standards.
+\fBHARDN-XDR\fR is a comprehensive security hardening script for Debian-based systems. It applies a wide range of security configurations, installs monitoring tools, and configures the system to be compliant with STIG (Security Technical Implementation Guide) standards.
 The script provides a menu-driven interface to select which security modules to apply, allowing for a customized hardening process.
 .SH OPTIONS
 .TP
-B--version, -vP
+\fB--version, -v\fR
 Displays the version of HARDN-XDR.
 .TP
-B--help, -hP
+\fB--help, -h\fR
 Displays the help message.
 .SH MODULES
 The following modules can be selected in the main menu:
 .TP
-BConfigure UFW FirewallP
+\fBConfigure UFW Firewall\fR
 Installs and configures UFW (Uncomplicated Firewall) with a default deny policy for incoming traffic and allows essential services.
 .TP
-BInstall and configure Fail2BanP
+\fBInstall and configure Fail2Ban\fR
 Installs and configures Fail2Ban to protect against brute-force attacks.
 .TP
-BHarden SSH ServerP
+\fBHarden SSH Server\fR
 Applies security best practices to the OpenSSH server configuration.
 .TP
-BSetup Auditd for system monitoringP
+\fBSetup Auditd for system monitoring\fR
 Installs and configures the Linux Audit Daemon to log security-relevant events.
 .TP
-BApply Kernel Security HardeningP
+\fBApply Kernel Security Hardening\fR
 Applies a set of security-focused kernel parameters via sysctl.
 .TP
-BEnforce STIG password qualityP
+\fBEnforce STIG password quality\fR
 Configures password policies to meet STIG requirements.
 .TP
-BHarden GRUB bootloaderP
+\fBHarden GRUB bootloader\fR
 Sets a password for the GRUB bootloader to protect against unauthorized boot-time changes.
 .TP
-BInstall AIDE for file integrityP
+\fBInstall AIDE for file integrity\fR
 Installs AIDE (Advanced Intrusion Detection Environment) to monitor file integrity.
 .TP
-BInstall rkhunter (Rootkit Hunter)P
+\fBInstall rkhunter (Rootkit Hunter)\fR
 Installs rkhunter to scan for rootkits and other malware.
 .TP
-BInstall chkrootkitP
+\fBInstall chkrootkit\fR
 Installs chkrootkit, another tool to scan for rootkits.
 .TP
-BAnd many more...P
+\fBAnd many more...\fR
 Includes modules for automatic updates, central logging, SELinux, and more.
 .SH FILES
 .TP
-I/etc/hardn-xdr/P
+\fI/etc/hardn-xdr/\fR
 The main configuration directory for HARDN-XDR.
 .TP
-I/var/log/hardn-xdr.logP
+\fI/var/log/hardn-xdr.log\fR
 The main log file for the HARDN-XDR script.
 .SH BUGS
 Please report any bugs to the developers.
