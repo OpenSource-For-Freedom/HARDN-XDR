@@ -1,5 +1,5 @@
 install.sh                      usr/lib/hardn-xdr/
 src/setup/hardn-main.sh          usr/lib/hardn-xdr/src/setup/
-src/setup/modules/               usr/lib/hardn-xdr/src/setup/modules/
+src/setup/modules                usr/lib/hardn-xdr/src/setup/
 hardn-xdr                        usr/bin/
 man/hardn-xdr.1                  usr/share/man/man1/

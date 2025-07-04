@@ -66,6 +66,7 @@ cd HARDN-XDR
 ### Build the Package
 ```bash
 dpkg-buildpackage -us -uc
+sudo apt install -f
 cd ..
 sudo apt install ./hardn_*_amd64.deb
 ```
