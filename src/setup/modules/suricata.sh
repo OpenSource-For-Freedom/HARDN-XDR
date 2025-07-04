@@ -3,7 +3,6 @@
 # Install and configure Suricata IDS/IPS
 # This script is designed to be sourced as a module from hardn-main.sh
 
-# Function to install Suricata and dependencies
 install_suricata() {
         HARDN_STATUS "info" "Installing Suricata and dependencies..."
 
