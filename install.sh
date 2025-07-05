@@ -10,6 +10,34 @@ check_root() {
         [ $EUID -eq 0 ] || { echo "Please run as root." >&2; exit 1; }
 }
 
+check_sudo_cve_vulnerability() {
+    echo -e "\033[1;31m[+] Checking for sudo CVE-2025-32463 / CVE-2025-23381...\033[0m"
+
+    # Minimum secure version known to be patched
+    local required_version="1.9.17p1"
+    local installed_version
+
+    # Extract version number
+    if command -v sudo >/dev/null 2>&1; then
+        installed_version=$(sudo -V | head -n1 | awk '{print $NF}')
+    else
+        echo -e "\033[1;33m[WARNING]\033[0m sudo not found on system. Cannot verify vulnerability."
+        return
+    fi
+
+    # Compare using dpkg if available
+    if command -v dpkg >/dev/null 2>&1; then
+        if dpkg --compare-versions "$installed_version" lt "$required_version"; then
+            echo -e "\033[1;31m[CRITICAL]\033[0m Your sudo version ($installed_version) is vulnerable to CVE-2025-23381."
+            echo -e "\033[1;33m[WARNING]\033[0m Please run: \033[1;34msudo apt install sudo\033[0m to upgrade before using HARDN-XDR."
+        else
+            echo -e "\033[1;32m[OK]\033[0m Sudo version $installed_version is secure."
+        fi
+    else
+        echo -e "\033[1;33m[WARNING]\033[0m dpkg not available; cannot compare versions reliably."
+    fi
+}
+
 update_system() {
         echo -e "\033[1;31m[+] Updating system...\033[0m"
         DEBIAN_FRONTEND=noninteractive apt-get update -y
@@ -85,9 +113,22 @@ install_files() {
         install -d -m 755 "$PREFIX" && cp -r src "$PREFIX/" && chmod -R 755 "$PREFIX/src"
         echo -e "\033[1;32m[+] HARDN-XDR files installed successfully.\033[0m"
 }
+# CVE‑2025‑32463/CVE‑2025‑23381
+check_sudo_version() {
+  echo "[+] Checking sudo version…"
+  local req="1.9.17p1"
+  local inst=$(sudo -V | head -n1 | awk '{print $NF}')
+  if dpkg --compare-versions "$inst" lt "$req"; then
+    echo "Installed sudo $inst is vulnerable to CVE-2025-32463/23381. Upgrade to ≥ $req."
+  else
+    echo "sudo $inst is patched."
+  fi
+}
 
 main() {
         check_root
+        check_sudo_version
+        check_sudo_cve_vulnerability
         verify_dependencies
         update_system
         install_files
