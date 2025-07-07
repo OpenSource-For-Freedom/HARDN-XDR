@@ -1,20 +1,21 @@
 #!/bin/bash
-set -e
+set -ex
 
-case "$1" in
-  configure)
-    echo "[postinst] Setting executable permissions..."
-    find /usr/lib/hardn-xdr/src/setup/modules -type f -name "*.sh" -exec chmod +x {} \;
+LOG_FILE="/tmp/postinst.log"
 
-    chmod +x /usr/lib/hardn-xdr/install.sh || true
-    chmod +x /usr/lib/hardn-xdr/src/setup/hardn-main.sh || true
+{
+  echo "[postinst] Executed on $(date)"
+  echo "[postinst] Checking install.sh..."
 
-    echo "[postinst] Running install.sh to finalize setup..."
-    bash /usr/lib/hardn-xdr/install.sh || true
-
-    echo "HARDN-XDR installation complete."
+  if [ -x /usr/lib/hardn-xdr/install.sh ]; then
+    echo "[postinst] Found install.sh, executing..."
+    /usr/lib/hardn-xdr/install.sh
+    echo "[postinst] HARDN-XDR installation complete."
     echo "Run with: sudo hardn-xdr"
-    ;;
-esac
+  else
+    echo "[postinst] ERROR: install.sh not found or not executable."
+    exit 1
+  fi
+} | tee "$LOG_FILE"
 
 exit 0

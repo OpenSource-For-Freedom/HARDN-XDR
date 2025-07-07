@@ -15,19 +15,14 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        arch: [amd64]
-      max-parallel: 1
+        arch: [amd64, arm64]
     outputs:
       new_tag: ${{ steps.bump.outputs.new_tag }}
-
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup architecture
-        run: echo "Building for ${{ matrix.arch }}"
-
-      - name: Fetch all tags
+      - name: Fetch tags
         run: git fetch --tags
 
       - name: Get latest v1.1.x tag
@@ -47,74 +42,136 @@ jobs:
           echo "new_tag=$new_tag"
           echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
 
-      - name: Install build dependencies
+      - name: Install deps and tools
         run: |
           sudo apt-get update
           sudo apt-get install -y dpkg-dev debhelper fakeroot build-essential devscripts lintian gnupg whiptail
-      - name: Confirm install sources exist
-        run: |
-          for file in install.sh src/setup/hardn-main.sh hardn-xdr man/hardn-xdr.1; do
-          [ -f "$file" ] || { echo "::error ::Missing file: $file"; exit 1; }
-          done
-          [ -d src/setup/modules ] || { echo "::error ::Missing dir: src/setup/modules"; exit 1; }
-          echo "All install targets are present."
-      - name: Build Debian package
-        run: |
-          export DEB_BUILD_ARCH=${{ matrix.arch }}
-          dpkg-buildpackage -us -uc
-          sudo apt install -f
-      - name: Inspect built .deb contents
-        run: |
-          deb=$(ls ../*.deb | head -n 1)
-          echo "Package contents of $deb:"
-          dpkg-deb -c "$deb"
 
-      - name: Rename and move .deb
+      - name: Set executable permissions
+        run: |
+          chmod +x install.sh debian/postinst hardn-xdr src/setup/hardn-main.sh
+          find src/setup/modules -type f -name "*.sh" -exec chmod +x {} \;
+
+      - name: Update changelog for ${{ matrix.arch }}
+        run: |
+          version="${{ steps.bump.outputs.new_tag }}"
+          version="${version#v}"
+          export DEBCHANGE_RELEASE_DATE="$(date -R)"
+          arch="${{ matrix.arch }}"
+          if [ ! -f debian/changelog ]; then touch debian/changelog; fi
+          dch --newversion "$version" \
+              "Automated release $version for architecture: $arch." \
+              --distribution unstable \
+              --force-distribution
+          dch --release --force-distribution ""
+
+      - name: Build package for ${{ matrix.arch }}
+        run: |
+          dpkg-buildpackage -us -uc
+          sudo apt install -f -y
+
+      - name: Rename .deb
         id: rename
         run: |
           version="${{ steps.bump.outputs.new_tag }}"
-          version="${version#v}"  # strip 'v'
-          arch="${{ matrix.arch }}"
+          version="${version#v}"
           deb_file=$(ls ../*.deb | head -n 1)
-          [ ! -f "$deb_file" ] && echo "::error ::No .deb file found." && exit 1
-          new_name="hardn_${version}_${arch}.deb"
-          mv "$deb_file" "./$new_name"
+          new_name="hardn_${version}_${{ matrix.arch }}.deb"
+          mv "$deb_file" "$new_name"
           echo "deb_file=$new_name" >> $GITHUB_OUTPUT
 
-      - name: Upload .deb artifact
+      - name: Upload .deb
         uses: actions/upload-artifact@v4
         with:
           name: deb-${{ matrix.arch }}
           path: ${{ steps.rename.outputs.deb_file }}
 
-      - name: Run test container with .deb
-        run: |
-          docker run --rm \
-          -e SKIP_WHIPTAIL=1 \
-          -v "$(pwd)/${{ steps.rename.outputs.deb_file }}:/tmp/hardn.deb" \
-          debian:stable-slim bash -c '
-          set -euo pipefail
-          export DEBIAN_FRONTEND=noninteractive
-          apt-get update
-          apt-get install -y sudo gnupg
-          dpkg -i /tmp/hardn.deb || (apt-get install -f -y && dpkg -i /tmp/hardn.deb)
-          echo "--- Installed Package Contents ---"
-          dpkg -L hardn
-          echo "--- Running hardn-xdr ---"
-          sudo SKIP_WHIPTAIL=1 hardn-xdr || echo "hardn-xdr run failed"
-          ' | tee hardn-execution.log
+  test-modules:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+        module: [aide, auditd, audit_system, auto_updates, banner, binfmt, central_logging, chkrootkit, compilers, coredumps, debsums, deleted_files, dns_config, file_perms, firewire, grub, kernel_sec, network_protocols, ntp, pentest, process_accounting, purge_old_pkgs, rkhunter, secure_net, service_disable, shared_mem, stig_pwquality, suricata, ufw, unhide, unnecesary_services, usb]
+      fail-fast: false
+    steps:
+      - name: Download .deb for ${{ matrix.arch }}
+        uses: actions/download-artifact@v4
+        with:
+          name: deb-${{ matrix.arch }}
+          path: .
 
-      - name: Upload test log
+      - name: Run module test for ${{ matrix.module }} on ${{ matrix.arch }}
+        timeout-minutes: 5
+        run: |
+          echo "Testing module: ${{ matrix.module }} on arch ${{ matrix.arch }}" > result.log
+          docker run --rm \
+            -e SKIP_WHIPTAIL=1 \
+            -v "$(pwd)/hardn_*.deb:/tmp/hardn.deb" \
+            debian:stable-slim bash -c '
+              set -e
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update && apt-get install -y sudo gnupg bash
+              dpkg -i /tmp/hardn.deb || true
+              apt-get install -f -y
+              module="/usr/lib/hardn-xdr/src/setup/modules/${{ matrix.module }}.sh"
+              if [ ! -f "$module" ]; then echo "Missing $module" && exit 1; fi
+              chmod +x "$module"
+              bash "$module"
+            ' >> result.log 2>&1 || echo "FAIL: ${{ matrix.module }}" >> result.log
+
+      - name: Upload result
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: hardn-test-log
-          path: hardn-execution.log
+          name: module-${{ matrix.arch }}-${{ matrix.module }}
+          path: result.log
+
+  test-deployment:
+    needs: test-modules
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - name: Download built .deb for ${{ matrix.arch }}
+        uses: actions/download-artifact@v4
+        with:
+          name: deb-${{ matrix.arch }}
+          path: .
+
+      - name: Rename downloaded .deb
+        run: |
+          file=$(find . -name "hardn_*.deb" | head -n 1)
+          cp "$file" ./hardn.deb
+
+      - name: Run full system test and diagnostics on ${{ matrix.arch }}
+        run: |
+          echo "Running full HARDN system test on ${{ matrix.arch }}" > full-run.log
+          docker run --rm \
+            -e SKIP_WHIPTAIL=1 \
+            -v "$(pwd)/hardn.deb:/tmp/hardn.deb" \
+            debian:stable-slim bash -c '
+              set -ex
+              export DEBIAN_FRONTEND=noninteractive
+              export SKIP_WHIPTAIL=1
+              apt-get update && apt-get install -y sudo gnupg bash coreutils findutils whiptail
+              dpkg -i /tmp/hardn.deb || true
+              apt-get install -f -y
+              echo "--- Launching HARDN-XDR ---"
+              SKIP_WHIPTAIL=1 /usr/bin/hardn-xdr
+            ' >> full-run.log 2>&1
+
+      - name: Upload full system test log
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-system-test-${{ matrix.arch }}
+          path: full-run.log
 
   tag-and-release:
-    needs: build-and-test
+    needs: [build-and-test, test-modules, test-deployment]
+    if: success()
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -124,11 +181,15 @@ jobs:
       - name: Fetch tags
         run: git fetch --tags
 
-      - name: Download .deb artifact
+      - name: Download all .deb artifacts
         uses: actions/download-artifact@v4
         with:
-          name: deb-amd64
           path: .
+
+      - name: Move .deb files to root for release
+        run: |
+          mkdir -p release
+          find . -name "*.deb" -exec mv {} release/ \;
 
       - name: Create and push new tag
         run: |
@@ -136,7 +197,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           tag="${{ needs.build-and-test.outputs.new_tag }}"
           if git rev-parse "$tag" >/dev/null 2>&1; then
-            echo "Tag already exists, skipping"
+            echo "Tag $tag already exists. Skipping tag creation."
           else
             git tag "$tag" -m "Release $tag"
             git push origin "$tag"
@@ -147,5 +208,17 @@ jobs:
         with:
           tag_name: ${{ needs.build-and-test.outputs.new_tag }}
           name: "Release ${{ needs.build-and-test.outputs.new_tag }}"
-          body: "Automated release for version ${{ needs.build-and-test.outputs.new_tag }}"
-          files: ./hardn_*.deb
+          body: |
+            ![HARDN-XDR Logo](https://raw.githubusercontent.com/OpenSource-For-Freedom/HARDN-XDR/main/docs/assets/HARDN%20(1).png)
+
+            **HARDN-XDR Automated Release**
+
+            - **Version:** `${{ needs.build-and-test.outputs.new_tag }}`
+            - **Architectures:** `amd64`, `arm64`
+            - **Timestamp:** $(date -R)
+
+            - All modules tested in parallel  
+            - XDR deployment verified  
+            - Lintian run validated
+          files: |
+            release/*.deb

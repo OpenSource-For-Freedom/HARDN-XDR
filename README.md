@@ -2,6 +2,12 @@
   <img src="https://img.shields.io/badge/OS: Debian Systems-red?style=for-the-badge&labelColor=grey" alt="OS: DEBIAN 12"><br><br>
 </p>
 
+<div align="center">
+
+![arch](https://img.shields.io/badge/arch-amd64:arm64-blue?style=flat-square&logo=linux)
+
+</div>
+
 <p align="center">
   <img src="https://github.com/OpenSource-For-Freedom/HARDN-XDR/blob/main/docs/assets/HARDN%20(1).png" /><br><br>
   <img src="https://img.shields.io/badge/The_Linux_Security_Project-red?style=for-the-badge&labelColor=black" alt="The Linux Security Project"><br><br>
@@ -54,23 +60,46 @@
   <img src="https://img.shields.io/badge/INSTALLATION-white?style=for-the-badge&labelColor=black" alt="INSTALLATION"><br><br>
 </p>
 
-## Quick Start
+## Quick Start 
 
-## HARDN-XDR Install
+### Install from GitHub
 
-### Clone the Repo
+- HARDN-XDR is being tested for "Multi-Arch" deployments, specify your architecture from the releases page and change the install commands accordingly. 
+
+1. Download the latest `.deb` package: [amd64:arm64]
+   Visit: https://github.com/OpenSource-For-Freedom/HARDN-XDR/releases
+
+2. Install the package:
+```bash
+sudo apt install ./hardn_*_amd64.deb
+```
+
+3. Run the tool:
+```bash
+sudo hardn-xdr
+```
+
+### Build from Source:
+
+1. Clone the repository:
 ```bash
 git clone https://github.com/OpenSource-For-Freedom/HARDN-XDR
 cd HARDN-XDR
 ```
-### Build the Package
+
+2. Build the Debian package:
 ```bash
 dpkg-buildpackage -us -uc
 sudo apt install -f
 cd ..
+```
+
+3. Install the package: (specify the arch) 
+```bash
 sudo apt install ./hardn_*_amd64.deb
 ```
-### Launch the Tool
+
+4. Run the tool:
 ```bash
 sudo hardn-xdr
 ```
@@ -98,30 +127,26 @@ man hardn-xdr
 
 ## File Structure
 
+```mermaid
+graph TD
+    A[HARDN-XDR root]
+    A --> B[install.sh]
+    A --> C[hardn-xdr]
+    A --> D[man/]
+    D --> D1[hardn-xdr.1]
+    A --> E[src/]
+    E --> E1[setup/]
+    E1 --> E1a[hardn-main.sh]
+    E1 --> E1b[modules/]
+    E1b --> M1[module1.sh]
+    E1b --> M2[module2.sh]
+    E1b --> M3[...]
 
-```bash
-HARDN-XDR/
-├── debian/                
-│   ├── changelog           
-│   ├── compat              
-│   ├── control             
-│   ├── copyright           
-│   ├── install   
-│   ├── postinst  
-│   └── rules               
-├── docs/                 
-│   ├── assets/            
-│   ├── HARDN.md            
-│   └── deb_stig.md        
-├── install.sh              # Main installation script for the application.
-├── LICENSE                 
-├── man/                    
-│   └── hardn-xdr.1         # Man page for the hardn-xdr command.
-├── README.md               
-└── src/                    
-  └── setup/             
-    ├── hardn-main.sh   # main script that launches the interactive menu.
-    └── modules/        
+    A --> F[debian/]
+    F --> F1[control]
+    F --> F2[postinst]
+    F --> F3[rules]
+    F --> F4[changelog]
 ```
 
 <br>
@@ -133,10 +158,6 @@ HARDN-XDR/
 
 <p align="center">
   <img src="docs/assets/cybersynapse.png" alt="CyberSynapse Logo" />
-</p>
-
-<p align="center">
-  <img src="docs/assets/securejump.jpg" alt="SecureJump Logo" />
 </p>
 
 <br>
@@ -152,9 +173,3 @@ This project is licensed under the MIT License.
 <p align="center">
   <img src="https://img.shields.io/badge/CONTACT-white?style=for-the-badge&labelColor=black" alt="CONTACT"><br><br>
 office@cybersynapse.ro
-<br>
-contacto@securejump.cl
-</p>
-
-
-

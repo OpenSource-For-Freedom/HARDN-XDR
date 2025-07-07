@@ -2,3 +2,9 @@
 
 %:
 	dh $@
+
+override_dh_install:
+	chmod +x hardn-xdr
+	chmod +x src/setup/hardn-main.sh
+	find src/setup/modules -type f -name "*.sh" -exec chmod +x {} \;
+	dh_install

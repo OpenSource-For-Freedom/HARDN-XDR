@@ -1,2 +1,2 @@
 #!/bin/bash
-exec /usr/lib/hardn-xdr/src/setup/hardn-main.sh "$@"
+exec /usr/lib/hardn-xdr/src/setup/hardn-main.sh "$@""

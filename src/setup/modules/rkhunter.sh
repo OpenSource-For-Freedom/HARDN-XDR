@@ -10,79 +10,72 @@ is_installed() {
     elif command -v rpm >/dev/null 2>&1; then
         rpm -q "$1" >/dev/null 2>&1
     else
-        return 1 # Cannot determine package manager
+        return 1
     fi
+}
+# for arch status first , arm64 wont support this package 
+ARCH=$(uname -m)
+HARDN_STATUS "info" "Detected architecture: $ARCH"
+
+if [[ "$ARCH" == "aarch64" || "$ARCH" == "arm64" ]]; then
+    HARDN_STATUS "warning" "rkhunter may not be fully supported or available on $ARCH. Attempting fallback install..."
+fi
+
+HARDN_STATUS "info" "Installing rkhunter prerequisites..."
+apt-get update
+apt-get install -y curl file gnupg2 net-tools sudo bash binutils whiptail lsof findutils || {
+    HARDN_STATUS "error" "Failed to install prerequisites"
+    exit 1
 }
 
 HARDN_STATUS "info" "Configuring rkhunter..."
+
 if ! is_installed rkhunter; then
-	HARDN_STATUS "info" "rkhunter package not found. Attempting to install..."
-    if command -v apt-get >/dev/null 2>&1; then
-        apt-get install -y rkhunter >/dev/null 2>&1
-    elif command -v dnf >/dev/null 2>&1; then
-        dnf install -y rkhunter >/dev/null 2>&1
-    elif command -v yum >/dev/null 2>&1; then
-        yum install -y rkhunter >/dev/null 2>&1
+    HARDN_STATUS "info" "rkhunter not found in system. Trying apt install..."
+    apt-get install -y rkhunter || HARDN_STATUS "warning" "rkhunter not found in apt, trying GitHub fallback."
+fi
+
+if ! is_installed rkhunter; then
+    if ! is_installed git; then
+        HARDN_STATUS "info" "Installing git for GitHub fallback..."
+        apt-get install -y git || {
+            HARDN_STATUS "error" "Git install failed. Cannot proceed."
+            exit 1
+        }
     fi
 
-	if ! is_installed rkhunter; then
-		HARDN_STATUS "warning" "Warning: Failed to install rkhunter via package manager. Attempting to download and install from GitHub as a fallback..."
-		# Ensure git is installed for GitHub clone
-		if ! is_installed git; then
-			HARDN_STATUS "info" "Installing git..."
-			if command -v apt-get >/dev/null 2>&1; then
-                apt-get install -y git >/dev/null 2>&1
-            elif command -v dnf >/dev/null 2>&1; then
-                dnf install -y git >/dev/null 2>&1
-            elif command -v yum >/dev/null 2>&1; then
-                yum install -y git >/dev/null 2>&1
-            fi
+    cd /tmp || exit 1
+    git clone https://github.com/Rootkit-Hunter/rkhunter.git rkhunter_github_clone || {
+        HARDN_STATUS "error" "Failed to clone rkhunter repo"
+        exit 1
+    }
 
-			if ! is_installed git; then
-				HARDN_STATUS "error" "Error: Failed to install git. Cannot proceed with GitHub install."
-				# Skip GitHub install if git fails
-				return
-			fi
-		fi
+    cd rkhunter_github_clone
+    ./installer.sh --layout DEB >/dev/null 2>&1 && ./installer.sh --install >/dev/null 2>&1 || {
+        HARDN_STATUS "error" "GitHub rkhunter installer failed"
+        cd .. && rm -rf rkhunter_github_clone
+        exit 1
+    }
 
-		cd /tmp || { HARDN_STATUS "error" "Error: Cannot change directory to /tmp."; return 1; }
-		HARDN_STATUS "info" "Cloning rkhunter from GitHub..."
-		if git clone https://github.com/Rootkit-Hunter/rkhunter.git rkhunter_github_clone >/dev/null 2>&1; then
-			cd rkhunter_github_clone || { HARDN_STATUS "error" "Error: Cannot change directory to rkhunter_github_clone."; return 1; }
-			HARDN_STATUS "info" "Running rkhunter installer..."
-			if ./installer.sh --layout DEB >/dev/null 2>&1; then
-			    ./installer.sh --install >/dev/null 2>&1 || {
-					HARDN_STATUS "error" "Error: rkhunter installer failed."
-					cd .. && rm -rf rkhunter_github_clone
-					return 1
-				}
-				HARDN_STATUS "pass" "rkhunter installed successfully from GitHub."
-			else
-				HARDN_STATUS "error" "Error: rkhunter installer failed."
-			fi
-			cd .. && rm -rf rkhunter_github_clone
-		else
-			HARDN_STATUS "error" "Error: Failed to clone rkhunter from GitHub."
-		fi
-	fi
+    cd .. && rm -rf rkhunter_github_clone
+    HARDN_STATUS "pass" "rkhunter installed from GitHub."
 else
-	HARDN_STATUS "pass" "rkhunter package is already installed."
+    HARDN_STATUS "pass" "rkhunter installed via package manager."
 fi
 
-if command -v rkhunter >/dev/null 2>&1; then
-	# fixes: issue with git install where /etc/default/rkhunter is not created during the installation process
-	test -e /etc/default/rkhunter || touch /etc/default/rkhunter
 
-	sed -i 's/#CRON_DAILY_RUN=""/CRON_DAILY_RUN="true"/' /etc/default/rkhunter 2>/dev/null || true
-
-
-	rkhunter --overwrite >/dev/null 2>&1 || true
-	rkhunter --version >/dev/null 2>&1 || {
-		HARDN_STATUS "warning" "Warning: Failed to update rkhunter database."
-	}
-	rkhunter --show >/dev/null 2>&1 || {
-		HARDN_STATUS "warning" "Warning: Failed to update rkhunter properties."
-	}
-else
-	HARDN_STATUS "warning" "Warning: rkhunter not found, skipping configuration."
+if ! command -v rkhunter >/dev/null 2>&1; then
+    HARDN_STATUS "error" "rkhunter not found in path after install."
+    exit 1
 fi
+
+test -e /etc/default/rkhunter || touch /etc/default/rkhunter
+sed -i 's/#CRON_DAILY_RUN=""/CRON_DAILY_RUN="true"/' /etc/default/rkhunter 2>/dev/null || true
+
+rkhunter --propupd >/dev/null 2>&1 || HARDN_STATUS "warning" "Failed: rkhunter --propupd"
+rkhunter --version || {
+    HARDN_STATUS "error" "rkhunter command failed post-install"
+    exit 1
+}
+
+HARDN_STATUS "pass" "rkhunter installed and configured successfully on $ARCH."

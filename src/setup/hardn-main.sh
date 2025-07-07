@@ -287,8 +287,19 @@ main_menu() {
 main() {
     print_ascii_banner
     show_system_info
-    welcomemsg
-    main_menu
+
+    echo "[DEBUG] SKIP_WHIPTAIL=${SKIP_WHIPTAIL:-unset}"
+
+    if [[ "$SKIP_WHIPTAIL" == "1" ]]; then
+        echo "[INFO] SKIP_WHIPTAIL is set. Running in non-interactive CI mode."
+        update_system_packages
+        install_package_dependencies
+        setup_all_security_modules
+        cleanup
+    else
+        welcomemsg
+        main_menu
+    fi
 
     print_ascii_banner
 
