@@ -49,7 +49,7 @@ jobs:
 
       - name: Set executable permissions
         run: |
-          chmod +x install.sh debian/postinst hardn-xdr src/setup/hardn-main.sh
+          chmod +x install.sh debian/postinst src/setup/hardn-main.sh
           find src/setup/modules -type f -name "*.sh" -exec chmod +x {} \;
 
       - name: Update changelog for ${{ matrix.arch }}
@@ -102,7 +102,7 @@ jobs:
           path: .
 
       - name: Run module test for ${{ matrix.module }} on ${{ matrix.arch }}
-        timeout-minutes: 8
+        timeout-minutes: ${{ matrix.module == 'aide' && 15 || 5 }}
         run: |
           echo "Testing module: ${{ matrix.module }} on arch ${{ matrix.arch }}" > result.log
           docker run --rm \
