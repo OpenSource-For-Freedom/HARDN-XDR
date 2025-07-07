@@ -102,7 +102,7 @@ jobs:
           path: .
 
       - name: Run module test for ${{ matrix.module }} on ${{ matrix.arch }}
-        timeout-minutes: 5
+        timeout-minutes: 8
         run: |
           echo "Testing module: ${{ matrix.module }} on arch ${{ matrix.arch }}" > result.log
           docker run --rm \

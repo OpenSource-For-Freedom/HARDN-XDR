@@ -76,6 +76,7 @@ verify_dependencies() {
 }
 
 install_files() {
+
     log "[+] Installing HARDN-XDR files..."
     install -d -m 755 "$PREFIX" && cp -r src "$PREFIX/" && chmod -R 755 "$PREFIX/src"
     log "[✓] HARDN-XDR files installed successfully."
@@ -98,3 +99,4 @@ main() {
 }
 
 main "$@"
+

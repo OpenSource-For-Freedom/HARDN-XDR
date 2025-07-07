@@ -150,13 +150,20 @@ EOF
 
 run_module() {
     local module_file="$1"
-    local module_path="./modules/${module_file}"
-    if [ -f "$module_path" ]; then
-        HARDN_STATUS "info" "Executing module: ${module_file}"
-        # shellcheck source=./modules/ufw.sh
-        source "$module_path"
+
+    # Try installed path (Deb package location)
+    local module_path_installed="/usr/lib/hardn-xdr/src/setup/modules/$module_file"
+    # Fallback dev path
+    local module_path_local="./modules/$module_file"
+
+    if [ -f "$module_path_installed" ]; then
+        HARDN_STATUS "info" "Executing module (installed path): ${module_file}"
+        source "$module_path_installed"
+    elif [ -f "$module_path_local" ]; then
+        HARDN_STATUS "info" "Executing module (local dev path): ${module_file}"
+        source "$module_path_local"
     else
-        HARDN_STATUS "error" "Module not found: ${module_path}"
+        HARDN_STATUS "error" "Module not found in either path: $module_file"
     fi
 }
 
