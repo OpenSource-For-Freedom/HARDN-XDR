@@ -115,10 +115,15 @@ jobs:
               dpkg -i /tmp/hardn.deb || true
               apt-get install -f -y
               module="/usr/lib/hardn-xdr/src/setup/modules/${{ matrix.module }}.sh"
-              if [ ! -f "$module" ]; then echo "Missing $module" && exit 1; fi
+              if [ ! -f "$module" ]; then echo "FAIL: $module missing" && exit 1; fi
               chmod +x "$module"
-              bash "$module"
-            ' >> result.log 2>&1 || echo "FAIL: ${{ matrix.module }}" >> result.log
+              if bash "$module"; then
+                echo "PASS: ${{ matrix.module }}"
+              else
+                echo "FAIL: ${{ matrix.module }}"
+                exit 1
+              fi
+            ' >> result.log 2>&1
 
       - name: Upload result
         if: always()
@@ -127,8 +132,37 @@ jobs:
           name: module-${{ matrix.arch }}-${{ matrix.module }}
           path: result.log
 
-  test-deployment:
+  summarize-results:
     needs: test-modules
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all module test artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: results
+
+      - name: Combine logs
+        run: |
+          mkdir -p summary
+          find results -name result.log -exec cat {} \; > summary/summary.log
+          echo "== Combined Module Test Results =="
+          cat summary/summary.log
+
+      - name: Upload Summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: module-test-summary
+          path: summary/summary.log
+
+      - name: Fail if any module failed
+        run: |
+          if grep -q "FAIL:" summary/summary.log; then
+            echo "::error ::One or more modules failed."
+            exit 1
+          fi
+
+  test-deployment:
+    needs: summarize-results
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -169,7 +203,7 @@ jobs:
           path: full-run.log
 
   tag-and-release:
-    needs: [build-and-test, test-modules, test-deployment]
+    needs: [build-and-test, summarize-results, test-deployment]
     if: success()
     runs-on: ubuntu-latest
     steps:
