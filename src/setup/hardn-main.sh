@@ -5,7 +5,6 @@
 # About this script:
 # STIG Compliance: Security Technical Implementation Guide.
 
-
 HARDN_VERSION="1.1.50"
 export APT_LISTBUGS_FRONTEND=none
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -16,23 +15,14 @@ HARDN_STATUS() {
     local status="$1"
     local message="$2"
     case "$status" in
-        "pass")
-            echo -e "\033[1;32m[PASS]\033[0m $message"
-            ;;
-        "warning")
-            echo -e "\033[1;33m[WARNING]\033[0m $message"
-            ;;
-        "error")
-            echo -e "\033[1;31m[ERROR]\033[0m $message"
-            ;;
-        "info")
-            echo -e "\033[1;34m[INFO]\033[0m $message"
-            ;;
-        *)
-            echo -e "\033[1;37m[UNKNOWN]\033[0m $message"
-            ;;
+        "pass")    echo -e "\033[1;32m[PASS]\033[0m $message" ;;
+        "warning") echo -e "\033[1;33m[WARNING]\033[0m $message" ;;
+        "error")   echo -e "\033[1;31m[ERROR]\033[0m $message" ;;
+        "info")    echo -e "\033[1;34m[INFO]\033[0m $message" ;;
+        *)         echo -e "\033[1;37m[UNKNOWN]\033[0m $message" ;;
     esac
 }
+
 detect_os_details() {
     if [[ -r /etc/os-release ]]; then
         source /etc/os-release
@@ -52,7 +42,6 @@ show_system_info() {
         echo "Detected OS: ${ID:-Unknown} ${CURRENT_DEBIAN_VERSION_ID} (${CURRENT_DEBIAN_CODENAME})"
     fi
     echo "Features: STIG Compliance, Malware Detection, System Hardening"
-    echo "Security Tools: UFW, Fail2Ban, AppArmor, AIDE, rkhunter, and more"
     echo ""
 }
 
@@ -76,7 +65,6 @@ preinstallmsg() {
     echo ""
     whiptail --title "HARDN-XDR" --msgbox "Welcome to HARDN-XDR. A Linux Security Hardening program." 10 60
     echo "The system will be configured to ensure STIG and Security compliance."
-
 }
 
 update_system_packages() {
@@ -111,7 +99,6 @@ install_package_dependencies() {
 }
 
 print_ascii_banner() {
-
     local terminal_width
     terminal_width=$(tput cols)
     local banner
@@ -145,16 +132,13 @@ EOF
     done <<< "$banner"
     sleep 2
     printf "\033[0m"
-
 }
 
 run_module() {
     local module_file="$1"
 
-    # Try installed path (Deb package location)
     local module_path_installed="/usr/lib/hardn-xdr/src/setup/modules/$module_file"
-    # Fallback dev path
-    local module_path_local="./modules/$module_file"
+    local module_path_local="${SCRIPT_DIR}/modules/$module_file"
 
     if [ -f "$module_path_installed" ]; then
         HARDN_STATUS "info" "Executing module (installed path): ${module_file}"
@@ -168,7 +152,7 @@ run_module() {
 }
 
 setup_all_security_modules() {
-    HARDN_STATUS "info" "Installing all security modules..."
+    HARDN_STATUS "info" "Installing security modules..."
     local modules=(
         "ufw.sh" "fail2ban.sh" "sshd.sh" "auditd.sh" "kernel_sec.sh"
         "stig_pwquality.sh" "grub.sh" "aide.sh" "rkhunter.sh" "chkrootkit.sh"
@@ -241,7 +225,6 @@ setup_security(){
     fi
 
     for choice in $choices; do
-        # Remove quotes from the choice
         local module_file=$(echo "$choice" | tr -d '"')
         run_module "$module_file"
     done
@@ -257,7 +240,6 @@ cleanup() {
     HARDN_STATUS "pass" "System cleanup completed. Unused packages and cache cleared."
     whiptail --infobox "HARDN-XDR v${HARDN_VERSION} setup complete! Please reboot your system." 8 75
     sleep 3
-
 }
 
 main_menu() {
@@ -295,8 +277,6 @@ main() {
     print_ascii_banner
     show_system_info
 
-    echo "[DEBUG] SKIP_WHIPTAIL=${SKIP_WHIPTAIL:-unset}"
-
     if [[ "$SKIP_WHIPTAIL" == "1" ]]; then
         echo "[INFO] SKIP_WHIPTAIL is set. Running in non-interactive CI mode."
         update_system_packages
@@ -322,33 +302,14 @@ if [[ $# -gt 0 ]]; then
             echo "HARDN-XDR v${HARDN_VERSION}"
             echo "Linux Security Hardening Sentinel"
             echo "Extended Detection and Response"
-            echo ""
-            echo "Target Systems: Debian 12+, Ubuntu 24.04+"
-            echo "Features: STIG Compliance, Malware Detection, System Hardening"
-            echo "Developed by: Christopher Bingham and Tim Burns"
-            echo ""
-            echo "This is the final public release of HARDN-XDR."
             exit 0
             ;;
         --help|-h)
-            echo "HARDN-XDR v${HARDN_VERSION} - Linux Security Hardening Sentinel"
-            echo ""
-            echo "Usage: $0 [OPTIONS]"
-            echo ""
-            echo "Options:"
-            echo "  --version, -v    Show version information"
-            echo "  --help, -h       Show this help message"
-            echo ""
-            echo "This script applies comprehensive security hardening to Debian-based systems"
-            echo "including STIG compliance, malware detection, and security monitoring."
-            echo ""
-            echo "WARNING: This script makes significant system changes. Run only on systems"
-            echo "         intended for security hardening."
+            echo "Usage: $0 [--version|-v] [--help|-h]"
             exit 0
             ;;
         *)
-            echo "Error: Unknown option '$1'"
-            echo "Use '$0 --help' for usage information."
+            echo "Unknown option '$1'"
             exit 1
             ;;
     esac

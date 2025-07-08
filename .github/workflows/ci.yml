@@ -108,7 +108,11 @@ jobs:
           path: .
 
       - name: Run module test for ${{ matrix.module }} on ${{ matrix.arch }}
+
         timeout-minutes: ${{ matrix.module == 'aide' && 15 || 5 }}
+
+        timeout-minutes: 15
+
         run: |
           echo "Testing module: ${{ matrix.module }} on arch ${{ matrix.arch }}" > result.log
           docker run --rm \
@@ -150,7 +154,9 @@ jobs:
         run: |
           file=$(find . -name "hardn_*.deb" | head -n 1)
           cp "$file" ./hardn.deb
-
+      - name: Debug check modules
+        run: |
+          ls -lR src/setup/modules
       - name: Run full system test and diagnostics on ${{ matrix.arch }}
         run: |
           echo "Running full HARDN system test on ${{ matrix.arch }}" > full-run.log
