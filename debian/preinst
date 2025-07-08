@@ -1,0 +1,29 @@
+#!/bin/bash
+# preinst script for hardn package
+
+set -e
+
+case "$1" in
+    install|upgrade)
+        echo "[preinst] Preparing HARDN-XDR installation..."
+        
+        # Stop any running HARDN services to avoid conflicts during upgrade
+        for service in debsums-check.timer debsums-check.service; do
+            if systemctl is-active "$service" >/dev/null 2>&1; then
+                systemctl stop "$service" 2>/dev/null || true
+                echo "[preinst] Stopped $service for safe upgrade"
+            fi
+        done
+        
+        echo "[preinst] Pre-installation setup completed"
+        ;;
+    abort-upgrade)
+        # No action needed
+        ;;
+    *)
+        echo "preinst called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+exit 0

@@ -1,0 +1,28 @@
+# Debian packaging build artifacts
+debian/.debhelper/
+debian/debhelper-build-stamp
+debian/files
+debian/hardn.substvars
+debian/hardn/
+debian/tmp/
+
+# Build artifacts
+*.deb
+*.buildinfo
+*.changes
+*.dsc
+*.tar.gz
+*.tar.xz
+
+# Log files
+*.log
+
+# Temporary files
+*.tmp
+.DS_Store
+*~
+
+# Editor backups
+*.bak
+*.swp
+*.swo

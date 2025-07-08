@@ -24,6 +24,11 @@ LOG_FILE="/tmp/postinst.log"
     echo "[postinst] WARNING: Modules directory not found."
   fi
 
+  # Create necessary directories for HARDN modules
+  mkdir -p /var/log/debsums
+  mkdir -p /usr/local/var/log/suricata
+  echo "[postinst] Created log directories for HARDN modules."
+
   echo "[postinst] HARDN-XDR installed successfully."
   echo "Run with: sudo hardn-xdr"
 } | tee "$LOG_FILE"

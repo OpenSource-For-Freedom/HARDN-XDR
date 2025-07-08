@@ -1,0 +1,54 @@
+#!/bin/bash
+# postrm script for hardn package
+
+set -e
+
+case "$1" in
+    remove|purge)
+        echo "[postrm] Cleaning up HARDN-XDR systemd services..."
+        
+        # Stop and disable HARDN-related systemd services
+        for service in debsums-check.timer debsums-check.service; do
+            if systemctl is-enabled "$service" >/dev/null 2>&1; then
+                systemctl stop "$service" 2>/dev/null || true
+                systemctl disable "$service" 2>/dev/null || true
+                echo "[postrm] Stopped and disabled $service"
+            fi
+        done
+        
+        # Reload systemd daemon
+        systemctl daemon-reload 2>/dev/null || true
+        
+        # Remove systemd service files if they exist
+        for file in /etc/systemd/system/debsums-check.service /etc/systemd/system/debsums-check.timer; do
+            if [ -f "$file" ]; then
+                rm -f "$file"
+                echo "[postrm] Removed $file"
+            fi
+        done
+        
+        # Remove cron files if they exist
+        if [ -f /etc/cron.d/debsums ]; then
+            rm -f /etc/cron.d/debsums
+            echo "[postrm] Removed debsums cron job"
+        fi
+        
+        # Only remove logs and data on purge
+        if [ "$1" = "purge" ]; then
+            echo "[postrm] Purging HARDN-XDR logs and data..."
+            rm -rf /var/log/debsums 2>/dev/null || true
+            rm -f /tmp/postinst.log 2>/dev/null || true
+        fi
+        
+        echo "[postrm] HARDN-XDR cleanup completed"
+        ;;
+    upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+        # No action needed for these cases
+        ;;
+    *)
+        echo "postrm called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+exit 0
