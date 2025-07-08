@@ -22,6 +22,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: List module directory structure
+        run: |
+          ls -la
+          mkdir -p src/setup/modules || true
+          find . -name "*.sh" -type f | grep -i module
+
       - name: Fetch tags
         run: git fetch --tags
 
