@@ -1,12 +1,14 @@
 #!/bin/bash
 
-# HARDN-XDR GRUB Hardening Module 
-# Securely hardens GRUB without breaking boot
-
+# HARDN-XDR - GRUB Password Hardening Module
+# Complies: LYNIS BOOT-5122 
+# VM/ container detection
+# supplies hardn.env for storage 
 
 LOG_DIR="/var/log/hardn"
-LOG_FILE="$LOG_DIR/grub_hardening.log"
-VERIFICATION_LOG="$LOG_DIR/grub_verification.log"
+LOG_FILE="$LOG_DIR/grub_password.log"
+GRUB_USER_FILE="/etc/grub.d/01_users"
+ENV_FILE="/etc/hardn/hardn.env"
 
 HARDN_STATUS() {
     local status="$1"
@@ -25,83 +27,103 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
 }
 
-backup_grub_default() {
-    local file="/etc/default/grub"
-    if [ -f "$file" ]; then
-        cp "$file" "${file}.bak.$(date +%F_%H%M%S)"
-        chmod 644 "${file}.bak."*
-        HARDN_STATUS "info" "Backup of $file created."
+is_virtualized() {
+    grep -qa 'docker\|lxc\|wsl' /proc/1/cgroup && return 0
+    [[ "$(systemd-detect-virt)" != "none" ]] && return 0
+    return 1
+}
+
+load_env_values() {
+    if [ -f "$ENV_FILE" ]; then
+
+        source "$ENV_FILE"
+        export GRUB_USERNAME GRUB_PASSWORD_HASH
     fi
 }
 
-safely_disable_recovery_mode() {
-    local grub_default="/etc/default/grub"
-    if [ ! -f "$grub_default" ]; then
-        HARDN_STATUS "warning" "$grub_default not found."
-        return 0
-    fi
-
-    if grep -q 'GRUB_DISABLE_RECOVERY="true"' "$grub_default"; then
-        HARDN_STATUS "info" "Recovery mode already disabled."
-        return 0
-    fi
-
-    if grep -q "GRUB_DISABLE_RECOVERY" "$grub_default"; then
-        sed -i 's/GRUB_DISABLE_RECOVERY=.*/GRUB_DISABLE_RECOVERY="true"/' "$grub_default"
-    else
-        echo 'GRUB_DISABLE_RECOVERY="true"' >> "$grub_default"
-    fi
-    HARDN_STATUS "pass" "Recovery mode disabled."
+prompt_password_hash() {
+    echo -e "\n\033[1;36m[INPUT]\033[0m Enter a GRUB username (e.g., admin):"
+    read -r grub_user
+    echo -e "\n\033[1;36m[INPUT]\033[0m Enter a password for GRUB superuser '$grub_user':"
+    grub_hash=$(grub-mkpasswd-pbkdf2 | awk '/PBKDF2 hash of your password is/ {print $NF}')
+    echo "$grub_user:$grub_hash"
 }
 
-fix_grub_permissions() {
-    [ -f /etc/default/grub ] && chmod 644 /etc/default/grub
-    [ -f /boot/grub/grub.cfg ] && chmod 644 /boot/grub/grub.cfg
-    [ -f /boot/grub2/grub.cfg ] && chmod 644 /boot/grub2/grub.cfg
-    HARDN_STATUS "info" "Set readable permissions for GRUB config files."
+write_grub_user_file() {
+    local user="$1"
+    local hash="$2"
+
+    cat <<EOF > "$GRUB_USER_FILE"
+#!/bin/sh
+cat <<EOM
+set superuser="$user"
+password_pbkdf2 $user $hash
+EOM
+EOF
+
+    chmod 755 "$GRUB_USER_FILE"
+    HARDN_STATUS "pass" "GRUB user file created at $GRUB_USER_FILE"
+    log "Set GRUB superuser '$user' with password hash."
 }
 
-regenerate_grub_safely() {
+update_grub_config() {
     if command -v update-grub >/dev/null 2>&1; then
-        update-grub && HARDN_STATUS "pass" "GRUB config regenerated."
+        update-grub && HARDN_STATUS "pass" "GRUB configuration updated."
     elif command -v grub2-mkconfig >/dev/null 2>&1; then
-        grub2-mkconfig -o /boot/grub2/grub.cfg && HARDN_STATUS "pass" "GRUB config regenerated (grub2-mkconfig)."
+        grub2-mkconfig -o /boot/grub2/grub.cfg && HARDN_STATUS "pass" "GRUB config updated (grub2-mkconfig)."
     else
-        HARDN_STATUS "warning" "Could not regenerate GRUB config. Please do so manually."
+        HARDN_STATUS "error" "No GRUB configuration tool found."
     fi
 }
 
-verify_and_log() {
+grub_protect() {
     mkdir -p "$LOG_DIR"
-    {
-        echo "=== GRUB Hardening Verification ==="
-        echo "Date: $(date)"
-        grep 'GRUB_DISABLE_RECOVERY' /etc/default/grub || echo "Missing GRUB_DISABLE_RECOVERY setting"
-        [ -f /etc/default/grub ] && stat -c "/etc/default/grub: %a %U:%G" /etc/default/grub
-        [ -f /boot/grub/grub.cfg ] && stat -c "/boot/grub/grub.cfg: %a %U:%G" /boot/grub/grub.cfg
-        [ -f /boot/grub2/grub.cfg ] && stat -c "/boot/grub2/grub.cfg: %a %U:%G" /boot/grub2/grub.cfg
-        echo "=== End of Verification ==="
-    } > "$VERIFICATION_LOG"
-    chmod 600 "$VERIFICATION_LOG"
-    HARDN_STATUS "info" "Verification log saved to $VERIFICATION_LOG"
-}
+    touch "$LOG_FILE"
+    chmod 600 "$LOG_FILE"
 
-grub_hardening_module() {
-    HARDN_STATUS "info" "Starting GRUB hardening module..."
-    mkdir -p "$LOG_DIR"
-    touch "$LOG_FILE" && chmod 600 "$LOG_FILE"
+    # Skip if already configured
+    if [ -f "$GRUB_USER_FILE" ] && grep -q 'password_pbkdf2' "$GRUB_USER_FILE"; then
+        HARDN_STATUS "info" "GRUB password already set."
+        return 0
+    fi
 
-    backup_grub_default
-    safely_disable_recovery_mode
-    fix_grub_permissions
-    regenerate_grub_safely
-    verify_and_log
+    # Skip if VM or container
+    if is_virtualized; then
+        HARDN_STATUS "info" "Running in a virtualized/container environment — skipping GRUB password protection."
+        log "GRUB hardening skipped (VM/container detected)."
+        return 0
+    fi
 
-    HARDN_STATUS "pass" "GRUB hardening module completed."
+
+    load_env_values
+    local user=""
+    local hash=""
+
+    if [[ -n "$GRUB_USERNAME" && -n "$GRUB_PASSWORD_HASH" ]]; then
+        user="$GRUB_USERNAME"
+        hash="$GRUB_PASSWORD_HASH"
+        HARDN_STATUS "info" "Loaded GRUB credentials from $ENV_FILE"
+    else
+        # Fallback to interactive
+        if [ -t 0 ]; then
+            user_and_hash=$(prompt_password_hash)
+            user="${user_and_hash%%:*}"
+            hash="${user_and_hash#*:}"
+        else
+            HARDN_STATUS "warning" "Interactive prompt disabled and no preset hash found — skipping GRUB protection."
+            log "No GRUB credentials could be set (non-interactive mode)."
+            return 0
+        fi
+    fi
+
+    write_grub_user_file "$user" "$hash"
+    update_grub_config
+
+    HARDN_STATUS "pass" "GRUB password protection applied."
     return 0
 }
 
-# Only run if executed directly (not sourced)
+# if called directly/locally 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
-    grub_hardening_module "$@"
+    grub_protect "$@"
 fi
