@@ -232,7 +232,7 @@ jobs:
           fi
 
       - name: Create GitHub Release and upload .deb
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.build-and-test.outputs.new_tag }}
           name: "Release ${{ needs.build-and-test.outputs.new_tag }}"
