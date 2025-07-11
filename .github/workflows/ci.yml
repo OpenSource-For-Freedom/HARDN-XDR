@@ -119,6 +119,7 @@ jobs:
           - service_disable
           - shared_mem
           - stig_pwquality
+          - sudo_hardening
           - suricata
           - ufw
           - unhide

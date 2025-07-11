@@ -92,17 +92,21 @@ else
     HARDN_STATUS "warning" "Rsyslog service not running. Configuration will be applied on next start."
 fi
 
-# Create logrotate configuration for the central log
-HARDN_STATUS "info" "Creating logrotate configuration file /etc/logrotate.d/hardn-xdr..."
+# Create logrotate configuration for the central log with STIG-compliant retention
+HARDN_STATUS "info" "Creating STIG-compliant logrotate configuration file /etc/logrotate.d/hardn-xdr..."
 cat > /etc/logrotate.d/hardn-xdr << 'EOF'
 /usr/local/var/log/suricata/hardn-xdr.log {
     daily
-    rotate 30
+    rotate 365
     compress
     delaycompress
     missingok
     notifempty
     create 640 root adm
+    maxsize 100M
+    maxage 365
+    copytruncate
+    sharedscripts
     postrotate
         # Ensure rsyslog reloads its configuration or reopens log files
         # Use the standard rsyslog-rotate script if available, otherwise restart
@@ -122,10 +126,169 @@ cat > /etc/logrotate.d/hardn-xdr << 'EOF'
         chown root:adm /usr/local/var/log/suricata/hardn-xdr.log
     endscript
 }
+
+# Additional security logs with retention
+/var/log/auth.log {
+    daily
+    rotate 365
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 640 root adm
+    maxsize 100M
+    copytruncate
+}
+
+/var/log/sudo.log {
+    daily
+    rotate 365
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 640 root adm
+    maxsize 50M
+    copytruncate
+}
+
+/var/log/aide/*.log {
+    daily
+    rotate 365
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 640 root adm
+    maxsize 50M
+    copytruncate
+}
 EOF
 chmod 644 /etc/logrotate.d/hardn-xdr
-HARDN_STATUS "pass" "Logrotate configuration created/updated."
+HARDN_STATUS "pass" "STIG-compliant logrotate configuration created with 1-year retention."
 
+# Configure remote log forwarding for STIG compliance
+setup_remote_log_forwarding() {
+    HARDN_STATUS "info" "Configuring remote log forwarding for STIG compliance..."
+    
+    # Create remote forwarding configuration
+    cat > /etc/rsyslog.d/49-hardn-remote.conf << 'EOF'
+# HARDN-XDR Remote Log Forwarding Configuration
+# STIG Requirement: Forward security logs to remote, write-only log server
+
+# Load required modules for remote forwarding
+$ModLoad imuxsock
+$ModLoad imklog
+
+# Configure remote forwarding (uncomment and configure as needed)
+# Forward all security-related logs to remote syslog server
+# Replace REMOTE_LOG_SERVER with your actual log server IP/hostname
+# Replace 514 with your log server port if different
+
+# TCP forwarding (more reliable, recommended for STIG)
+# *.* @@REMOTE_LOG_SERVER:514
+
+# UDP forwarding (alternative)
+# *.* @REMOTE_LOG_SERVER:514
+
+# TLS encrypted forwarding (most secure, recommended for sensitive environments)
+# Requires certificates to be configured
+# $DefaultNetstreamDriver gtls
+# $DefaultNetstreamDriverCAFile /etc/ssl/rsyslog/ca.pem
+# $DefaultNetstreamDriverCertFile /etc/ssl/rsyslog/cert.pem
+# $DefaultNetstreamDriverKeyFile /etc/ssl/rsyslog/key.pem
+# $ActionSendStreamDriverAuthMode x509/name
+# $ActionSendStreamDriverPermittedPeer *.example.com
+# $ActionSendStreamDriverMode 1
+# *.* @@(o)REMOTE_LOG_SERVER:6514
+
+# Example configuration for specific facilities
+# Forward authentication logs
+auth,authpriv.* @@REMOTE_LOG_SERVER:514
+# Forward security alerts
+security.* @@REMOTE_LOG_SERVER:514
+# Forward HARDN-XDR logs
+local5.* @@REMOTE_LOG_SERVER:514
+
+# Local file backup (ensure logs are still available locally)
+$ActionQueueType LinkedList
+$ActionQueueFileName hardn_remote_queue
+$ActionQueueSaveOnShutdown on
+$ActionQueueMaxDiskSpace 1g
+$ActionResumeRetryCount -1
+EOF
+
+    chmod 644 /etc/rsyslog.d/49-hardn-remote.conf
+    
+    # Create configuration script for easy setup
+    cat > /usr/local/bin/configure-remote-logging.sh << 'EOF'
+#!/bin/bash
+# Script to configure remote log forwarding
+
+usage() {
+    echo "Usage: $0 <log_server_ip> [port] [protocol]"
+    echo "  log_server_ip: IP address or hostname of remote log server"
+    echo "  port: Port number (default: 514)"
+    echo "  protocol: tcp, udp, or tls (default: tcp)"
+    echo
+    echo "Example: $0 192.168.1.100 514 tcp"
+    exit 1
+}
+
+if [[ $# -lt 1 ]]; then
+    usage
+fi
+
+LOG_SERVER="$1"
+PORT="${2:-514}"
+PROTOCOL="${3:-tcp}"
+
+echo "Configuring remote log forwarding to $LOG_SERVER:$PORT via $PROTOCOL"
+
+# Backup existing config
+cp /etc/rsyslog.d/49-hardn-remote.conf /etc/rsyslog.d/49-hardn-remote.conf.bak
+
+case "$PROTOCOL" in
+    tcp)
+        FORWARD_STRING="@@$LOG_SERVER:$PORT"
+        ;;
+    udp)
+        FORWARD_STRING="@$LOG_SERVER:$PORT"
+        ;;
+    tls)
+        FORWARD_STRING="@@(o)$LOG_SERVER:$PORT"
+        echo "Note: TLS forwarding requires additional certificate configuration"
+        ;;
+    *)
+        echo "Error: Invalid protocol. Use tcp, udp, or tls"
+        exit 1
+        ;;
+esac
+
+# Update configuration
+sed -i "s/@@REMOTE_LOG_SERVER:514/$FORWARD_STRING/g" /etc/rsyslog.d/49-hardn-remote.conf
+
+echo "Remote log forwarding configured. Restarting rsyslog..."
+systemctl restart rsyslog
+
+if systemctl is-active --quiet rsyslog; then
+    echo "✓ Remote log forwarding configured successfully"
+    echo "✓ Logs will be forwarded to $LOG_SERVER:$PORT via $PROTOCOL"
+else
+    echo "✗ Error: rsyslog failed to restart. Check configuration."
+    exit 1
+fi
+EOF
+
+    chmod 755 /usr/local/bin/configure-remote-logging.sh
+    chown root:root /usr/local/bin/configure-remote-logging.sh
+    
+    HARDN_STATUS "pass" "Remote log forwarding configuration created"
+    HARDN_STATUS "info" "Use '/usr/local/bin/configure-remote-logging.sh <server_ip>' to configure remote forwarding"
+}
+
+# Setup remote log forwarding configuration
+setup_remote_log_forwarding
 
 # Create a symlink in /var/log for easier access
 HARDN_STATUS "info" "Creating symlink /var/log/hardn-xdr.log..."
@@ -133,4 +296,6 @@ ln -sf /usr/local/var/log/suricata/hardn-xdr.log /var/log/hardn-xdr.log
 HARDN_STATUS "pass" "Symlink created at /var/log/hardn-xdr.log."
 
 
-HARDN_STATUS "pass" "Central logging setup complete. All security logs will be collected in /usr/local/var/log/suricata/hardn-xdr.log"
+HARDN_STATUS "pass" "Central logging setup complete with STIG-compliant retention and remote forwarding capability."
+HARDN_STATUS "info" "All security logs will be collected in /usr/local/var/log/suricata/hardn-xdr.log"
+HARDN_STATUS "info" "Logs will be retained for 1 year and can be forwarded to remote log servers"
