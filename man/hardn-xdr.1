@@ -1,4 +1,4 @@
-.TH "HARDN-XDR" 1 "July 1, 2025" "1.1.50" "HARDN-XDR User Manuals"
+.TH "HARDN-XDR" 1 "July 11, 2025" "1.1.50" "HARDN-XDR User Manuals"
 .SH NAME
 hardn-xdr \- A Linux Security Hardening Sentinel
 .SH SYNOPSIS
@@ -16,40 +16,120 @@ Displays the version of HARDN-XDR.
 \fB--help, -h\fR
 Displays the help message.
 .SH MODULES
-The following modules can be selected in the main menu:
+The default HARDN installation will install all of the following security modules. Alternativesly, specific modules can be selected/deselected during installation for a customized set up.
 .TP
-\fBConfigure UFW Firewall\fR
-Installs and configures UFW (Uncomplicated Firewall) with a default deny policy for incoming traffic and allows essential services.
+\fBaide.sh\fR
+Installs, configures, and schedules AIDE (Advanced Intrusion Detection Environment) to monitor and verify the integrity of system files against unauthorized changes.
 .TP
-\fBInstall and configure Fail2Ban\fR
-Installs and configures Fail2Ban to protect against brute-force attacks.
+\fBaudit_system.sh\fR
+Installs, configures, and manages Linux auditing tools (like auditd) to monitor and log system activity for security and compliance.
 .TP
-\fBHarden SSH Server\fR
-Applies security best practices to the OpenSSH server configuration.
+\fBauditd.sh\fR
+Installs and configures the Linux Audit Daemon (auditd) and configures comprehensive audit rules to monitor and log security-relevant system events.
 .TP
-\fBSetup Auditd for system monitoring\fR
-Installs and configures the Linux Audit Daemon to log security-relevant events.
+\fBauto_updates.sh\fR
+Automates the installation and scheduling of system package updates to keep the system secure and up-to-date.
 .TP
-\fBApply Kernel Security Hardening\fR
-Applies a set of security-focused kernel parameters via sysctl.
+\fBbanner.sh\fR
+Configures a custom login banner to display a security or informational message to users when they access the system.
 .TP
-\fBEnforce STIG password quality\fR
-Configures password policies to meet STIG requirements.
+\fBbinfmt.sh\fR
+Checks for and disables non-native binary format support by unloading the binfmt_misc kernel module and preventing it from loading on boot.
 .TP
-\fBHarden GRUB bootloader\fR
+\fBcentral_logging.sh\fR
+Aggregates security-related logs from multiple tools into a single local log file at /usr/local/var/log/suricata/hardn-xdr.log for unified monitoring and analysis.
+.TP
+\fBchkrootkit.sh\fR
+Installs and configures chkrootkit to scan the system for rootkits, helping detect signs of malware or unauthorized access.
+.TP
+\fBcompilers.sh\fR
+Restricts access to /usr/bin/gcc, /usr/bin/g++, /usr/bin/make, /usr/bin/cc, /usr/bin/c++, /usr/bin/as, and /usr/bin/ld by setting permissions and ownership so only root can use them, reducing the risk of unauthorized code compilation.
+.TP
+\fBcoredumps.sh\fR
+Disables core dumps system-wide to prevent sensitive data leakage from crashed processes and reduce security risks.
+.TP
+\fBdebsums.sh\fR
+Configures and optimizes the debsums tool to verify the integrity of installed Debian packages, helping detect unauthorized or unexpected changes to system files.
+.TP
+\fBdeleted_files.sh\fR
+Scans the system for binaries and libraries that have been deleted but are still running in memory, helping detect stealthy malware or unauthorized processes that attempt to evade standard file-based detection.
+.TP
+\fBdns_config.sh\fR
+Sets secure DNS servers and enables DNSSEC for privacy and integrity, applying changes system-wide and ensuring they persist across reboots.
+.TP
+\fBfail2ban.sh\fR
+Installs and configures Fail2Ban to automatically block malicious IPs after repeated failed login attempts, protecting the system from brute-force attacks.
+.TP
+\fBfile_perms.sh\fR
+Enforces secure permissions on sensitive system files (/root, /etc/paswd, /etc/shadow, /etc/group, /etc/gshadow) to protect user accounts and authentication data.
+.TP
+\fBfirejail.sh\fR
+Installs Firejail and sets up secure sandbox profiles for browsers to isolate them from the rest of the system and minimize security risks.
+.TP
+\fBfirewire.sh\fR
+Disables FireWire support to block potential physical DMA attacks and harden system security.
+.TP
+\fBgrub.sh\fR
 Sets a password for the GRUB bootloader to protect against unauthorized boot-time changes.
 .TP
-\fBInstall AIDE for file integrity\fR
-Installs AIDE (Advanced Intrusion Detection Environment) to monitor file integrity.
+\fBkernel_sec.sh\fR
+Enforces kernel security by setting hardened sysctl parameters for memory, information leak prevention, and network protection.
 .TP
-\fBInstall rkhunter (Rootkit Hunter)\fR
-Installs rkhunter to scan for rootkits and other malware.
+\fBnetwork_protocols.sh\fR
+Blocks legacy and uncommon network protocols to minimize potential vulnerabilities and harden system security.
 .TP
-\fBInstall chkrootkit\fR
-Installs chkrootkit, another tool to scan for rootkits.
+\fBntp.sh\fR
+.br
+Configures secure and accurate time synchronization by setting up systemd-timesyncd or ntpd with recommended NTP (Network Time Protocol) servers.
 .TP
-\fBAnd many more...\fR
-Includes modules for automatic updates, central logging, SELinux, and more.
+\fBpentest.sh\fR
+Runs Lynis and nmap to audit, harden, and report on system and network security.
+.TP
+\fBprocess_accounting.sh\fR
+Installs and activates process accounting and sysstat to monitor commands, user activity, and system performance for security auditing.
+.TP
+\fBpurge_old_pkgs.sh\fR
+Cleans the system by purging obsolete and unused packages to improve security and free up disk space.
+.TP
+\fBrkhunter.sh\fR
+Installs and configures rkhunter (Rootkit Hunter) to automatically scan the system for rootkits and suspicious activity, helping detect and alert on potential security threats.
+.TP
+\fBsecure_net.sh\fR
+Strengthens network security by applying sysctl settings that disable risky networking features and enable protections against spoofing, flooding, and misrouting attacks.
+.TP
+\fBselinux.sh\fR
+Automates installation of SELinux and its management tools, ensuring your system is equipped for kernel-enforced mandatory access control security.
+.TP
+\fBshared_mem.sh\fR
+Secures shared memory by enforcing restrictive mount options on /run/shm to prevent execution and privilege escalation attacks.
+.TP
+\fBsshd.sh\fR
+Installs and enables the OpenSSH server with basic setup, ensuring remote access is available and ready for further hardening.
+.TP
+\fBstig_pwquality.sh\fR
+Enforces strong password complexity requirements according to STIG guidelines for enhanced system security.
+.TP
+\fBsuricata.sh\fR
+Installs, configures, and ensures the Suricata open source network analysis and threat detection software is running for network security monitoring.
+.TP
+\fBufw.sh\fR
+.br \" File names of length 3 (6 including ".sh", like ufw.sh) display on one line with their description. ".br" allows for correct display of the module name in the man page.
+Installs and configures UFW (Uncomplicated Firewall) to secure the system with a simple, default-deny firewall policy, and a policy to allow essential services.
+.TP
+\fBunhide.sh\fR
+Installs Unhide, a forensic tool to find processes and TCP/UDP ports hidden by rootkits, Linux kernal modules or by other techniques.
+.TP
+\fBunnecessary_services.sh\fR
+Disables and removes unnecessary services and packages to reduce the system's attack surface and strengthen security.
+.TP
+\fBusb.sh\fR
+.br
+Blocks USB storage devices while allowing keyboards and mice, securing the system against USB-based data threats.
+.TP
+\fByara.sh\fR
+Installs and runs YARA to scan for malware and suspicious files using pattern-matching rules.
+
+
 .SH FILES
 .TP
 \fI/etc/hardn-xdr/\fR
