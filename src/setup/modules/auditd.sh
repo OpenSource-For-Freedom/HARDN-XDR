@@ -1,4 +1,22 @@
 #!/bin/bash
+
+# Source common functions
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../hardn-common.sh" 2>/dev/null || {
+    # Fallback if common file not found
+    HARDN_STATUS() {
+        local status="$1"
+        local message="$2"
+        case "$status" in
+            "pass")    echo -e "\033[1;32m[PASS]\033[0m $message" ;;
+            "warning") echo -e "\033[1;33m[WARNING]\033[0m $message" ;;
+            "error")   echo -e "\033[1;31m[ERROR]\033[0m $message" ;;
+            "info")    echo -e "\033[1;34m[INFO]\033[0m $message" ;;
+            *)         echo -e "\033[1;37m[UNKNOWN]\033[0m $message" ;;
+        esac
+    }
+}
+
 set -e
 
 is_installed() {
@@ -37,7 +55,7 @@ audit_rules_file="/etc/audit/rules.d/hardn-xdr.rules"
 cat <<EOF > $audit_rules_file
 # auditd-attack
 # A Linux Auditd configuration mapped to MITRE's Attack Framework
-# Most of my inspiration came from various individuals so I wont name them all, but you're work does not go 
+# Most of my inspiration came from various individuals so I wont name them all, but you're work does not go
 # unnoticed!
 
 ### Special Thanks To
@@ -61,8 +79,8 @@ cat <<EOF > $audit_rules_file
 -f 1
 
 # Ignore errors
-## e.g. caused by users or files not found in the local environment  
--i 
+## e.g. caused by users or files not found in the local environment
+-i
 
 # Self Auditing ---------------------------------------------------------------
 
@@ -132,7 +150,7 @@ cat <<EOF > $audit_rules_file
 -a always,exit -F arch=b64 -S clock_settime -k T1099_Timestomp
 -w /etc/localtime -p wa -k T1099_Timestomp
 
-## Stunnel 
+## Stunnel
 -w /usr/sbin/stunnel -p x -k T1079_Multilayer_Encryption
 
 ## Cron configuration & scheduled jobs related events
@@ -211,7 +229,7 @@ cat <<EOF > $audit_rules_file
 -a always,exit -F arch=b32 -S mount -F auid>=500 -F auid!=4294967295 -k T1052_Exfiltration_Over_Physical_Medium
 -a always,exit -F arch=b64 -S mount -F auid>=500 -F auid!=4294967295 -k T1052_Exfiltration_Over_Physical_Medium
 
-## Session Related Events 
+## Session Related Events
 -w /var/run/utmp -p wa -k T1108_Redundant_Access
 -w /var/log/wtmp -p wa -k T1108_Redundant_Access
 -w /var/log/btmp -p wa -k T1108_Redundant_Access
@@ -321,7 +339,7 @@ cat <<EOF > $audit_rules_file
 -w /usr/bin/socat -p x -k T1219_Remote_Access_Tools
 -w /usr/bin/rdesktop -p x -k T1219_Remote_Access_Tools
 
-##Third Party Software 
+##Third Party Software
 # RPM (Redhat/CentOS)
 -w /usr/bin/rpm -p x -k T1072_third_party_software
 -w /usr/bin/yum -p x -k T1072_third_party_software
@@ -366,8 +384,8 @@ cat <<EOF > $audit_rules_file
 ## File Deletion by User Related Events
 -a always,exit -F arch=b32 -S rmdir -S unlink -S unlinkat -S rename -S renameat -F auid>=500 -F auid!=4294967295 -k T1107_File_Deletion
 -a always,exit -F arch=b64 -S rmdir -S unlink -S unlinkat -S rename -S renameat -F auid>=500 -F auid!=4294967295 -k T1107_File_Deletion
--a always,exit -F arch=b32 -S rmdir -S unlink -S unlinkat -S rename -S renameat -F auid=0 -k T1070_Indicator_Removal_on_Host 
--a always,exit -F arch=b64 -S rmdir -S unlink -S unlinkat -S rename -S renameat -F auid=0 -k T1070_Indicator_Removal_on_Host 
+-a always,exit -F arch=b32 -S rmdir -S unlink -S unlinkat -S rename -S renameat -F auid=0 -k T1070_Indicator_Removal_on_Host
+-a always,exit -F arch=b64 -S rmdir -S unlink -S unlinkat -S rename -S renameat -F auid=0 -k T1070_Indicator_Removal_on_Host
 
 # Make the configuration immutable --------------------------------------------
 ##-e 2

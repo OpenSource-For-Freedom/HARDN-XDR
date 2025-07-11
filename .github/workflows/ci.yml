@@ -2,7 +2,7 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    branches: ["main"]
   workflow_dispatch:
 
 permissions:
@@ -65,6 +65,9 @@ jobs:
           dch --release --force-distribution ""
 
       - name: Build package for ${{ matrix.arch }}
+        env:
+          DEBIAN_FRONTEND: noninteractive
+          SKIP_WHIPTAIL: 1
         run: |
           dpkg-buildpackage -us -uc
           sudo apt install -f -y
@@ -107,7 +110,6 @@ jobs:
           - dns_config
           - file_perms
           - firewire
-          - grub
           - kernel_sec
           - network_protocols
           - ntp
@@ -138,11 +140,16 @@ jobs:
           echo "Testing module: ${{ matrix.module }} on arch ${{ matrix.arch }}" > result.log
           docker run --rm \
             -e SKIP_WHIPTAIL=1 \
+            -e DEBIAN_FRONTEND=noninteractive \
+            -e CI=true \
             -v "$(pwd)/hardn_*.deb:/tmp/hardn.deb" \
             debian:stable-slim bash -c '
               set -e
               export DEBIAN_FRONTEND=noninteractive
-              apt-get update && apt-get install -y sudo gnupg bash debconf coreutils findutils whiptail
+              export SKIP_WHIPTAIL=1
+              export CI=true
+              apt-get update && apt-get install -y sudo gnupg bash debconf-utils coreutils findutils whiptail
+              echo "debconf debconf/frontend select Noninteractive" | debconf-set-selections
               dpkg -i /tmp/hardn.deb || true
               apt-get install -f -y
               module="/usr/lib/hardn-xdr/src/setup/modules/${{ matrix.module }}.sh"
@@ -180,10 +187,15 @@ jobs:
           echo "Running HARDN deployment test on ${{ matrix.arch }}" > full-run.log
           docker run --rm --platform linux/${{ matrix.arch }} \
             -e SKIP_WHIPTAIL=1 \
-            -v "$(pwd)/hardn_${{ matrix.arch }}.deb:/tmp/hardn.deb" \
+            -e DEBIAN_FRONTEND=noninteractive \
+            -e CI=true \
+            -v "$(pwd)/hardn_*.deb:/tmp/hardn.deb" \
             debian:stable-slim bash -ex << 'EOF' >> full-run.log 2>&1
               export DEBIAN_FRONTEND=noninteractive
-              apt-get update && apt-get install -y sudo gnupg bash coreutils findutils whiptail
+              export SKIP_WHIPTAIL=1
+              export CI=true
+              apt-get update && apt-get install -y sudo gnupg bash coreutils findutils whiptail debconf-utils
+              echo "debconf debconf/frontend select Noninteractive" | debconf-set-selections
               dpkg -i /tmp/hardn.deb || true
               apt-get install -f -y
               echo "--- Launching HARDN-XDR ---"
@@ -245,8 +257,8 @@ jobs:
             - **Architectures:** `amd64`, `arm64`
             - **Timestamp:** $(date -R)
 
-            - All modules tested in parallel  
-            - Deployment verified under QEMU emulation  
+            - All modules tested in parallel
+            - Deployment verified under QEMU emulation
             - Lintian run validated
           files: |
             release/*.deb

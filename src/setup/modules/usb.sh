@@ -1,13 +1,31 @@
 #!/bin/bash
+
+# Source common functions
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../hardn-common.sh" 2>/dev/null || {
+    # Fallback if common file not found
+    HARDN_STATUS() {
+        local status="$1"
+        local message="$2"
+        case "$status" in
+            "pass")    echo -e "\033[1;32m[PASS]\033[0m $message" ;;
+            "warning") echo -e "\033[1;33m[WARNING]\033[0m $message" ;;
+            "error")   echo -e "\033[1;31m[ERROR]\033[0m $message" ;;
+            "info")    echo -e "\033[1;34m[INFO]\033[0m $message" ;;
+            *)         echo -e "\033[1;37m[UNKNOWN]\033[0m $message" ;;
+        esac
+    }
+}
+
 cat > /etc/modprobe.d/99-usb-storage.conf << 'EOF'
 blacklist usb-storage
 blacklist uas          # Block USB Attached SCSI (another storage protocol)
 
 EOF
-    
+
 HARDN_STATUS "info" "USB security policy configured to allow HID devices but block storage."
-    
-# Create udev rules to further control USB devices 
+
+# Create udev rules to further control USB devices
 cat > /etc/udev/rules.d/99-usb-storage.rules << 'EOF'
 # Block USB storage devices while allowing keyboards and mice
 ACTION=="add", SUBSYSTEMS=="usb", ATTRS{bInterfaceClass}=="08", RUN+="/bin/sh -c 'echo 0 > /sys$DEVPATH/authorized'"
@@ -16,15 +34,15 @@ ACTION=="add", SUBSYSTEMS=="usb", ATTRS{bInterfaceClass}=="08", RUN+="/bin/sh -c
 EOF
 
 HARDN_STATUS "info" "Additional udev rules created for USB device control."
-    
+
     # Reload rules
 if udevadm control --reload-rules && udevadm trigger; then
 	HARDN_STATUS "pass" "Udev rules reloaded successfully."
 else
 	HARDN_STATUS "error" "Failed to reload udev rules."
 fi
-    
-    # Unload the usb-storage module 
+
+    # Unload the usb-storage module
 if lsmod | grep -q "usb_storage"; then
 	HARDN_STATUS "info" "usb-storage module is currently loaded, attempting to unload..."
 	if rmmod usb_storage >/dev/null 2>&1; then

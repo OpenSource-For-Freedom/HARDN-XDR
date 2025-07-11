@@ -1,5 +1,22 @@
 #!/bin/bash
 
+# Source common functions
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../hardn-common.sh" 2>/dev/null || {
+    # Fallback if common file not found
+    HARDN_STATUS() {
+        local status="$1"
+        local message="$2"
+        case "$status" in
+            "pass")    echo -e "\033[1;32m[PASS]\033[0m $message" ;;
+            "warning") echo -e "\033[1;33m[WARNING]\033[0m $message" ;;
+            "error")   echo -e "\033[1;31m[ERROR]\033[0m $message" ;;
+            "info")    echo -e "\033[1;34m[INFO]\033[0m $message" ;;
+            *)         echo -e "\033[1;37m[UNKNOWN]\033[0m $message" ;;
+        esac
+    }
+}
+
 is_installed() {
     if command -v apt >/dev/null 2>&1; then
         dpkg -s "$1" >/dev/null 2>&1
@@ -31,9 +48,9 @@ packages_to_purge=$(dpkg -l | grep '^rc' | awk '{print $2}')
 if [[ "$packages_to_purge" ]]; then
 	HARDN_STATUS "info" "Found the following packages with leftover configuration files to purge:"
 	echo "$packages_to_purge"
-   
+
 	if command -v whiptail >/dev/null; then
-		whiptail --title "Packages to Purge" --msgbox "The following packages have leftover configuration files that will be purged:\n\n$packages_to_purge" 15 70
+		hardn_msgbox "The following packages have leftover configuration files that will be purged:\n\n$packages_to_purge" 15 70
 	fi
 
 	for pkg in $packages_to_purge; do
@@ -49,13 +66,13 @@ if [[ "$packages_to_purge" ]]; then
 			fi
 		fi
 	done
-	whiptail --infobox "Purged configuration files for removed packages." 7 70
+	hardn_infobox "Purged configuration files for removed packages." 7 70
 else
 	HARDN_STATUS "pass" "No old/removed packages with leftover configuration files found to purge."
-	whiptail --infobox "No leftover package configurations to purge." 7 70
+	hardn_infobox "No leftover package configurations to purge." 7 70
 fi
 
 HARDN_STATUS "error" "Running apt-get autoremove and clean to free up space..."
 apt-get autoremove -y
 apt-get clean
-whiptail --infobox "Apt cache cleaned." 7 70
+hardn_infobox "Apt cache cleaned." 7 70

@@ -1,4 +1,22 @@
 #!/bin/bash
+
+# Source common functions
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../hardn-common.sh" 2>/dev/null || {
+    # Fallback if common file not found
+    HARDN_STATUS() {
+        local status="$1"
+        local message="$2"
+        case "$status" in
+            "pass")    echo -e "\033[1;32m[PASS]\033[0m $message" ;;
+            "warning") echo -e "\033[1;33m[WARNING]\033[0m $message" ;;
+            "error")   echo -e "\033[1;31m[ERROR]\033[0m $message" ;;
+            "info")    echo -e "\033[1;34m[INFO]\033[0m $message" ;;
+            *)         echo -e "\033[1;37m[UNKNOWN]\033[0m $message" ;;
+        esac
+    }
+}
+
 HARDN_STATUS "error" "Enabling process accounting (acct) and system statistics (sysstat)..."
 local changed_acct changed_sysstat
 changed_acct=false
@@ -22,7 +40,7 @@ is_installed() {
 
 HARDN_STATUS "info" "Checking and installing acct (process accounting)..."
 if ! is_installed acct && ! is_installed psacct; then
-	whiptail --infobox "Installing acct (process accounting)..." 7 60
+	hardn_infobox "Installing acct (process accounting)..." 7 60
 	if apt-get install -y acct; then
 		HARDN_STATUS "pass" "acct installed successfully."
 		changed_acct=true
@@ -47,7 +65,7 @@ fi
 # Enable Sysstat
 HARDN_STATUS "info" "Checking and installing sysstat..."
 if ! is_installed sysstat; then
-	whiptail --infobox "Installing sysstat..." 7 60
+	hardn_infobox "Installing sysstat..." 7 60
 	if apt-get install -y sysstat; then
 		HARDN_STATUS "pass" "sysstat installed successfully."
 		changed_sysstat=true

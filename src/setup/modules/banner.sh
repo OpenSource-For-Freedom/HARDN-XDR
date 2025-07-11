@@ -1,5 +1,22 @@
 #!/bin/bash
 
+# Source common functions
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../hardn-common.sh" 2>/dev/null || {
+    # Fallback if common file not found
+    HARDN_STATUS() {
+        local status="$1"
+        local message="$2"
+        case "$status" in
+            "pass")    echo -e "\033[1;32m[PASS]\033[0m $message" ;;
+            "warning") echo -e "\033[1;33m[WARNING]\033[0m $message" ;;
+            "error")   echo -e "\033[1;31m[ERROR]\033[0m $message" ;;
+            "info")    echo -e "\033[1;34m[INFO]\033[0m $message" ;;
+            *)         echo -e "\033[1;37m[UNKNOWN]\033[0m $message" ;;
+        esac
+    }
+}
+
 HARDN_STATUS "info" "Setting up the HARDN XDR Banner..."
 
 configure_stig_banner() {
@@ -25,7 +42,7 @@ configure_stig_banner() {
         echo "*                                                           *"
         echo "************************************************************"
     } > "$banner_file"
-    
+
     chmod 644 "$banner_file"
     HARDN_STATUS "pass" "STIG compliant banner configured in $banner_file."
 }
@@ -38,3 +55,5 @@ configure_stig_banner "/etc/issue.net" "remote logins (/etc/issue.net)"
 
 # Configure banner for message of the day
 configure_stig_banner "/etc/motd" "message of the day (/etc/motd)"
+
+HARDN_STATUS "pass" "All HARDN-XDR banners configured successfully."

@@ -1,4 +1,22 @@
 #!/bin/bash
+
+# Source common functions
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../hardn-common.sh" 2>/dev/null || {
+    # Fallback if common file not found
+    HARDN_STATUS() {
+        local status="$1"
+        local message="$2"
+        case "$status" in
+            "pass")    echo -e "\033[1;32m[PASS]\033[0m $message" ;;
+            "warning") echo -e "\033[1;33m[WARNING]\033[0m $message" ;;
+            "error")   echo -e "\033[1;31m[ERROR]\033[0m $message" ;;
+            "info")    echo -e "\033[1;34m[INFO]\033[0m $message" ;;
+            *)         echo -e "\033[1;37m[UNKNOWN]\033[0m $message" ;;
+        esac
+    }
+}
+
 HARDN_STATUS "info" "Configuring DNS nameservers..."
 
 # Define DNS providers with their primary and secondary servers
@@ -15,7 +33,7 @@ declare -A dns_providers=(
 
 # A through selection of recommended Secured DNS provider
 local selected_provider
-selected_provider=$(whiptail --title "DNS Provider Selection" --menu \
+selected_provider=$(hardn_menu \
 	"Select a DNS provider for enhanced security and privacy:" 18 78 6 \
 	"Quad9" "DNSSEC, Malware Blocking, No Logging (Recommended)" \
 	"Cloudflare" "DNSSEC, Privacy-First, No Logging" \
@@ -196,11 +214,11 @@ EOF
 fi
 
 if [[ "$changes_made" = true ]]; then
-	whiptail --infobox "DNS configured: $selected_provider\nPrimary: $primary_dns\nSecondary: $secondary_dns" 8 70
+	hardn_infobox "DNS configured: $selected_provider\nPrimary: $primary_dns\nSecondary: $secondary_dns" 8 70
 else
-	whiptail --infobox "DNS configuration checked. No changes made or needed." 8 70
+	hardn_infobox "DNS configuration checked. No changes made or needed." 8 70
 fi
 else
 		HARDN_STATUS "error" "Failed to write to $resolv_conf. Manual configuration required."
 	fi
-fi	
+fi

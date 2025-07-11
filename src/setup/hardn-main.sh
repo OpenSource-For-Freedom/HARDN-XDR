@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
-# HARDN-XDR - The Linux Security Hardening Sentinel
-# Version 2.0.0
-# About this script:
-# STIG Compliance: Security Technical Implementation Guide.
 
 HARDN_VERSION="1.1.50"
 export APT_LISTBUGS_FRONTEND=none
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CURRENT_DEBIAN_VERSION_ID=""
 CURRENT_DEBIAN_CODENAME=""
+
+# standardized whiptail usage
+source "${SCRIPT_DIR}/hardn-common.sh" 2>/dev/null || {
+
+    echo "Warning: Could not source hardn-common.sh, using local functions"
+}
 
 HARDN_STATUS() {
     local status="$1"
@@ -134,11 +136,11 @@ run_module() {
     fi
 }
 
-setup_all_security_modules() {
+setup_security_modules() {
     HARDN_STATUS "info" "Installing security modules..."
     local modules=(
         "ufw.sh" "fail2ban.sh" "sshd.sh" "auditd.sh" "kernel_sec.sh"
-        "stig_pwquality.sh" "grub.sh" "aide.sh" "rkhunter.sh" "chkrootkit.sh"
+        "stig_pwquality.sh" "aide.sh" "rkhunter.sh" "chkrootkit.sh"
         "auto_updates.sh" "central_logging.sh" "audit_system.sh" "ntp.sh"
         "debsums.sh" "yara.sh" "suricata.sh" "firejail.sh" "selinux.sh"
         "unhide.sh" "pentest.sh" "compilers.sh" "purge_old_pkgs.sh" "dns_config.sh"
@@ -165,7 +167,7 @@ cleanup() {
 
 main_menu() {
     local choice
-    choice=$(whiptail --title "HARDN-XDR Main Menu" --menu "Choose an option:" 15 60 3 \
+    choice=$(whiptail --title "HARDN-XDR v${HARDN_VERSION}" --menu "Choose an option:" 15 60 3 \
         "1" "Install all security modules" \
         "2" "Select specific security modules" \
         "3" "Exit" 3>&1 1>&2 2>&3)
@@ -174,13 +176,13 @@ main_menu() {
         1)
             update_system_packages
             install_package_dependencies
-            setup_all_security_modules
+            setup_security_modules
             cleanup
             ;;
         2)
             update_system_packages
             install_package_dependencies
-            setup_security
+            setup_security_modules
             cleanup
             ;;
         3)
@@ -194,20 +196,35 @@ main_menu() {
     esac
 }
 
+# Auto-detect CI environment
+if [[ -n "$CI" || -n "$GITHUB_ACTIONS" || -n "$GITLAB_CI" || -n "$JENKINS_URL" || ! -t 0 ]]; then
+    export SKIP_WHIPTAIL=1
+    echo "[INFO] CI environment detected, running in non-interactive mode"
+fi
+
 main() {
     print_ascii_banner
     show_system_info
     check_root
+
     if [[ "$SKIP_WHIPTAIL" == "1" ]]; then
-        HARDN_STATUS "info" "Non-interactive mode: installing all modules."
+        HARDN_STATUS "info" "Running in non-interactive mode (SKIP_WHIPTAIL=1)"
+        # Run default hardening without user interaction
         update_system_packages
         install_package_dependencies
-        setup_all_security_modules
+        setup_security_modules
         cleanup
-    else
-        welcomemsg
-        main_menu
+
+        print_ascii_banner
+        HARDN_STATUS "pass" "HARDN-XDR v${HARDN_VERSION} installation completed successfully!"
+        HARDN_STATUS "info" "Your system has been hardened with STIG compliance and security tools."
+        HARDN_STATUS "info" "Please reboot your system to complete the configuration."
+        return 0
     fi
+
+    # Interactive mode continues...
+    welcomemsg
+    main_menu
 
     print_ascii_banner
 
