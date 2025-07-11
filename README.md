@@ -89,6 +89,7 @@ cd HARDN-XDR
 
 2. Build the Debian package:
 ```bash
+sudo apt update && sudo apt install dpkg-dev build-essential -y
 dpkg-buildpackage -us -uc
 sudo apt install -f
 cd ..
