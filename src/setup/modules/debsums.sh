@@ -1,22 +1,5 @@
 #!/bin/bash
 
-# Source common functions
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../hardn-common.sh" 2>/dev/null || {
-    # Fallback if common file not found
-    HARDN_STATUS() {
-        local status="$1"
-        local message="$2"
-        case "$status" in
-            "pass")    echo -e "\033[1;32m[PASS]\033[0m $message" ;;
-            "warning") echo -e "\033[1;33m[WARNING]\033[0m $message" ;;
-            "error")   echo -e "\033[1;31m[ERROR]\033[0m $message" ;;
-            "info")    echo -e "\033[1;34m[INFO]\033[0m $message" ;;
-            *)         echo -e "\033[1;37m[UNKNOWN]\033[0m $message" ;;
-        esac
-    }
-}
-
 
 # Debsums Optimization Improvements for performance:
 # 1. Process Prioritization: Using nice/ionice to reduce system impact during checks
@@ -107,25 +90,32 @@ get_pkg_manager() {
 # Function to check if a package is installed (optimized)
 is_installed() {
     local package="$1"
+    local result=1
 
     # Use cached package manager value
     case "$PKG_MANAGER" in
         apt)
             dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed"
+            result=$?
             ;;
         dnf)
             dnf list installed "$package" >/dev/null 2>&1
+            result=$?
             ;;
         yum)
             yum list installed "$package" >/dev/null 2>&1
+            result=$?
             ;;
         rpm)
             rpm -q "$package" >/dev/null 2>&1
+            result=$?
             ;;
         *)
-            return 1 # Cannot determine package manager
+            result=1 # Cannot determine package manager
             ;;
     esac
+
+    return $result
 }
 
 # Function to efficiently create log directories with rotation

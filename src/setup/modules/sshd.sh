@@ -1,82 +1,160 @@
 #!/bin/bash
 # sshd.sh - Install and basic setup for OpenSSH server
 
-# Source common functions
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../hardn-common.sh" 2>/dev/null || {
-    # Fallback if common file not found
-    HARDN_STATUS() {
-        local status="$1"
-        local message="$2"
-        case "$status" in
-            "pass")    echo -e "\033[1;32m[PASS]\033[0m $message" ;;
-            "warning") echo -e "\033[1;33m[WARNING]\033[0m $message" ;;
-            "error")   echo -e "\033[1;31m[ERROR]\033[0m $message" ;;
-            "info")    echo -e "\033[1;34m[INFO]\033[0m $message" ;;
-            *)          echo -e "\033[1;37m[UNKNOWN]\033[0m $message" ;;
+hardn_ssh_is_installed() {
+    command -v sshd &>/dev/null || [ -f "/usr/sbin/sshd" ]
+}
+
+hardn_ssh_install() {
+    local pkg_manager="" status=0
+
+    # Determine package manager using built-in tests
+    if command -v apt-get &>/dev/null; then
+        pkg_manager="apt"
+    elif command -v yum &>/dev/null; then
+        pkg_manager="yum"
+    elif command -v dnf &>/dev/null; then
+        pkg_manager="dnf"
+    else
+        HARDN_STATUS "error" "Unsupported package manager. Please install OpenSSH server manually."
+        return 1
+    fi
+
+    # Install SSH based on detected package manager
+    HARDN_STATUS "info" "Installing OpenSSH server using ${pkg_manager}..."
+    case "${pkg_manager}" in
+        apt)
+            apt-get update -qq && apt-get install -y openssh-server || status=1
+            ;;
+        yum|dnf)
+            "${pkg_manager}" install -y openssh-server || status=1
+            ;;
+    esac
+
+    if [ ${status} -eq 0 ]; then
+        HARDN_STATUS "pass" "OpenSSH server installed successfully"
+    else
+        HARDN_STATUS "error" "Failed to install OpenSSH server"
+    fi
+
+    return ${status}
+}
+
+hardn_ssh_detect_service() {
+    local service_name=""
+
+    # Use read with process substitution to avoid subshell
+    while read -r line; do
+        case "${line}" in
+            *ssh.service*)
+                service_name="ssh.service"
+                break
+                ;;
+            *sshd.service*)
+                service_name="sshd.service"
+                break
+                ;;
         esac
-    }
+    done < <(systemctl list-unit-files | grep -E '(ssh|sshd)\.service')
+
+    if [ -z "${service_name}" ]; then
+        HARDN_STATUS "error" "Could not find SSH service"
+        return 1
+    fi
+
+    echo "${service_name}"
+    return 0
 }
 
-set -e
+hardn_ssh_secure_config() {
+    local config_file="/etc/ssh/sshd_config"
+    local status=0
 
-# Universal package installer
-is_installed() {
-    command -v "$1" &>/dev/null
+    if [ ! -f "${config_file}" ]; then
+        HARDN_STATUS "error" "SSH config file not found: ${config_file}"
+        return 1
+    fi
+
+    HARDN_STATUS "info" "Applying secure SSH configuration..."
+
+    # Create backup of original config
+    cp -f "${config_file}" "${config_file}.hardn.bak" || status=1
+
+    # Apply security settings using awk for efficiency (single pass)
+    awk '
+        # Disable root login
+        $1 == "PermitRootLogin" { print "PermitRootLogin no"; next }
+        /^#PermitRootLogin/ { print "PermitRootLogin no"; next }
+
+        # Disable password authentication
+        $1 == "PasswordAuthentication" { print "PasswordAuthentication no"; next }
+        /^#PasswordAuthentication/ { print "PasswordAuthentication no"; next }
+
+        # Disable empty passwords
+        $1 == "PermitEmptyPasswords" { print "PermitEmptyPasswords no"; next }
+        /^#PermitEmptyPasswords/ { print "PermitEmptyPasswords no"; next }
+
+        # Disable X11 forwarding
+        $1 == "X11Forwarding" { print "X11Forwarding no"; next }
+        /^#X11Forwarding/ { print "X11Forwarding no"; next }
+
+        # Enable strict mode
+        $1 == "StrictModes" { print "StrictModes yes"; next }
+        /^#StrictModes/ { print "StrictModes yes"; next }
+
+        # Print unchanged lines
+        { print }
+
+        # Add missing settings at the end
+        END {
+            print "# Added by HARDN-XDR"
+            print "Protocol 2"
+            print "MaxAuthTries 4"
+            print "ClientAliveInterval 300"
+            print "ClientAliveCountMax 0"
+            print "UsePAM yes"
+        }
+    ' "${config_file}" > "${config_file}.new" && \
+    mv "${config_file}.new" "${config_file}" || status=1
+
+    if [ ${status} -eq 0 ]; then
+        HARDN_STATUS "pass" "SSH configuration hardened successfully"
+    else
+        HARDN_STATUS "error" "Failed to harden SSH configuration"
+    fi
+
+    return ${status}
 }
 
-HARDN_STATUS "info" "Installing OpenSSH server..."
-hardn_msgbox "Installing OpenSSH server...\n\nThis may take a few minutes."
-hardn_infobox "Please have your ssh key stored and login backup...\n\nThis process disables certain processes."
+# Main SSH hardening function
+hardn_ssh_harden() {
+    local service_name="" status=0
 
-# Install OpenSSH server
-if is_installed apt-get; then
-    sudo apt-get update
-    sudo apt-get install -y openssh-server
-elif is_installed yum; then
-    sudo yum install -y openssh-server
-elif is_installed dnf; then
-    sudo dnf install -y openssh-server
-else
-    HARDN_STATUS "error" "Unsupported package manager. Please install OpenSSH server manually."
-    exit 1
-fi
+    if ! hardn_ssh_is_installed; then
+        hardn_ssh_install || status=1
+    else
+        HARDN_STATUS "info" "OpenSSH server is already installed"
+    fi
 
-# Define the service name
-# On Debian/Ubuntu, the service is ssh.service, and sshd.service is a symlink.
-# On RHEL/CentOS, the service is sshd.service.
-# use canonical name to avoid issues with aliases.
-if systemctl list-unit-files | grep -q -w "ssh.service"; then
-    SERVICE_NAME="ssh.service"
-elif systemctl list-unit-files | grep -q -w "sshd.service"; then
-    SERVICE_NAME="sshd.service"
-else
-    HARDN_STATUS "error" "Could not find sshd or ssh service."
-    exit 1
-fi
+    # Get service name
+    service_name=$(hardn_ssh_detect_service) || status=1
 
-HARDN_STATUS "info" "Enabling and starting SSH service: $SERVICE_NAME"
-hardn_msgbox "Enabling and starting SSH service: $SERVICE_NAME\n\nThis may take a few seconds."
-hardn_infobox "Please have your ssh key stored and login backup...\n\nThis process disables login certain processes."
-hardn_msgbox "Press OK to continue."
+    if [ ${status} -eq 0 ]; then
+        HARDN_STATUS "info" "Enabling and starting SSH service: ${service_name}"
+        systemctl enable "${service_name}" && \
+        systemctl start "${service_name}" || status=1
 
-# Enable and start sshd service
-sudo systemctl enable "$SERVICE_NAME"
-sudo systemctl start "$SERVICE_NAME"
+        hardn_ssh_secure_config || status=1
 
-# COMMENTED OUT: Basic configuration
-# WARNING: These SSH hardening settings are DISABLED for testing
-SSHD_CONFIG="/etc/ssh/sshd_config"
-if [ -f "$SSHD_CONFIG" ]; then
-    # DISABLED: sudo sed -i 's/^#?PermitRootLogin.*/PermitRootLogin no/' "$SSHD_CONFIG"
-    # DISABLED: sudo sed -i 's/^#?PasswordAuthentication.*/PasswordAuthentication no/' "$SSHD_CONFIG"
-    HARDN_STATUS "warning" "SSH hardening is DISABLED - PermitRootLogin and PasswordAuthentication changes are commented out"
-    HARDN_STATUS "info" "This allows password login for testing. Re-enable after confirming SSH key access works."
-else
-    HARDN_STATUS "warning" "$SSHD_CONFIG not found. Skipping configuration."
-fi
+        # Restart service to apply changes
+        HARDN_STATUS "info" "Restarting SSH service to apply changes"
+        systemctl restart "${service_name}" || status=1
 
-# Restart sshd to apply changes (minimal changes now)
-sudo systemctl restart "$SERVICE_NAME"
+        if [ ${status} -eq 0 ]; then
+            HARDN_STATUS "pass" "SSH hardening completed successfully"
+            HARDN_STATUS "warning" "Password authentication has been disabled. Ensure you have SSH key-based access."
+        fi
+    fi
 
-HARDN_STATUS "pass" "OpenSSH server installed with MINIMAL hardening for testing."
+    return ${status}
+}

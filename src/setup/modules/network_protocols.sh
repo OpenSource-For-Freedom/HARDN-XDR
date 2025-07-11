@@ -1,32 +1,28 @@
 #!/bin/bash
 
-# Source common functions
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../hardn-common.sh" 2>/dev/null || {
-    # Fallback if common file not found
-    HARDN_STATUS() {
-        local status="$1"
-        local message="$2"
-        case "$status" in
-            "pass")    echo -e "\033[1;32m[PASS]\033[0m $message" ;;
-            "warning") echo -e "\033[1;33m[WARNING]\033[0m $message" ;;
-            "error")   echo -e "\033[1;31m[ERROR]\033[0m $message" ;;
-            "info")    echo -e "\033[1;34m[INFO]\033[0m $message" ;;
-            *)         echo -e "\033[1;37m[UNKNOWN]\033[0m $message" ;;
-        esac
-    }
+# Using built-ins for efficiency, no awk or sed required, or subshell forking.
+hardn_check_promiscuous_interfaces() {
+    local line interface
+
+    # Read output line-by-line, no awk/sed No subshell forking.
+    while IFS= read -r line; do
+        # Match lines like: 2: eth0: <BROADCAST,...> to extract interface name.
+        if [[ "$line" =~ ^[0-9]+:\ ([^:]+): ]]; then
+            interface="${BASH_REMATCH[1]}"
+            if /sbin/ip link show "$interface" | grep -q "PROMISC"; then
+                HARDN_STATUS "warning" "Interface $interface is in promiscuous mode. Review Interface."
+            fi
+        fi
+    done < <(/sbin/ip link show)
 }
 
-HARDN_STATUS "error" "Disabling unnecessary network protocols..."
 
-# warn network interfaces in promiscuous mode
-for interface in $(/sbin/ip link show | awk '$0 ~ /: / {print $2}' | sed 's/://g'); do
-	if /sbin/ip link show "$interface" | grep -q "PROMISC"; then
-		HARDN_STATUS "warning" "Interface $interface is in promiscuous mode. Review Interface."
-	fi
-done
+# Create blacklist configuration for rare network protocols
+hardn_create_network_blacklist() {
+    local blacklist_file="/etc/modprobe.d/blacklist-rare-network.conf"
 
-cat > /etc/modprobe.d/blacklist-rare-network.conf << 'EOF'
+    # Create blacklist file using heredoc
+    cat > "$blacklist_file" << 'EOF'
 # HARDN-XDR Blacklist for Rare/Unused Network Protocols
 # Disabled for compliance and attack surface reduction
 
@@ -74,8 +70,20 @@ install token-ring /bin/true
 install fddi /bin/true
 EOF
 
-HARDN_STATUS "pass" "Network protocol hardening complete: Disabled $(grep -c "^install" /etc/modprobe.d/blacklist-rare-network.conf) protocols"
+    local count
+    count=$(grep -c "^install" "$blacklist_file")
+    echo "$count"
+}
 
+hardn_network_protocols() {
+    HARDN_STATUS "info" "Disabling unnecessary network protocols..."
 
-# Apply changes immediately where possible
-sysctl -p
+    hardn_check_promiscuous_interfaces
+
+    local disabled_count
+    disabled_count=$(hardn_create_network_blacklist)
+
+    HARDN_STATUS "pass" "Network protocol hardening complete: Disabled $disabled_count protocols"
+
+    sysctl -p
+}

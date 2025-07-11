@@ -1,85 +1,57 @@
 #!/bin/bash
 
-# Source common functions
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../hardn-common.sh" 2>/dev/null || {
-    # Fallback if common file not found
-    HARDN_STATUS() {
-        local status="$1"
-        local message="$2"
-        case "$status" in
-            "pass")    echo -e "\033[1;32m[PASS]\033[0m $message" ;;
-            "warning") echo -e "\033[1;33m[WARNING]\033[0m $message" ;;
-            "error")   echo -e "\033[1;31m[ERROR]\033[0m $message" ;;
-            "info")    echo -e "\033[1;34m[INFO]\033[0m $message" ;;
-            *)         echo -e "\033[1;37m[UNKNOWN]\033[0m $message" ;;
-        esac
-    }
-}
-
-set -e
+set -euo pipefail
 
 is_installed() {
-    if command -v apt >/dev/null 2>&1; then
-        dpkg -s "$1" >/dev/null 2>&1
-    elif command -v dnf >/dev/null 2>&1; then
-        dnf list installed "$1" >/dev/null 2>&1
-    elif command -v yum >/dev/null 2>&1; then
-        yum list installed "$1" >/dev/null 2>&1
-    elif command -v rpm >/dev/null 2>&1; then
-        rpm -q "$1" >/dev/null 2>&1
-    else
-        return 1 # Cannot determine package manager
-    fi
+    local pkg="$1"
+    case "$(command -v apt || command -v dnf || command -v yum || command -v rpm || echo '')" in
+        */apt)  dpkg -s "$pkg" >/dev/null 2>&1 ;;
+        */dnf)  dnf list installed "$pkg" >/dev/null 2>&1 ;;
+        */yum)  yum list installed "$pkg" >/dev/null 2>&1 ;;
+        */rpm)  rpm -q "$pkg" >/dev/null 2>&1 ;;
+        *)      return 1 ;;
+    esac
 }
 
+install_package() {
+    local pkg="$1"
+    case "$(command -v apt || command -v dnf || command -v yum || command -v rpm || echo '')" in
+        */apt) apt install -y "$pkg" >/dev/null 2>&1;;
+        */dnf) dnf install -y "$pkg" >/dev/null 2>&1;;
+        */yum) yum install -y "$pkg" >/dev/null 2>&1;;
+        *)    return 1 ;;
+    esac
+}
+
+# Install auditd if not already installed
 if ! is_installed auditd; then
     HARDN_STATUS "info" "Installing auditd..."
-    if command -v apt >/dev/null 2>&1; then
-        apt install -y auditd >/dev/null 2>&1
-    elif command -v dnf >/dev/null 2>&1; then
-        dnf install -y auditd >/dev/null 2>&1
-    elif command -v yum >/dev/null 2>&1; then
-        yum install -y auditd >/dev/null 2>&1
-    fi
+    install_package auditd
 fi
 
+# Enable and start auditd
 systemctl daemon-reload
 systemctl enable auditd
 systemctl restart auditd
 
 HARDN_STATUS "info" "Configuring auditd rules for system security..."
-
 audit_rules_file="/etc/audit/rules.d/hardn-xdr.rules"
 
-cat <<EOF > $audit_rules_file
+# Create rules file with heredoc (single write operation)
+cat > "$audit_rules_file" << 'EOF'
 # auditd-attack
 # A Linux Auditd configuration mapped to MITRE's Attack Framework
-# Most of my inspiration came from various individuals so I wont name them all, but you're work does not go
-# unnoticed!
-
-### Special Thanks To
-
-#[Eric Gershman](https://github.com/EricGershman/auditd-examples)
-#[iase.disa.mil](https://iase.disa.mil/stigs/os/unix-linux/Pages/red-hat.aspx)
-#[cyb3rops](https://gist.github.com/Neo23x0/9fe88c0c5979e017a389b90fd19ddfee)
-#[ugurengin](https://gist.github.com/ugurengin/4d37ee83e87bc44291f8ae87a00504cd)
-#[checkraze](https://github.com/checkraze/auditd-rules/blob/master/auditd.rules)
-#[auditdBroFramework](https://github.com/set-element/auditdBroFramework/blob/master/system_config/audit.rules)
 
 # Remove any existing rules
 -D
 
 # Buffer Size
-## Feel free to increase this if the machine panic's
 -b 8192
 
-# Failure Mode
-## Possible values: 0 (silent), 1 (printk, print a failure message), 2 (panic, halt the system)
+# Failure Mode (0=silent, 1=printk, 2=panic)
 -f 1
 
 # Ignore errors
-## e.g. caused by users or files not found in the local environment
 -i
 
 # Self Auditing ---------------------------------------------------------------
@@ -203,6 +175,7 @@ cat <<EOF > $audit_rules_file
 -a always,exit -F path=/usr/sbin/ccreds_validate -F perm=x -F auid>=500 -F auid!=4294967295 -k T1078_Valid_Accounts
 -a always,exit -F path=/usr/sbin/userhelper -F perm=x -F auid>=500 -F auid!=4294967295 -k T1078_Valid_Accounts
 ##-a always,exit -F path=/usr/libexec/openssh/ssh-keysign -F perm=x -F auid>=500 -F auid!=4294967295 -k T1078_Valid_Accounts
+
 -a always,exit -F path=/usr/bin/Xorg -F perm=x -F auid>=500 -F auid!=4294967295 -k T1078_Valid_Accounts
 -a always,exit -F path=/usr/bin/rlogin -F perm=x -F auid>=500 -F auid!=4294967295 -k T1078_Valid_Accounts
 -a always,exit -F path=/usr/bin/sudoedit -F perm=x -F auid>=500 -F auid!=4294967295 -k T1078_Valid_Accounts
@@ -294,11 +267,11 @@ cat <<EOF > $audit_rules_file
 -a always,exit -F arch=b32 -S setuid -S setgid -S setreuid -S setregid -k T1166_Seuid_and_Setgid
 -a always,exit -F arch=b64 -S setuid -S setgid -S setreuid -S setregid -F exit=EPERM -k T1166_Seuid_and_Setgid
 -a always,exit -F arch=b32 -S setuid -S setgid -S setreuid -S setregid -F exit=EPERM -k T1166_Seuid_and_Setgid
- -w /usr/bin/ -p wa -k T1068_Exploitation_for_Privilege_Escalation
+-w /usr/bin/ -p wa -k T1068_Exploitation_for_Privilege_Escalation
 
 ## Recon Related Events
 -w /etc/group -p wa -k T1087_Account_Discovery
--w /etc/passwd -p wa -k TT1087_Account_Discovery
+-w /etc/passwd -p wa -k T1087_Account_Discovery
 -w /etc/gshadow -k T1087_Account_Discovery
 -w /etc/shadow -k T1087_Account_Discovery
 -w /etc/security/opasswd -k T1087_Account_Discovery
@@ -396,4 +369,4 @@ chmod 600 "$audit_rules_file"
 chown root:root "$audit_rules_file"
 
 # Reload auditd rules
-augenrules --load 2>/dev/null || service auditd restart
+augenrules --load || service auditd reload

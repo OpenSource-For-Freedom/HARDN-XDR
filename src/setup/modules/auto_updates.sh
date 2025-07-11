@@ -1,49 +1,39 @@
 #!/bin/bash
 
-# Source common functions
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../hardn-common.sh" 2>/dev/null || {
-    # Fallback if common file not found
-    HARDN_STATUS() {
-        local status="$1"
-        local message="$2"
-        case "$status" in
-            "pass")    echo -e "\033[1;32m[PASS]\033[0m $message" ;;
-            "warning") echo -e "\033[1;33m[WARNING]\033[0m $message" ;;
-            "error")   echo -e "\033[1;31m[ERROR]\033[0m $message" ;;
-            "info")    echo -e "\033[1;34m[INFO]\033[0m $message" ;;
-            *)         echo -e "\033[1;37m[UNKNOWN]\033[0m $message" ;;
-        esac
-    }
+hardn_autoupdate_is_installed() {
+    local pkg="$1"
+    local pm
+
+    pm=$(command -v apt dnf yum rpm 2>/dev/null | head -1)
+    case "$pm" in
+        */apt)  dpkg -s "$pkg" >/dev/null 2>&1 ;;
+        */dnf)  dnf list installed "$pkg" >/dev/null 2>&1 ;;
+        */yum)  yum list installed "$pkg" >/dev/null 2>&1 ;;
+        */rpm)  rpm -q "$pkg" >/dev/null 2>&1 ;;
+        *)      return 1 ;;
+    esac
 }
 
-is_installed() {
-    if command -v apt >/dev/null 2>&1; then
-        dpkg -s "$1" >/dev/null 2>&1
-    elif command -v dnf >/dev/null 2>&1; then
-        dnf list installed "$1" >/dev/null 2>&1
-    elif command -v yum >/dev/null 2>&1; then
-        yum list installed "$1" >/dev/null 2>&1
-    elif command -v rpm >/dev/null 2>&1; then
-        rpm -q "$1" >/dev/null 2>&1
-    else
-        return 1 # Cannot determine package manager
+hardn_autoupdate_configure() {
+    # Source /etc/os-release to get ID and CURRENT_DEBIAN_CODENAME
+    [[ -f /etc/os-release ]] && . /etc/os-release
+
+    HARDN_STATUS "info" "Configuring automatic security updates for Debian-based systems..."
+
+    if ! hardn_autoupdate_is_installed "unattended-upgrades"; then
+        HARDN_STATUS "warning" "unattended-upgrades package not found, skipping configuration."
+        return 0
     fi
-}
 
-HARDN_STATUS "info" "Configuring automatic security updates for Debian-based systems..."
+    local config_file="/etc/apt/apt.conf.d/50unattended-upgrades"
+    local codename="${VERSION_CODENAME:-stable}"
 
-if ! is_installed unattended-upgrades; then
-    HARDN_STATUS "warning" "unattended-upgrades package not found, skipping configuration."
-    return 0
-fi
-
-case "${ID}" in # Use ${ID} from /etc/os-release
-	"debian")
-		cat > /etc/apt/apt.conf.d/50unattended-upgrades << EOF
+    case "${ID:-unknown}" in
+        "debian")
+            cat > "$config_file" << EOF
 Unattended-Upgrade::Allowed-Origins {
-    "${ID}:${CURRENT_DEBIAN_CODENAME}-security";
-    "${ID}:${CURRENT_DEBIAN_CODENAME}-updates";
+    "${ID}:${codename}-security";
+    "${ID}:${codename}-updates";
 };
 Unattended-Upgrade::Package-Blacklist {
     // Add any packages you want to exclude from automatic updates
@@ -56,20 +46,31 @@ Unattended-Upgrade::Remove-Unused-Dependencies "false";
 Unattended-Upgrade::Automatic-Reboot "false";
 EOF
             ;;
-	"ubuntu")
-		cat > /etc/apt/apt.conf.d/50unattended-upgrades << EOF
+        "ubuntu")
+            cat > "$config_file" << EOF
 Unattended-Upgrade::Allowed-Origins {
-    "${ID}:${CURRENT_DEBIAN_CODENAME}-security";
-    "${ID}ESMApps:${CURRENT_DEBIAN_CODENAME}-apps-security";
-    "${ID}ESM:${CURRENT_DEBIAN_CODENAME}-infra-security";
+    "${ID}:${codename}-security";
+    "${ID}ESMApps:${codename}-apps-security";
+    "${ID}ESM:${codename}-infra-security";
 };
 EOF
-		;;
-	*)
-		cat > /etc/apt/apt.conf.d/50unattended-upgrades << EOF
+            ;;
+        *)
+            cat > "$config_file" << EOF
 Unattended-Upgrade::Allowed-Origins {
-    "${ID}:${CURRENT_DEBIAN_CODENAME}-security";
+    "${ID:-debian}:${codename}-security";
 };
 EOF
-		;;
-esac
+            ;;
+    esac
+
+    # Configure APT periodic updates
+    cat > "/etc/apt/apt.conf.d/20auto-upgrades" << EOF
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+APT::Periodic::AutocleanInterval "7";
+EOF
+
+    HARDN_STATUS "success" "Automatic security updates configured successfully."
+    return 0
+}

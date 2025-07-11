@@ -1,68 +1,64 @@
 #!/bin/bash
 
-# Source common functions
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../hardn-common.sh" 2>/dev/null || {
-    # Fallback if common file not found
-    HARDN_STATUS() {
-        local status="$1"
-        local message="$2"
-        case "$status" in
-            "pass")    echo -e "\033[1;32m[PASS]\033[0m $message" ;;
-            "warning") echo -e "\033[1;33m[WARNING]\033[0m $message" ;;
-            "error")   echo -e "\033[1;31m[ERROR]\033[0m $message" ;;
-            "info")    echo -e "\033[1;34m[INFO]\033[0m $message" ;;
-            *)         echo -e "\033[1;37m[UNKNOWN]\033[0m $message" ;;
+hardn_chkrootkit_is_installed() {
+        local package="$1"
+
+        # Use case statement to determine package manager and check installation
+        case "$(command -v apt dnf yum rpm 2>/dev/null | head -1)" in
+            */apt)  dpkg -s "$package" >/dev/null 2>&1 ;;
+            */dnf)  dnf list installed "$package" >/dev/null 2>&1 ;;
+            */yum)  yum list installed "$package" >/dev/null 2>&1 ;;
+            */rpm)  rpm -q "$package" >/dev/null 2>&1 ;;
+            *)      return 1 ;;
         esac
-    }
 }
 
-is_installed() {
-    if command -v apt >/dev/null 2>&1; then
-        dpkg -s "$1" >/dev/null 2>&1
-    elif command -v dnf >/dev/null 2>&1; then
-        dnf list installed "$1" >/dev/null 2>&1
-    elif command -v yum >/dev/null 2>&1; then
-        yum list installed "$1" >/dev/null 2>&1
-    elif command -v rpm >/dev/null 2>&1; then
-        rpm -q "$1" >/dev/null 2>&1
-    else
-        return 1 # Cannot determine package manager
-    fi
+# Install chkrootkit if not already installed
+hardn_chkrootkit_install() {
+        HARDN_STATUS "info" "Setting up Chkrootkit..."
+
+        if hardn_chkrootkit_is_installed chkrootkit; then
+            HARDN_STATUS "info" "Chkrootkit is already installed."
+            return 0
+        fi
+
+        HARDN_STATUS "info" "Installing chkrootkit..."
+
+        # Use case statement to determine package manager and install
+        case "$(command -v apt dnf yum 2>/dev/null | head -1)" in
+            */apt)  apt install -y chkrootkit >/dev/null 2>&1 ;;
+            */dnf)  dnf install -y chkrootkit >/dev/null 2>&1 ;;
+            */yum)  yum install -y chkrootkit >/dev/null 2>&1 ;;
+            *)
+                HARDN_STATUS "error" "No supported package manager found (apt, dnf, yum)."
+                return 1
+                ;;
+        esac
+
+        if ! hardn_chkrootkit_is_installed chkrootkit; then
+            HARDN_STATUS "error" "Failed to install chkrootkit. Please check your package manager."
+            return 1
+        fi
+
+        return 0
 }
 
-HARDN_STATUS "info" "Setting up Chkrootkit..."
+# Configure chkrootkit for daily scans and alerts
+hardn_chkrootkit_configure() {
+    local email="${1:-your@email.com}"
+    local slack_webhook="${2:-https://hooks.slack.com/services/your/webhook/url}"
 
-if ! is_installed chkrootkit; then
-    HARDN_STATUS "info" "Installing chkrootkit..."
-    if command -v apt >/dev/null 2>&1; then
-        apt install -y chkrootkit >/dev/null 2>&1
-    elif command -v dnf >/dev/null 2>&1; then
-        dnf install -y chkrootkit >/dev/null 2>&1
-    elif command -v yum >/dev/null 2>&1; then
-        yum install -y chkrootkit >/dev/null 2>&1
-    fi
-fi
-
-if ! is_installed chkrootkit; then
-    HARDN_STATUS "error" "Failed to install chkrootkit. Please check your package manager."
-    exit 1
-fi
-
-# Optional: Configure daily scan and email/slack alerts
-EMAIL="your@email.com"
-SLACK_WEBHOOK_URL="https://hooks.slack.com/services/your/webhook/url"
-
-cat <<EOF >/etc/chkrootkit.conf
+    # Create configuration file
+    cat > /etc/chkrootkit.conf << EOF
 RUN_DAILY="yes"
 SEND_EMAIL="yes"
-EMAIL_TO="$EMAIL"
+EMAIL_TO="$email"
 SEND_SLACK="yes"
-SLACK_WEBHOOK_URL="$SLACK_WEBHOOK_URL"
+SLACK_WEBHOOK_URL="$slack_webhook"
 EOF
 
-# Create a cron job for daily scan
-cat <<'EOF' >/etc/cron.daily/chkrootkit
+    # Create daily cron job
+    cat > /etc/cron.daily/chkrootkit << 'EOF'
 #!/bin/sh
 EMAIL="your@email.com"
 SLACK_WEBHOOK_URL="https://hooks.slack.com/services/your/webhook/url"
@@ -72,10 +68,19 @@ echo "$RESULT" | mail -s "Chkrootkit Daily Scan Results" "$EMAIL"
 
 # Send to Slack
 if [ -n "$SLACK_WEBHOOK_URL" ]; then
-    PAYLOAD=$(printf '{"text":"Chkrootkit Daily Scan Results:\n%s"}' "$(echo "$RESULT" | sed 's/"/\\"/g')")
+    PAYLOAD=$(printf '{"text":"Chkrootkit Daily Scan Results:\n%s"}' "$(echo "$RESULT" | sed 's/"/\"/g')")
     curl -X POST -H 'Content-type: application/json' --data "$PAYLOAD" "$SLACK_WEBHOOK_URL"
 fi
 EOF
-chmod +x /etc/cron.daily/chkrootkit
+    chmod +x /etc/cron.daily/chkrootkit
 
-HARDN_STATUS "info" "Chkrootkit configured for daily scans, email, and Slack alerts."
+    HARDN_STATUS "info" "Chkrootkit configured for daily scans, email, and Slack alerts."
+    return 0
+}
+
+# Main function to setup chkrootkit
+hardn_chkrootkit_setup() {
+        hardn_chkrootkit_install || return 1
+        hardn_chkrootkit_configure "$@"
+        return 0
+}
