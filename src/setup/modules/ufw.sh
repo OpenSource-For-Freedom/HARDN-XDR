@@ -249,7 +249,7 @@ update_ntp_conf() {
     } >> "$target_conf"
 }
 
-# Main function to configure NTP - this is the function that should be called from hardn-main.sh
+# MAIN FUNCTION TO CONFIGURE NTP - THIS IS THE FUNCTION THAT SHOULD BE CALLED FROM HARDN-MAIN.SH
 configure_ntp() {
     # Default NTP servers - can be overridden by passing parameters
     local ntp_servers="${1:-0.debian.pool.ntp.org 1.debian.pool.ntp.org 2.debian.pool.ntp.org 3.debian.pool.ntp.org}"

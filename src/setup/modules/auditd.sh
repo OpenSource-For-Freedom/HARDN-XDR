@@ -4,19 +4,19 @@
 
 # Check if package is installed
 hardn_auditd_is_installed() {
-    local pkg="$1"
+        local pkg="$1"
 
-    if command -v apt >/dev/null 2>&1; then
-        dpkg -s "$pkg" >/dev/null 2>&1
-    elif command -v dnf >/dev/null 2>&1; then
-        dnf list installed "$pkg" >/dev/null 2>&1
-    elif command -v yum >/dev/null 2>&1; then
-        yum list installed "$pkg" >/dev/null 2>&1
-    elif command -v rpm >/dev/null 2>&1; then
-        rpm -q "$pkg" >/dev/null 2>&1
-    else
-        return 1 # Cannot determine package manager
-    fi
+        if command -v apt >/dev/null 2>&1; then
+            dpkg -s "$pkg" >/dev/null 2>&1
+        elif command -v dnf >/dev/null 2>&1; then
+            dnf list installed "$pkg" >/dev/null 2>&1
+        elif command -v yum >/dev/null 2>&1; then
+            yum list installed "$pkg" >/dev/null 2>&1
+        elif command -v rpm >/dev/null 2>&1; then
+            rpm -q "$pkg" >/dev/null 2>&1
+        else
+            return 1 # Cannot determine package manager
+        fi
 }
 
 # Install auditd if not already installed
@@ -47,9 +47,9 @@ hardn_auditd_install() {
 
 # Enable and start auditd service
 hardn_auditd_enable_service() {
-    systemctl daemon-reload
-    systemctl enable auditd
-    systemctl restart auditd
+        systemctl daemon-reload
+        systemctl enable auditd
+        systemctl restart auditd
 }
 
 # Configure auditd rules
@@ -399,45 +399,41 @@ hardn_auditd_configure_rules() {
 ##-e 2
 EOF
 
-# Secure the audit rules file permissions
-chmod 600 "$audit_rules_file"
-chown root:root "$audit_rules_file"
+        # Secure the audit rules file permissions
+        chmod 600 "$audit_rules_file"
+        chown root:root "$audit_rules_file"
 
-# Reload auditd rules
-augenrules --load 2>/dev/null || service auditd restart
+        # Reload auditd rules
+        augenrules --load 2>/dev/null || service auditd restart
 }
 
-# Main function for auditd module
-
-
-
-
+# MAIN FUNCTION FOR AUDITD MODULE
 hardn_auditd_main() {
-    echo "[INFO] Configuring auditd..."
-    HARDN_STATUS "info" "Setting up auditd..."
+        echo "[INFO] Configuring auditd..."
+        HARDN_STATUS "info" "Setting up auditd..."
 
-    # Install auditd
-    hardn_auditd_install || {
-        HARDN_STATUS "error" "Failed to install auditd"
-        return 1
-    }
+        # Install auditd
+        hardn_auditd_install || {
+            HARDN_STATUS "error" "Failed to install auditd"
+            return 1
+        }
 
-    # Configure auditd rules
-    hardn_auditd_configure_rules || {
-        HARDN_STATUS "error" "Failed to configure auditd rules"
-        return 1
-    }
+        # Configure auditd rules
+        hardn_auditd_configure_rules || {
+            HARDN_STATUS "error" "Failed to configure auditd rules"
+            return 1
+        }
 
-    # Enable and start auditd service
-    hardn_auditd_enable_service || {
-        HARDN_STATUS "error" "Failed to enable auditd service"
-        return 1
-    }
+        # Enable and start auditd service
+        hardn_auditd_enable_service || {
+            HARDN_STATUS "error" "Failed to enable auditd service"
+            return 1
+        }
 
-    echo "pass" "Auditd setup completed successfully"
-    # Auditd configuration module
+        echo "pass" "Auditd setup completed successfully"
+        # Auditd configuration module
 
-    return 0
+        return 0
 }
 
 # If script is run directly (not sourced), show error

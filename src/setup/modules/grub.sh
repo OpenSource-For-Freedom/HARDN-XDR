@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# HARDN-XDR: GRUB Bootloader Password Hardening Module for Debian 12
+# HARDN-XDR: GRUB Bootloader Password Hardening Module
 # (Interactive Only with Dialog + Rollback Support)
 
 # Global variables with module prefix to avoid collisions
@@ -18,7 +18,7 @@ enforce_source() {
         fi
 }
 
-# Verify we're being sourced by the correct script
+# Verify being sourced by the correct script
 verify_correct_source() {
         if [[ ! "${BASH_SOURCE[1]}" =~ hardn-main\.sh$ ]]; then
             echo "Error: This script must be sourced by hardn-main.sh" >&2
@@ -91,7 +91,7 @@ EOF
 }
 
 
-# Backup the current 40_custom config
+# BACKUP THE CURRENT 40_CUSTOM CONFIG
 hardn_grub_backup_config() {
     mkdir -p "$HARDN_GRUB_BACKUP_DIR"
     cp "$HARDN_GRUB_CUSTOM_FILE" "$HARDN_GRUB_BACKUP_DIR/40_custom.bak.$(date +%F-%H%M%S)" || return 1
@@ -99,7 +99,7 @@ hardn_grub_backup_config() {
     return 0
 }
 
-# Restore the most recent backup
+# RESTORE THE MOST RECENT BACKUP
 hardn_grub_rollback_config() {
         local latest_backup
         latest_backup=$(find "$HARDN_GRUB_BACKUP_DIR" -name "40_custom.bak.*" -type f -printf "%T@ %p\n" 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2-)
@@ -115,7 +115,7 @@ hardn_grub_rollback_config() {
         return 0
 }
 
-# Write GRUB config with password
+# WRITE GRUB CONFIG WITH PASSWORD
 hardn_grub_update_config() {
         local hash="$1"
         [[ -z "$hash" ]] && return 1
@@ -132,7 +132,7 @@ EOF
     return 0
 }
 
-# Regenerate grub.cfg for Debian 12
+# REGENERATE GRUB.CFG
 hardn_grub_regenerate() {
         printf " Regenerating GRUB configuration...\n"
 
@@ -149,26 +149,36 @@ hardn_grub_regenerate() {
         return 0
 }
 
-# Main function to secure GRUB
+# MAIN FUNCTION
 hardn_grub_secure() {
         printf " Securing GRUB with password (interactive)...\n"
 
-        enforce_source
+        # Check if script is being properly sourced
+        enforce_source || return 1
+        verify_correct_source || return 1
+        verify_xdr_root_set || return 1
 
+        # Get password hash from user
         local password_hash
         password_hash=$(hardn_grub_prompt_for_password_hash) || {
             printf " Aborted: Password prompt failed.\n"
             return 1
         }
 
-        hardn_grub_backup_config || return 1
+        # Backup current configuration
+        hardn_grub_backup_config || {
+            printf " Failed to backup GRUB configuration.\n"
+            return 1
+        }
 
+        # Update configuration with new password
         hardn_grub_update_config "$password_hash" || {
             printf " Failed to update config. Rolling back.\n"
             hardn_grub_rollback_config
             return 1
         }
 
+        # Regenerate GRUB configuration
         hardn_grub_regenerate || {
             printf " GRUB regeneration failed. Rolling back.\n"
             hardn_grub_rollback_config
