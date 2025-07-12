@@ -1,0 +1,23 @@
+# OS specific files
+.DS_Store
+Thumbs.db# Ignore JetBrains IDE configuration files
+.idea/
+
+# Common build directories
+build/
+dist/
+*.deb
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~
+
+# Logs
+*.log
+logs/
+
+# OS specific files
+.DS_Store
+Thumbs.db
