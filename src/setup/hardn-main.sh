@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CURRENT_DEBIAN_VERSION_ID=""
 CURRENT_DEBIAN_CODENAME=""
 
-# standardized whiptail usage
+# standard whiptail
 source "${SCRIPT_DIR}/hardn-common.sh" 2>/dev/null || {
 
     echo "Warning: Could not source hardn-common.sh, using local functions"
@@ -43,12 +43,13 @@ welcomemsg() {
     HARDN_STATUS "info" ""
     HARDN_STATUS "info" "HARDN-XDR v${HARDN_VERSION} - Linux Security Hardening Sentinel"
     HARDN_STATUS "info" "================================================================"
-    whiptail --title "HARDN-XDR v${HARDN_VERSION}" --msgbox \
-        "Welcome to HARDN-XDR v${HARDN_VERSION} - A Debian Security tool for System Hardening\n\nThis will apply STIG compliance, security tools, and comprehensive system hardening." 12 70
+
+    hardn_msgbox "Welcome to HARDN-XDR v${HARDN_VERSION} - A Debian Security tool for System Hardening\n\nThis will apply STIG compliance, security tools, and comprehensive system hardening." 12 70
+
     HARDN_STATUS "info" ""
     HARDN_STATUS "info" "This installer will update your system first..."
-    if whiptail --title "HARDN-XDR v${HARDN_VERSION}" --yesno \
-        "Do you want to continue with the installation?" 10 60; then
+
+    if hardn_yesno "Do you want to continue with the installation?" 10 60; then
         return 0
     else
         HARDN_STATUS "error" "Installation cancelled by user."
@@ -58,7 +59,7 @@ welcomemsg() {
 
 preinstallmsg() {
     HARDN_STATUS "info" ""
-    whiptail --title "HARDN-XDR" --msgbox "Welcome to HARDN-XDR. A Linux Security Hardening program." 10 60
+    hardn_msgbox "Welcome to HARDN-XDR. A Linux Security Hardening program." 10 60
     HARDN_STATUS "info" "The system will be configured to ensure STIG and Security compliance."
 }
 
@@ -123,17 +124,27 @@ EOF
 
 run_module() {
     local module_file="$1"
-    local module_path_installed="/usr/lib/hardn-xdr/src/setup/modules/$module_file"
-    local module_path_local="${SCRIPT_DIR}/modules/$module_file"
-    if [[ -f "$module_path_installed" ]]; then
-        HARDN_STATUS "info" "Executing module (installed path): ${module_file}"
-        source "$module_path_installed"
-    elif [[ -f "$module_path_local" ]]; then
-        HARDN_STATUS "info" "Executing module (local dev path): ${module_file}"
-        source "$module_path_local"
-    else
-        HARDN_STATUS "error" "Module not found in either path: $module_file"
-    fi
+    local module_paths=(
+        "/usr/lib/hardn-xdr/src/setup/modules/$module_file"
+        "${SCRIPT_DIR}/modules/$module_file"
+        "$(dirname "$0")/modules/$module_file"
+        "./modules/$module_file"
+    )
+
+    for module_path in "${module_paths[@]}"; do
+        if [[ -f "$module_path" ]]; then
+            HARDN_STATUS "info" "Executing module: ${module_file} from ${module_path}"
+            source "$module_path"
+            return 0
+        fi
+    done
+
+    HARDN_STATUS "error" "Module not found in any expected location: $module_file"
+    HARDN_STATUS "error" "Searched paths:"
+    for path in "${module_paths[@]}"; do
+        HARDN_STATUS "error" "  - $path"
+    done
+    return 1
 }
 
 setup_security_modules() {
@@ -167,10 +178,10 @@ cleanup() {
 
 main_menu() {
     local choice
-    choice=$(whiptail --title "HARDN-XDR v${HARDN_VERSION}" --menu "Choose an option:" 15 60 3 \
+    choice=$(hardn_menu "Choose an option:" 15 60 3 \
         "1" "Install all security modules" \
         "2" "Select specific security modules" \
-        "3" "Exit" 3>&1 1>&2 2>&3)
+        "3" "Exit")
 
     case "$choice" in
         1)
@@ -196,8 +207,23 @@ main_menu() {
     esac
 }
 
+cleanup() {
+    HARDN_STATUS "info" "Performing final system cleanup..."
+    apt-get autoremove -y &>/dev/null
+    apt-get clean &>/dev/null
+    apt-get autoclean &>/dev/null
+    HARDN_STATUS "pass" "System cleanup completed. Unused packages and cache cleared."
+
+    if [[ "$SKIP_WHIPTAIL" != "1" ]]; then
+        whiptail --infobox "HARDN-XDR v${HARDN_VERSION} setup complete! Please reboot your system." 8 75
+        sleep 3
+    else
+        HARDN_STATUS "info" "HARDN-XDR v${HARDN_VERSION} setup complete! Please reboot your system."
+    fi
+}
+
 # Auto-detect CI environment
-if [[ -n "$CI" || -n "$GITHUB_ACTIONS" || -n "$GITLAB_CI" || -n "$JENKINS_URL" || ! -t 0 ]]; then
+if [[ -n "$CI" || -n "$GITHUB_ACTIONS" || ! -t 0 ]]; then
     export SKIP_WHIPTAIL=1
     echo "[INFO] CI environment detected, running in non-interactive mode"
 fi
@@ -209,7 +235,7 @@ main() {
 
     if [[ "$SKIP_WHIPTAIL" == "1" ]]; then
         HARDN_STATUS "info" "Running in non-interactive mode (SKIP_WHIPTAIL=1)"
-        # Run default hardening without user interaction
+        # Run default without user interaction
         update_system_packages
         install_package_dependencies
         setup_security_modules

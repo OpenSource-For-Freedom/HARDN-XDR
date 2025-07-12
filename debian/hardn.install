@@ -2,3 +2,5 @@ src/setup/hardn-main.sh          usr/lib/hardn-xdr/src/setup/
 src/setup/modules/*              usr/lib/hardn-xdr/src/setup/modules/
 hardn-xdr                        usr/bin/
 man/hardn-xdr.1                  usr/share/man/man1/
+src/setup/hardn-common.sh        usr/lib/hardn-xdr/src/setup/
+

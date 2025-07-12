@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Auto-detect CI environment and skip whiptail
-if [[ -n "$CI" || -n "$GITHUB_ACTIONS" || -n "$GITLAB_CI" || -n "$JENKINS_URL" || ! -t 0 ]]; then
+if [[ -n "$CI" || -n "$GITHUB_ACTIONS" || ! -t 0 ]]; then
     export SKIP_WHIPTAIL=1
 fi
 
@@ -18,7 +18,7 @@ HARDN_STATUS() {
     esac
 }
 
-# Universal package
+# Universal 
 is_installed() {
     local pkg="$1"
     if command -v dpkg >/dev/null 2>&1; then
@@ -34,7 +34,7 @@ is_installed() {
     fi
 }
 
-# Standardized whiptail helper functions
+
 HARDN_WHIPTAIL_TITLE="HARDN-XDR v${HARDN_VERSION:-1.1.50}"
 
 
@@ -42,7 +42,7 @@ HARDN_WHIPTAIL_WIDTH=70
 HARDN_WHIPTAIL_HEIGHT=15
 HARDN_WHIPTAIL_MENU_HEIGHT=8
 
-# Standardized whiptail msgbox with CI detection
+# Standardized whiptail msgbox + CI 
 hardn_msgbox() {
     local message="$1"
     local height="${2:-$HARDN_WHIPTAIL_HEIGHT}"
@@ -61,7 +61,7 @@ hardn_msgbox() {
     whiptail --title "$HARDN_WHIPTAIL_TITLE" --msgbox "$message" "$height" "$width"
 }
 
-# Standardized whiptail infobox with CI detection
+# Standardized whiptail infobox + CI 
 hardn_infobox() {
     local message="$1"
     local height="${2:-$HARDN_WHIPTAIL_HEIGHT}"
@@ -80,7 +80,7 @@ hardn_infobox() {
     whiptail --title "$HARDN_WHIPTAIL_TITLE" --infobox "$message" "$height" "$width"
 }
 
-# Standardized whiptail menu with CI detection
+# Standardized whiptail menu + CI detection
 hardn_menu() {
     local message="$1"
     local height="${2:-$HARDN_WHIPTAIL_HEIGHT}"
@@ -104,7 +104,6 @@ hardn_menu() {
     whiptail --title "$HARDN_WHIPTAIL_TITLE" --menu "$message" "$height" "$width" "$menu_height" "${options[@]}"
 }
 
-# Standardized whiptail yesno with CI detection
 hardn_yesno() {
     local message="$1"
     local height="${2:-$HARDN_WHIPTAIL_HEIGHT}"
@@ -112,7 +111,7 @@ hardn_yesno() {
 
     if [[ "$SKIP_WHIPTAIL" == "1" ]]; then
         HARDN_STATUS "info" "Auto-confirming: $message"
-        return 0  # Default to "yes" in CI
+        return 0  
     fi
 
     if ! command -v whiptail >/dev/null 2>&1; then
@@ -123,7 +122,7 @@ hardn_yesno() {
     whiptail --title "$HARDN_WHIPTAIL_TITLE" --yesno "$message" "$height" "$width"
 }
 
-# Export variables for all files
+
 export -f HARDN_STATUS
 export -f is_installed
 export -f hardn_msgbox
