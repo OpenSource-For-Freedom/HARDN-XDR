@@ -408,7 +408,12 @@ augenrules --load 2>/dev/null || service auditd restart
 }
 
 # Main function for auditd module
+
+
+
+
 hardn_auditd_main() {
+    echo "[INFO] Configuring auditd..."
     HARDN_STATUS "info" "Setting up auditd..."
 
     # Install auditd
@@ -429,7 +434,9 @@ hardn_auditd_main() {
         return 1
     }
 
-    HARDN_STATUS "pass" "Auditd setup completed successfully"
+    echo "pass" "Auditd setup completed successfully"
+    # Auditd configuration module
+
     return 0
 }
 
