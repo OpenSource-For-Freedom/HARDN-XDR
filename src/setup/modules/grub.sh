@@ -1,107 +1,178 @@
 #!/bin/bash
 
-# HARDN-XDR GRUB Hardening Module 
-# Securely hardens GRUB without breaking boot
+# HARDN-XDR: GRUB Bootloader Password Hardening Module for Debian 12
+# (Interactive Only with Dialog + Rollback Support)
+
+# Enforce sourcing by hardn-main.sh
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    echo "❌ Error: This script must be sourced by hardn-main.sh, not executed directly." >&2
+    echo "Usage: source ${BASH_SOURCE[0]}" >&2
+    return 1
+fi
+
+# Verify we're being sourced by the correct script
+if [[ ! "${BASH_SOURCE[1]}" =~ hardn-main\.sh$ ]]; then
+    echo " Error: This script must be sourced by hardn-main.sh" >&2
+    return 1
+fi
+
+# Verify HARDN_XDR_ROOT is set (should be set by hardn-main.sh)
+if [[ -z "${HARDN_XDR_ROOT}" ]]; then
+    echo "❌ Error: HARDN_XDR_ROOT environment variable not set" >&2
+    echo "This script must be sourced by hardn-main.sh" >&2
+    return 1
+fi
 
 
-LOG_DIR="/var/log/hardn"
-LOG_FILE="$LOG_DIR/grub_hardening.log"
-VERIFICATION_LOG="$LOG_DIR/grub_verification.log"
+# Global variables with module prefix to avoid collisions
+HARDN_GRUB_DEFAULT_USERNAME="admin"
+HARDN_GRUB_BACKUP_DIR="/etc/grub.d/backups"
+HARDN_GRUB_CUSTOM_FILE="/etc/grub.d/40_custom"
 
-HARDN_STATUS() {
-    local status="$1"
-    local message="$2"
-    local color="\033[0m"
-    case "$status" in
-        info) color="\033[1;34m" ;;
-        pass) color="\033[1;32m" ;;
-        warning) color="\033[1;33m" ;;
-        error) color="\033[1;31m" ;;
-    esac
-    echo -e "${color}[${status^^}]\033[0m $message"
+# Prompt user for password using dialog and hash it
+hardn_grub_prompt_for_password_hash() {
+    # Check for dialog dependency
+    command -v dialog >/dev/null 2>&1 || {
+        printf "❌ 'dialog' is required for interactive password prompts.\n" >&2
+        return 1
+    }
+
+    # Create secure temporary files
+    local tmp1 tmp2 password password_confirm
+    tmp1=$(mktemp) || return 1
+    tmp2=$(mktemp) || { rm -f "$tmp1"; return 1; }
+
+    # Clean up temp files on exit
+    trap 'rm -f "$tmp1" "$tmp2"' RETURN
+
+    # Get and confirm password
+    dialog --title "GRUB Password" --passwordbox "Enter a strong password for GRUB (min 10 characters):" 10 60 2>"$tmp1"
+    dialog --title "Confirm Password" --passwordbox "Re-enter the password to confirm:" 10 60 2>"$tmp2"
+
+    read -r password < "$tmp1"
+    read -r password_confirm < "$tmp2"
+
+    # Validate password
+    [[ "$password" != "$password_confirm" ]] && {
+        dialog --msgbox "❌ Passwords do not match." 8 40
+        return 1
+    }
+
+    [[ ${#password} -lt 10 ]] && {
+        dialog --msgbox "❌ Password must be at least 10 characters long." 8 50
+        return 1
+    }
+
+    # Ensure expect is available
+    command -v expect >/dev/null 2>&1 || {
+        printf "Installing 'expect' for password hashing...\n"
+        apt-get update -qq && apt-get install -y expect
+    }
+
+####### Generate password hash
+    local hash
+    hash=$(expect << EOF
+    spawn grub-mkpasswd-pbkdf2
+    expect "Enter password:"
+    send "$password\r"
+    expect "Reenter Password:"
+    send "$password\r"
+    expect "PBKDF2 hash:"
+    expect eof
+EOF
+    awk '/PBKDF2/ { print $NF }')
 }
 
-log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
-}
+#####
 
-backup_grub_default() {
-    local file="/etc/default/grub"
-    if [ -f "$file" ]; then
-        cp "$file" "${file}.bak.$(date +%F_%H%M%S)"
-        chmod 644 "${file}.bak."*
-        HARDN_STATUS "info" "Backup of $file created."
-    fi
-}
-
-safely_disable_recovery_mode() {
-    local grub_default="/etc/default/grub"
-    if [ ! -f "$grub_default" ]; then
-        HARDN_STATUS "warning" "$grub_default not found."
-        return 0
-    fi
-
-    if grep -q 'GRUB_DISABLE_RECOVERY="true"' "$grub_default"; then
-        HARDN_STATUS "info" "Recovery mode already disabled."
-        return 0
-    fi
-
-    if grep -q "GRUB_DISABLE_RECOVERY" "$grub_default"; then
-        sed -i 's/GRUB_DISABLE_RECOVERY=.*/GRUB_DISABLE_RECOVERY="true"/' "$grub_default"
-    else
-        echo 'GRUB_DISABLE_RECOVERY="true"' >> "$grub_default"
-    fi
-    HARDN_STATUS "pass" "Recovery mode disabled."
-}
-
-fix_grub_permissions() {
-    [ -f /etc/default/grub ] && chmod 644 /etc/default/grub
-    [ -f /boot/grub/grub.cfg ] && chmod 644 /boot/grub/grub.cfg
-    [ -f /boot/grub2/grub.cfg ] && chmod 644 /boot/grub2/grub.cfg
-    HARDN_STATUS "info" "Set readable permissions for GRUB config files."
-}
-
-regenerate_grub_safely() {
-    if command -v update-grub >/dev/null 2>&1; then
-        update-grub && HARDN_STATUS "pass" "GRUB config regenerated."
-    elif command -v grub2-mkconfig >/dev/null 2>&1; then
-        grub2-mkconfig -o /boot/grub2/grub.cfg && HARDN_STATUS "pass" "GRUB config regenerated (grub2-mkconfig)."
-    else
-        HARDN_STATUS "warning" "Could not regenerate GRUB config. Please do so manually."
-    fi
-}
-
-verify_and_log() {
-    mkdir -p "$LOG_DIR"
-    {
-        echo "=== GRUB Hardening Verification ==="
-        echo "Date: $(date)"
-        grep 'GRUB_DISABLE_RECOVERY' /etc/default/grub || echo "Missing GRUB_DISABLE_RECOVERY setting"
-        [ -f /etc/default/grub ] && stat -c "/etc/default/grub: %a %U:%G" /etc/default/grub
-        [ -f /boot/grub/grub.cfg ] && stat -c "/boot/grub/grub.cfg: %a %U:%G" /boot/grub/grub.cfg
-        [ -f /boot/grub2/grub.cfg ] && stat -c "/boot/grub2/grub.cfg: %a %U:%G" /boot/grub2/grub.cfg
-        echo "=== End of Verification ==="
-    } > "$VERIFICATION_LOG"
-    chmod 600 "$VERIFICATION_LOG"
-    HARDN_STATUS "info" "Verification log saved to $VERIFICATION_LOG"
-}
-
-grub_hardening_module() {
-    HARDN_STATUS "info" "Starting GRUB hardening module..."
-    mkdir -p "$LOG_DIR"
-    touch "$LOG_FILE" && chmod 600 "$LOG_FILE"
-
-    backup_grub_default
-    safely_disable_recovery_mode
-    fix_grub_permissions
-    regenerate_grub_safely
-    verify_and_log
-
-    HARDN_STATUS "pass" "GRUB hardening module completed."
+# Backup the current 40_custom config
+hardn_grub_backup_config() {
+    mkdir -p "$HARDN_GRUB_BACKUP_DIR"
+    cp "$HARDN_GRUB_CUSTOM_FILE" "$HARDN_GRUB_BACKUP_DIR/40_custom.bak.$(date +%F-%H%M%S)" || return 1
+    printf "✅ Backup of GRUB custom config saved to %s.\n" "$HARDN_GRUB_BACKUP_DIR"
     return 0
 }
 
-# Only run if executed directly (not sourced)
-if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
-    grub_hardening_module "$@"
-fi
+# Restore the most recent backup
+hardn_grub_rollback_config() {
+    local latest_backup
+    latest_backup=$(find "$HARDN_GRUB_BACKUP_DIR" -name "40_custom.bak.*" -type f -printf "%T@ %p\n" 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2-)
+
+    if [[ -n "$latest_backup" ]]; then
+        cp "$latest_backup" "$HARDN_GRUB_CUSTOM_FILE" || return 1
+        printf "✅ Restored GRUB configuration from backup: %s\n" "$latest_backup"
+        hardn_grub_regenerate || return 1
+    else
+        printf "⚠️ No backup found to restore.\n" >&2
+        return 1
+    fi
+    return 0
+}
+
+# Write GRUB config with password
+hardn_grub_update_config() {
+    local hash="$1"
+    [[ -z "$hash" ]] && return 1
+
+    cat > "$HARDN_GRUB_CUSTOM_FILE" <<EOF
+#!/bin/sh
+set superusers="$HARDN_GRUB_DEFAULT_USERNAME"
+password_pbkdf2 $HARDN_GRUB_DEFAULT_USERNAME $hash
+exec tail -n +4 \$0
+EOF
+
+    chmod +x "$HARDN_GRUB_CUSTOM_FILE" || return 1
+    printf "✅ GRUB custom configuration updated.\n"
+    return 0
+}
+
+# Regenerate grub.cfg for Debian 12
+hardn_grub_regenerate() {
+    printf "♻️ Regenerating GRUB configuration...\n"
+
+    if command -v update-grub >/dev/null 2>&1; then
+        update-grub
+    elif command -v grub-mkconfig >/dev/null 2>&1; then
+        grub-mkconfig -o /boot/grub/grub.cfg
+    else
+        printf "❌ Could not regenerate GRUB config.\n" >&2
+        return 1
+    fi
+
+    printf "✅ GRUB config regenerated.\n"
+    return 0
+}
+
+# Main function to secure GRUB
+hardn_grub_secure() {
+    printf "🔐 Securing GRUB with password (interactive)...\n"
+
+    local password_hash
+    password_hash=$(hardn_grub_prompt_for_password_hash) || {
+        printf "❌ Aborted: Password prompt failed.\n"
+        return 1
+    }
+
+    hardn_grub_backup_config || return 1
+
+    hardn_grub_update_config "$password_hash" || {
+        printf "❌ Failed to update config. Rolling back.\n"
+        hardn_grub_rollback_config
+        return 1
+    }
+
+    hardn_grub_regenerate || {
+        printf "❌ GRUB regeneration failed. Rolling back.\n"
+        hardn_grub_rollback_config
+        return 1
+    }
+
+    printf "✅ GRUB password protection enabled.\n"
+    printf "Username: %s\n" "$HARDN_GRUB_DEFAULT_USERNAME"
+    printf "Please reboot to test password protection.\n"
+    return 0
+}
+
+# Export functions for use by hardn-main.sh
+# Only export the main entry point function to minimize global namespace pollution
+export -f hardn_grub_secure
