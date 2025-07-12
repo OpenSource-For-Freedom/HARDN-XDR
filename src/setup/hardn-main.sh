@@ -4,14 +4,36 @@
 # About this script:
 # STIG Compliance: Security Technical Implementation Guide.
 
+# Status function for consistent output formatting
+HARDN_STATUS() {
+    local status="$1"
+    local message="$2"
+    local color="\033[0m"
+
+    case "$status" in
+        info) color="\033[1;34m" ;;    # Blue
+        pass) color="\033[1;32m" ;;    # Green
+        warning) color="\033[1;33m" ;; # Yellow
+        error) color="\033[1;31m" ;;   # Red
+    esac
+
+    printf "${color}[%s]\033[0m %s\n" "${status^^}" "$message"
+
+    # Log to file if log directory and file are defined and exist
+    if [[ -n "${HARDN_LOG_FILE:-}" && -d "$(dirname "$HARDN_LOG_FILE")" ]]; then
+        printf "[%s] [%s] %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "${status^^}" "$message" >> "$HARDN_LOG_FILE"
+    fi
+}
+
 # Global variables with proper prefixing
 readonly HARDN_VERSION="1.1.50"
-#readonly HARDN_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly HARDN_SCRIPT_DIR
+         HARDN_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly HARDN_MODULE_DIR="${HARDN_SCRIPT_DIR}/modules"
 readonly HARDN_INSTALLED_MODULE_DIR="/usr/lib/hardn-xdr/src/setup/modules"
 readonly HARDN_CONFIG_DIR="/etc/hardn-xdr"
 readonly HARDN_LOG_DIR="/var/log/hardn-xdr"
-#readonly HARDN_LOG_FILE="${HARDN_LOG_DIR}/hardn-xdr.log"
+readonly HARDN_LOG_FILE="${HARDN_LOG_DIR}/hardn-xdr.log"
 readonly HARDN_BACKUP_DIR="/var/backups/hardn-xdr"
 
 # Export for modules to use
