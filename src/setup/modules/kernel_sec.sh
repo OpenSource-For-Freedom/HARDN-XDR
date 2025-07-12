@@ -2,7 +2,7 @@
 
 # Main function for kernel security module
 hardn_kernel_sec_main() {
-    HARDN_STATUS "info" "Applying kernel security settings..."
+    echo  "info" "Applying kernel security settings..."
 
     declare -A kernel_params=(
         # === Console and Memory Protections ===
@@ -71,7 +71,7 @@ hardn_kernel_sec_main() {
     done
 
     sysctl --system >/dev/null 2>&1
-    HARDN_STATUS "pass" "Kernel hardening applied successfully."
+    echo "pass" "Kernel hardening applied successfully."
 
     return 0
 }

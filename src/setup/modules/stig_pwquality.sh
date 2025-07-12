@@ -57,7 +57,8 @@ configure_pam_pwquality() {
 
 # Main function for STIG password quality module
 hardn_stig_pwquality_main() {
-    HARDN_STATUS "info" "Configuring PAM password quality..."
+#    HARDN_STATUS "info" "Configuring PAM password quality..."
+    echo "[INFO] Configuring PAM password quality..."
 
     # Install required packages
     install_pwquality || {
@@ -71,7 +72,7 @@ hardn_stig_pwquality_main() {
         # Don't return error here as this might be non-fatal
     }
 
-    HARDN_STATUS "pass" "PAM password quality configured successfully"
+    ehco  "pass" "PAM password quality configured successfully"
     return 0
 }
 
