@@ -1,43 +1,68 @@
 #!/bin/bash
-set -e
+# HARDN-XDR Auditd Configuration Module
+# This script is designed to be sourced by hardn-main.sh
 
-is_installed() {
+# Check if package is installed
+hardn_auditd_is_installed() {
+    local pkg="$1"
+
     if command -v apt >/dev/null 2>&1; then
-        dpkg -s "$1" >/dev/null 2>&1
+        dpkg -s "$pkg" >/dev/null 2>&1
     elif command -v dnf >/dev/null 2>&1; then
-        dnf list installed "$1" >/dev/null 2>&1
+        dnf list installed "$pkg" >/dev/null 2>&1
     elif command -v yum >/dev/null 2>&1; then
-        yum list installed "$1" >/dev/null 2>&1
+        yum list installed "$pkg" >/dev/null 2>&1
     elif command -v rpm >/dev/null 2>&1; then
-        rpm -q "$1" >/dev/null 2>&1
+        rpm -q "$pkg" >/dev/null 2>&1
     else
         return 1 # Cannot determine package manager
     fi
 }
 
-if ! is_installed auditd; then
-    HARDN_STATUS "info" "Installing auditd..."
-    if command -v apt >/dev/null 2>&1; then
-        apt install -y auditd >/dev/null 2>&1
-    elif command -v dnf >/dev/null 2>&1; then
-        dnf install -y auditd >/dev/null 2>&1
-    elif command -v yum >/dev/null 2>&1; then
-        yum install -y auditd >/dev/null 2>&1
+# Install auditd if not already installed
+hardn_auditd_install() {
+    if ! hardn_auditd_is_installed "auditd"; then
+        HARDN_STATUS "info" "Installing auditd..."
+
+        # Use case statement for package manager selection
+        case "$(command -v apt || command -v dnf || command -v yum || echo 'unknown')" in
+            */apt)
+                apt install -y auditd >/dev/null 2>&1
+                ;;
+            */dnf)
+                dnf install -y auditd >/dev/null 2>&1
+                ;;
+            */yum)
+                yum install -y auditd >/dev/null 2>&1
+                ;;
+            *)
+                HARDN_STATUS "error" "No supported package manager found"
+                return 1
+                ;;
+        esac
     fi
-fi
 
-systemctl daemon-reload
-systemctl enable auditd
-systemctl restart auditd
+    return 0
+}
 
-HARDN_STATUS "info" "Configuring auditd rules for system security..."
+# Enable and start auditd service
+hardn_auditd_enable_service() {
+    systemctl daemon-reload
+    systemctl enable auditd
+    systemctl restart auditd
+}
 
-audit_rules_file="/etc/audit/rules.d/hardn-xdr.rules"
+# Configure auditd rules
+hardn_auditd_configure_rules() {
+    local audit_rules_file="/etc/audit/rules.d/hardn-xdr.rules"
 
-cat <<EOF > $audit_rules_file
+    HARDN_STATUS "info" "Configuring auditd rules for system security..."
+
+    # Create rules file with secure permissions
+    cat > "$audit_rules_file" <<'EOF'
 # auditd-attack
 # A Linux Auditd configuration mapped to MITRE's Attack Framework
-# Most of my inspiration came from various individuals so I wont name them all, but you're work does not go 
+# Most of my inspiration came from various individuals so I wont name them all, but you're work does not go
 # unnoticed!
 
 ### Special Thanks To
@@ -61,8 +86,8 @@ cat <<EOF > $audit_rules_file
 -f 1
 
 # Ignore errors
-## e.g. caused by users or files not found in the local environment  
--i 
+## e.g. caused by users or files not found in the local environment
+-i
 
 # Self Auditing ---------------------------------------------------------------
 
@@ -132,7 +157,7 @@ cat <<EOF > $audit_rules_file
 -a always,exit -F arch=b64 -S clock_settime -k T1099_Timestomp
 -w /etc/localtime -p wa -k T1099_Timestomp
 
-## Stunnel 
+## Stunnel
 -w /usr/sbin/stunnel -p x -k T1079_Multilayer_Encryption
 
 ## Cron configuration & scheduled jobs related events
@@ -187,7 +212,8 @@ cat <<EOF > $audit_rules_file
 ##-a always,exit -F path=/usr/libexec/openssh/ssh-keysign -F perm=x -F auid>=500 -F auid!=4294967295 -k T1078_Valid_Accounts
 -a always,exit -F path=/usr/bin/Xorg -F perm=x -F auid>=500 -F auid!=4294967295 -k T1078_Valid_Accounts
 -a always,exit -F path=/usr/bin/rlogin -F perm=x -F auid>=500 -F auid!=4294967295 -k T1078_Valid_Accounts
--a always,exit -F path=/usr/bin/sudoedit -F perm=x -F auid>=500 -F auid!=4294967295 -k T1078_Valid_Accounts
+-a always,exit -F path=/usr/bin/sudoedit -F perm=x -F auid>=500 -F auid!=4294967295 -k
+
 -a always,exit -F path=/usr/bin/at -F perm=x -F auid>=500 -F auid!=4294967295 -k T1078_Valid_Accounts
 -a always,exit -F path=/usr/bin/rsh -F perm=x -F auid>=500 -F auid!=4294967295 -k T1078_Valid_Accounts
 -a always,exit -F path=/usr/bin/gpasswd -F perm=x -F auid>=500 -F auid!=4294967295 -k T1078_Valid_Accounts
@@ -211,7 +237,7 @@ cat <<EOF > $audit_rules_file
 -a always,exit -F arch=b32 -S mount -F auid>=500 -F auid!=4294967295 -k T1052_Exfiltration_Over_Physical_Medium
 -a always,exit -F arch=b64 -S mount -F auid>=500 -F auid!=4294967295 -k T1052_Exfiltration_Over_Physical_Medium
 
-## Session Related Events 
+## Session Related Events
 -w /var/run/utmp -p wa -k T1108_Redundant_Access
 -w /var/log/wtmp -p wa -k T1108_Redundant_Access
 -w /var/log/btmp -p wa -k T1108_Redundant_Access
@@ -321,7 +347,7 @@ cat <<EOF > $audit_rules_file
 -w /usr/bin/socat -p x -k T1219_Remote_Access_Tools
 -w /usr/bin/rdesktop -p x -k T1219_Remote_Access_Tools
 
-##Third Party Software 
+##Third Party Software
 # RPM (Redhat/CentOS)
 -w /usr/bin/rpm -p x -k T1072_third_party_software
 -w /usr/bin/yum -p x -k T1072_third_party_software
@@ -366,8 +392,8 @@ cat <<EOF > $audit_rules_file
 ## File Deletion by User Related Events
 -a always,exit -F arch=b32 -S rmdir -S unlink -S unlinkat -S rename -S renameat -F auid>=500 -F auid!=4294967295 -k T1107_File_Deletion
 -a always,exit -F arch=b64 -S rmdir -S unlink -S unlinkat -S rename -S renameat -F auid>=500 -F auid!=4294967295 -k T1107_File_Deletion
--a always,exit -F arch=b32 -S rmdir -S unlink -S unlinkat -S rename -S renameat -F auid=0 -k T1070_Indicator_Removal_on_Host 
--a always,exit -F arch=b64 -S rmdir -S unlink -S unlinkat -S rename -S renameat -F auid=0 -k T1070_Indicator_Removal_on_Host 
+-a always,exit -F arch=b32 -S rmdir -S unlink -S unlinkat -S rename -S renameat -F auid=0 -k T1070_Indicator_Removal_on_Host
+-a always,exit -F arch=b64 -S rmdir -S unlink -S unlinkat -S rename -S renameat -F auid=0 -k T1070_Indicator_Removal_on_Host
 
 # Make the configuration immutable --------------------------------------------
 ##-e 2
@@ -379,3 +405,36 @@ chown root:root "$audit_rules_file"
 
 # Reload auditd rules
 augenrules --load 2>/dev/null || service auditd restart
+}
+
+# Main function for auditd module
+hardn_auditd_main() {
+    HARDN_STATUS "info" "Setting up auditd..."
+
+    # Install auditd
+    hardn_auditd_install || {
+        HARDN_STATUS "error" "Failed to install auditd"
+        return 1
+    }
+
+    # Configure auditd rules
+    hardn_auditd_configure_rules || {
+        HARDN_STATUS "error" "Failed to configure auditd rules"
+        return 1
+    }
+
+    # Enable and start auditd service
+    hardn_auditd_enable_service || {
+        HARDN_STATUS "error" "Failed to enable auditd service"
+        return 1
+    }
+
+    HARDN_STATUS "pass" "Auditd setup completed successfully"
+    return 0
+}
+
+# If script is run directly (not sourced), show error
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    echo "Error: This script must be sourced by hardn-main.sh"
+    exit 1
+fi
