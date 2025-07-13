@@ -173,7 +173,7 @@ main_menu() {
     local choice
     choice=$(hardn_menu "Choose an option:" 15 60 3 \
         "1" "Install all security modules" \
-        "2" "Exit")
+        "2" "Exit" 3>&1 1>&2 2>&3)
 
     case "$choice" in
         1)
