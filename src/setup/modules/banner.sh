@@ -1,6 +1,5 @@
 #!/bin/bash
 
-#!/bin/bash
 source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
 set -e
 
