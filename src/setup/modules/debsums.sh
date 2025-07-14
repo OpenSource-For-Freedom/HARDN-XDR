@@ -345,11 +345,11 @@ start_time=$(date +%s)
 
 # Choose method based on parallel availability and run the check
 if command -v parallel >/dev/null 2>&1; then
-    run_parallel_check
+    run_parallel_check || HARDN_STATUS "warning" "Some packages failed debsums verification."
     result=$?
     report_check_result $result
 else
-    run_standard_check
+    run_standard_check || HARDN_STATUS "warning" "Some packages failed debsums verification."
     result=$?
     report_check_result $result
 fi
