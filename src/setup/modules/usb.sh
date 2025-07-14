@@ -1,69 +1,49 @@
 #!/bin/bash
+source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
+set -e
 
-# Source common functions
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../hardn-common.sh" 2>/dev/null || {
-    # Fallback if common file not found
-    HARDN_STATUS() {
-        local status="$1"
-        local message="$2"
-        case "$status" in
-            "pass")    echo -e "\033[1;32m[PASS]\033[0m $message" ;;
-            "warning") echo -e "\033[1;33m[WARNING]\033[0m $message" ;;
-            "error")   echo -e "\033[1;31m[ERROR]\033[0m $message" ;;
-            "info")    echo -e "\033[1;34m[INFO]\033[0m $message" ;;
-            *)         echo -e "\033[1;37m[UNKNOWN]\033[0m $message" ;;
-        esac
-    }
-}
+ROOT_USB=$(lsblk -o NAME,TRAN,MOUNTPOINT | grep -E 'usb.*\/$' || true)
 
+if [[ -n "$ROOT_USB" ]]; then
+  HARDN_STATUS "warning" "System is running from USB storage. Skipping USB block to avoid system lockout."
+  exit 0
+fi
+
+# Optional: Check if keyboard is present before blocking
+KEYBOARD_OK=$(udevadm info -q property --export -n /dev/input/event* | grep ID_INPUT_KEYBOARD || true)
+if [[ -z "$KEYBOARD_OK" ]]; then
+  HARDN_STATUS "error" "No valid USB keyboard detected. Blocking USB now may cause login failure."
+  exit 1
+fi
+
+# Proceed with blocking
 cat > /etc/modprobe.d/99-usb-storage.conf << 'EOF'
 blacklist usb-storage
-blacklist uas          # Block USB Attached SCSI (another storage protocol)
-
+blacklist uas
 EOF
 
-HARDN_STATUS "info" "USB security policy configured to allow HID devices but block storage."
+HARDN_STATUS "info" "USB storage modules blacklisted."
 
-# Create udev rules to further control USB devices
 cat > /etc/udev/rules.d/99-usb-storage.rules << 'EOF'
-# Block USB storage devices while allowing keyboards and mice
 ACTION=="add", SUBSYSTEMS=="usb", ATTRS{bInterfaceClass}=="08", RUN+="/bin/sh -c 'echo 0 > /sys$DEVPATH/authorized'"
-# Interface class 08 is for mass storage
-# Interface class 03 is for HID devices (keyboards, mice) - these remain allowed
 EOF
 
-HARDN_STATUS "info" "Additional udev rules created for USB device control."
+HARDN_STATUS "info" "Udev rules written."
 
-    # Reload rules
-if udevadm control --reload-rules && udevadm trigger; then
-	HARDN_STATUS "pass" "Udev rules reloaded successfully."
-else
-	HARDN_STATUS "error" "Failed to reload udev rules."
-fi
+udevadm control --reload-rules && udevadm trigger && HARDN_STATUS "pass" "Udev rules reloaded."
 
-    # Unload the usb-storage module
+# Try unloading storage
 if lsmod | grep -q "usb_storage"; then
-	HARDN_STATUS "info" "usb-storage module is currently loaded, attempting to unload..."
-	if rmmod usb_storage >/dev/null 2>&1; then
-		HARDN_STATUS "pass" "Successfully unloaded usb-storage module."
-	else
-		HARDN_STATUS "error" "Failed to unload usb-storage module. It may be in use."
-	fi
+  rmmod usb_storage && HARDN_STATUS "pass" "usb-storage module unloaded." || HARDN_STATUS "warning" "Failed to unload usb-storage."
 else
-	HARDN_STATUS "pass" "usb-storage module is not loaded, no need to unload."
+  HARDN_STATUS "info" "usb-storage module not currently loaded."
 fi
 
-# HID is enabled
-if lsmod | grep -q "usbhid"; then
-	HARDN_STATUS "pass" "USB HID module is loaded - keyboards and mice will work."
+# Ensure HID is enabled
+if ! lsmod | grep -q "usbhid"; then
+  modprobe usbhid && HARDN_STATUS "pass" "usbhid module loaded." || HARDN_STATUS "error" "Could not load usbhid!"
 else
-	HARDN_STATUS "warning" "USB HID module is not loaded - attempting to load it..."
-	if modprobe usbhid; then
-		HARDN_STATUS "pass" "Successfully loaded USB HID module."
-	else
-		HARDN_STATUS "error" "Failed to load USB HID module."
-	fi
+  HARDN_STATUS "pass" "usbhid module already active."
 fi
 
-HARDN_STATUS "pass" "USB configuration complete: keyboards and mice allowed, storage blocked."
+HARDN_STATUS "pass" "USB policy: storage blocked, HID enabled."
