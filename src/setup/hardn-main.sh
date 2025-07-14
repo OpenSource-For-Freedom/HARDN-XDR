@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-HARDN_VERSION="1.1.51"
+HARDN_VERSION="1.1.63"
 export APT_LISTBUGS_FRONTEND=none
 
 # Auto-detect CI or headless environment
