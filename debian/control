@@ -2,15 +2,16 @@ Source: hardn
 Section: admin
 Priority: optional
 Maintainer: Tim Burns <control@cybersynapse.ro>
-Build-Depends: debhelper-compat (= 13),
-               devscripts,
-               dpkg-dev,
-               fakeroot,
-               build-essential,
-               python3,
-               bash (>= 5.0),
-               whiptail,
-               debconf
+Build-Depends: 
+ debhelper-compat (= 13),
+ devscripts,
+ dpkg-dev,
+ fakeroot,
+ build-essential,
+ python3,
+ bash (>= 5.0),
+ whiptail,
+ debconf
 Standards-Version: 4.6.2
 Rules-Requires-Root: no
 Homepage: https://github.com/OpenSource-For-Freedom/HARDN-XDR
