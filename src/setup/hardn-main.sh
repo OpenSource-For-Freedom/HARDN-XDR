@@ -85,9 +85,13 @@ install_package_dependencies() {
 }
 
 print_ascii_banner() {
+   # Declaring and assigning terminal width and banner separately to avoid masking return variables
+   # https://github.com/koalaman/shellcheck/wiki/SC2155
     export TERM=xterm
-    local terminal_width=$(tput cols)
-    local banner=$(cat << "EOF"
+    local terminal_width
+          terminal_width=$(tput cols)
+    local banner
+          banner=$(cat << "EOF"
 
    ▄█    █▄            ▄████████         ▄████████      ████████▄       ███▄▄▄▄
   ███    ███          ███    ███        ███    ███      ███   ▀███      ███▀▀▀██▄
@@ -104,7 +108,8 @@ print_ascii_banner() {
 
 EOF
 )
-    local banner_width=$(echo "$banner" | awk '{print length}' | sort -n | tail -1)
+    local banner_width
+          banner_width=$(echo "$banner" | awk '{print length}' | sort -n | tail -1)
     local padding=$(( (terminal_width - banner_width) / 2 ))
     printf "\033[1;32m"
     while IFS= read -r line; do
@@ -124,6 +129,8 @@ run_module() {
     for module_path in "${module_paths[@]}"; do
         if [[ -f "$module_path" ]]; then
             HARDN_STATUS "info" "Executing module: ${module_file} from ${module_path}"
+            # shellcheck source=/usr/lib/hardn-xdr/src/setup/modules/
+            # shellcheck source=./modules/
             source "$module_path"
             return 0
         fi
@@ -194,12 +201,14 @@ main_menu() {
     esac
 }
 
+# main
 main() {
     print_ascii_banner
     show_system_info
     check_root
 
-    if [[ "$SKIP_WHIPTAIL" == "1" ]]; then
+    if [[ "$SKIP_WHIPTAIL" == "1" || "$AUTO_MODE" == "true" ]]; then
+        HARDN_STATUS "info" "Running in non-interactive mode"
         update_system_packages
         install_package_dependencies
         setup_security_modules
@@ -211,12 +220,31 @@ main() {
     main_menu
 }
 
-# Entry 
+# Entry
 if [[ $# -gt 0 ]]; then
+    # Add these options to your script's option parsing
     case "$1" in
-        --version|-v) HARDN_STATUS "info" "HARDN-XDR v${HARDN_VERSION}"; exit 0 ;;
-        --help|-h)    HARDN_STATUS "info" "Usage: $0 [--version] [--help]"; exit 0 ;;
-        *)            HARDN_STATUS "error" "Unknown option '$1'"; exit 1 ;;
+        --version|-v)
+            echo "HARDN-XDR version 1.1.x"
+            exit 0
+            ;;
+        --help|-h)
+            echo "Usage: hardn-xdr [OPTIONS]"
+            echo "Options:"
+            echo "  --version, -v     Display version information"
+            echo "  --help, -h        Display this help message"
+            echo "  --auto            Run in automatic mode without prompts"
+            echo "  --ci              Run in CI environment mode"
+            exit 0
+            ;;
+        --auto)
+            export AUTO_MODE=true
+            ;;
+        --ci)
+            export CI_MODE=true
+            export SKIP_WHIPTAIL=1
+            export AUTO_MODE=true
+            ;;
     esac
 fi
 
