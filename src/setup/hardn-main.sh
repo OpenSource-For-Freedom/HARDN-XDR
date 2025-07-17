@@ -222,7 +222,6 @@ main() {
 
 # Entry
 if [[ $# -gt 0 ]]; then
-    # Add these options to your script's option parsing
     case "$1" in
         --version|-v)
             echo "HARDN-XDR version 1.1.x"
