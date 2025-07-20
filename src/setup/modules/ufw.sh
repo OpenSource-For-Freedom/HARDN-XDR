@@ -14,7 +14,10 @@ if command -v whiptail >/dev/null 2>&1; then
     mode=$(whiptail --title "UFW Setup Mode" --radiolist "Choose firewall setup mode:" 12 90 2 \
         "basic" "Default deny incoming, allow outgoing, enable UFW" ON \
         "advanced" "Custom rules for server/container" OFF 3>&1 1>&2 2>&3)
-    [[ $? -ne 0 ]] && HARDN_STATUS "info" "User cancelled UFW setup." && return 1 2>/dev/null || exit 1
+    if [[ $? -ne 0 ]]; then
+        HARDN_STATUS "info" "User cancelled UFW setup."
+        return 1 2>/dev/null || exit 1
+    fi
 fi
 
 # Reset UFW for a clean state
