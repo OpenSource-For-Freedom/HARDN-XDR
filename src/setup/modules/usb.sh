@@ -35,7 +35,7 @@ EOF
 HARDN_STATUS "info" "USB storage modules blacklisted."
 
 cat > /etc/udev/rules.d/99-usb-storage.rules << 'EOF'
-        return 0
+# Add valid udev rules here if needed
 EOF
 
 HARDN_STATUS "info" "Udev rules written."
