@@ -80,7 +80,12 @@ fi
 
 # --------- Load Kernel Module ----------
 if ! lsmod | grep -q apparmor; then
-    modprobe apparmor && HARDN_STATUS "info" "AppArmor kernel module loaded."
+    if modprobe apparmor; then
+        HARDN_STATUS "info" "AppArmor kernel module loaded."
+    else
+        HARDN_STATUS "error" "Failed to load AppArmor kernel module. Please check your system configuration."
+        return 1
+    fi
 fi
 
 # --------- Apply Selected Mode ----------
