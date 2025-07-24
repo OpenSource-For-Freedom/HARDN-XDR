@@ -133,14 +133,14 @@ jobs:
               dpkg -i /tmp/hardn.deb || true
               apt-get install -f -y
 
-              echo "--- RUNNING HARDN-XDR ---"
+              echo "Running HARDN-XDR"
               /usr/bin/hardn-xdr || echo "HARDN-XDR exited"
 
-              echo "--- SIMULATING MODULE EXECUTION ---"
+              echo "Running modules"
               fail_count=0
               for script in /usr/lib/hardn-xdr/src/setup/modules/*.sh; do
                 name=$(basename "$script")
-                echo "---- RUNNING: $name ----" | tee -a /var/log/hardn-ci/modules.log
+                echo "Running: $name" | tee -a /var/log/hardn-ci/modules.log
                 bash "$script" >> /var/log/hardn-ci/$name.log 2>&1 || {
                   echo "[FAIL] $name failed" | tee -a /var/log/hardn-ci/modules.log
                   fail_count=$((fail_count+1))
@@ -174,16 +174,16 @@ jobs:
 
       - name: Parse failed modules and open/update issue
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          issue_title="❌ HARDN-XDR Module Failures Detected"
+          issue_title="HARDN-XDR Module Failures Detected"
           body="## Module Failures Report\n\nThe following modules failed:\n\n"
 
           fail_modules=$(grep "\[FAIL\]" logs/hardn-ci/modules.log | cut -d' ' -f2)
           count=0
 
           for module in $fail_modules; do
-            body+="### ❌ $module\n"
+            body+="### $module\n"
             body+="\`\`\`\n"
             if [ -f logs/hardn-ci/$module.log ]; then
               tail -n 20 logs/hardn-ci/$module.log >> temp.log
@@ -218,7 +218,7 @@ jobs:
 
       - name: Create GitHub Release
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           gh release create "${{ needs.build-and-test.outputs.new_tag }}" \
             ./hardn_*.deb \
