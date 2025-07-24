@@ -71,7 +71,14 @@ fi
 if ! grep -q "apparmor=1" /proc/cmdline; then
     if grep -q '^GRUB_CMDLINE_LINUX="' /etc/default/grub; then
         sed -i 's/^GRUB_CMDLINE_LINUX="/GRUB_CMDLINE_LINUX="apparmor=1 security=apparmor /' /etc/default/grub
-        update-grub
+        if grep -q "ID=debian" /etc/os-release || grep -q "ID=ubuntu" /etc/os-release; then
+            update-grub
+        elif grep -q "ID=fedora" /etc/os-release || grep -q "ID=centos" /etc/os-release; then
+            grub2-mkconfig -o /boot/grub2/grub.cfg
+        else
+            HARDN_STATUS "error" "Unsupported distribution. GRUB update failed."
+            return 1
+        fi
         HARDN_STATUS "info" "GRUB updated to enable AppArmor. Reboot required."
     else
         HARDN_STATUS "warning" "Could not modify GRUB. Please enable AppArmor manually."
