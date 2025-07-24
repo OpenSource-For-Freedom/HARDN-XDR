@@ -102,6 +102,8 @@ jobs:
     strategy:
       matrix:
         arch: [amd64, arm64]
+    outputs:
+      passed: ${{ steps.simulate.outputs.passed }}
     steps:
       - name: Register QEMU emulation
         uses: docker/setup-qemu-action@v3
@@ -112,95 +114,113 @@ jobs:
           name: deb-${{ matrix.arch }}
           path: .
 
-      - name: Simulate full HARDN deployment inside container
+      - name: Simulate full HARDN deployment
         id: simulate
         run: |
           echo "Simulating full install for ${{ matrix.arch }}"
           cp hardn_*.deb ./hardn.deb
+          mkdir -p ./logbundle/hardn-ci
 
           docker run --rm -i --platform linux/${{ matrix.arch }} \
             -e SKIP_WHIPTAIL=1 \
             -e DEBIAN_FRONTEND=noninteractive \
             -e CI=true \
             -v "$(pwd)/hardn.deb:/tmp/hardn.deb" \
+            -v "$(pwd)/logbundle:/var/log/" \
             debian:stable-slim bash -euxo pipefail -c '
               apt-get update
-              apt-get install -y sudo bash gnupg curl whiptail
+              apt-get install -y sudo bash gnupg curl whiptail coreutils
               dpkg -i /tmp/hardn.deb || true
               apt-get install -f -y
-              echo "--- Checking /usr/bin/hardn-xdr ---"
-              ls -l /usr/bin/hardn-xdr || echo "hardn-xdr NOT FOUND"
-              echo "--- RUNNING HARDN DEPLOYMENT ---"  
-              /usr/bin/hardn-xdr || echo "HARDN-XDR exited with code $?"
-            ' | tee full-run.log
 
-      - name: Upload full system test log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: full-system-test-${{ matrix.arch }}
-          path: ./full-run.log
+              echo "--- RUNNING HARDN-XDR ---"
+              /usr/bin/hardn-xdr || echo "HARDN-XDR exited"
 
-      - name: Print full output to job log
-        if: always()
-        run: |
-          echo "=== HARDN-XDR Full Output ==="
-          cat full-run.log || true
+              echo "--- SIMULATING MODULE EXECUTION ---"
+              fail_count=0
+              for script in /usr/lib/hardn-xdr/src/setup/modules/*.sh; do
+                name=$(basename "$script")
+                echo "---- RUNNING: $name ----" | tee -a /var/log/hardn-ci/modules.log
+                bash "$script" >> /var/log/hardn-ci/$name.log 2>&1 || {
+                  echo "[FAIL] $name failed" | tee -a /var/log/hardn-ci/modules.log
+                  fail_count=$((fail_count+1))
+                }
+              done
+              echo "Total failures: $fail_count" | tee -a /var/log/hardn-ci/modules.log
+              echo "$fail_count" > /var/log/hardn-ci/fail_count.txt
+            '
 
-  tag-and-release:
-    needs: [build-and-test, test-deployment]
-    if: success()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Fetch tags
-        run: git fetch --tags
-
-      - name: Download all .deb artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: .
-
-      - name: Move .deb files to root for release
-        run: |
-          mkdir -p release
-          find . -name "*.deb" -exec mv {} release/ \;
-
-      - name: Set formatted release date
-        id: release_date
-        run: echo "value=$(date -R)" >> $GITHUB_OUTPUT
-
-      - name: Create and push new tag
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          tag="${{ needs.build-and-test.outputs.new_tag }}"
-          if git rev-parse "$tag" >/dev/null 2>&1; then
-            echo "Tag $tag already exists. Skipping tag creation."
-          else
-            git tag "$tag" -m "Release $tag"
-            git push origin "$tag"
+          echo "passed=false" >> $GITHUB_OUTPUT
+          if [ ! -s logbundle/hardn-ci/fail_count.txt ] || grep -q '^0$' logbundle/hardn-ci/fail_count.txt; then
+            echo "passed=true" >> $GITHUB_OUTPUT
           fi
 
-      - name: Create GitHub Release and upload .deb
-        uses: softprops/action-gh-release@v2
+      - name: Upload logs
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: ${{ needs.build-and-test.outputs.new_tag }}
-          name: "Release ${{ needs.build-and-test.outputs.new_tag }}"
-          body: |
-            ![Logo](docs/assets/HARDN%20(1).png)
-            **HARDN-XDR Automated Release**
+          name: full-system-test-logs-${{ matrix.arch }}
+          path: logbundle
 
-            - **Version:** `${{ needs.build-and-test.outputs.new_tag }}`
-            - **Architectures:** `amd64`, `arm64`
-            - **Timestamp:** ${{ steps.release_date.outputs.value }}
+  report-failures:
+    needs: test-deployment
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download logs
+        uses: actions/download-artifact@v4
+        with:
+          name: full-system-test-logs-amd64
+          path: logs
 
-            - All modules tested
-            - Deployment verified in container
-            - Lintian passed
-          files: |
-            release/*.deb
+      - name: Parse failed modules and open/update issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          issue_title="❌ HARDN-XDR Module Failures Detected"
+          body="## Module Failures Report\n\nThe following modules failed:\n\n"
+
+          fail_modules=$(grep "\[FAIL\]" logs/hardn-ci/modules.log | cut -d' ' -f2)
+          count=0
+
+          for module in $fail_modules; do
+            body+="### ❌ $module\n"
+            body+="\`\`\`\n"
+            if [ -f logs/hardn-ci/$module.log ]; then
+              tail -n 20 logs/hardn-ci/$module.log >> temp.log
+              body+="$(cat temp.log)\n"
+            else
+              body+="No log output found.\n"
+            fi
+            body+="\`\`\`\n"
+            count=$((count+1))
+          done
+
+          if [ "$count" -gt 0 ]; then
+            issue_number=$(gh issue list --state open --limit 1 --search "$issue_title" --json number -q '.[0].number' || echo "")
+            if [ -n "$issue_number" ]; then
+              gh issue comment "$issue_number" --body "$body"
+            else
+              gh issue create --title "$issue_title" --body "$body"
+            fi
+          else
+            echo "No failed modules detected."
+
+  release:
+    needs: [build-and-test, test-deployment]
+    if: needs.test-deployment.outputs.passed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download .deb
+        uses: actions/download-artifact@v4
+        with:
+          name: deb-amd64
+          path: .
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ needs.build-and-test.outputs.new_tag }}" \
+            ./hardn_*.deb \
+            --title "Release ${{ needs.build-and-test.outputs.new_tag }}" \
+            --notes "Automated release for HARDN-XDR"
