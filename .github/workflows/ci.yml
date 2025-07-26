@@ -88,7 +88,9 @@ jobs:
           deb_file=$(ls ../*.deb | head -n 1)
           new_name="hardn_${version}_${{ matrix.arch }}.deb"
           mv "$deb_file" "$new_name"
-          echo "deb_file=$new_name" >> $GITHUB_OUTPUT
+          mkdir -p release_assets/deb-${{ matrix.arch }}
+          mv "$new_name" release_assets/deb-${{ matrix.arch }}/
+          echo "deb_file=release_assets/deb-${{ matrix.arch }}/$new_name" >> $GITHUB_OUTPUT
 
       - name: Upload .deb
         uses: actions/upload-artifact@v4
@@ -108,20 +110,25 @@ jobs:
       - name: Register QEMU emulation
         uses: docker/setup-qemu-action@v3
 
+      - name: Check raw binfmt version
+        run: |
+          docker run --rm --privileged tonistiigi/binfmt:latest --version || true
+
       - name: Download built .deb for ${{ matrix.arch }}
         uses: actions/download-artifact@v4
         with:
           name: deb-${{ matrix.arch }}
-          path: .
+          path: release_assets/deb-${{ matrix.arch }}
 
       - name: Simulate full HARDN deployment
         id: simulate
         run: |
           echo "Simulating full install for ${{ matrix.arch }}"
-          cp hardn_*.deb ./hardn.deb
+          cp release_assets/deb-${{ matrix.arch }}/*.deb ./hardn.deb
           mkdir -p ./logbundle/hardn-ci
 
           docker run --rm -i --platform linux/${{ matrix.arch }} \
+            --privileged \
             -e SKIP_WHIPTAIL=1 \
             -e DEBIAN_FRONTEND=noninteractive \
             -e CI=true \
@@ -129,7 +136,7 @@ jobs:
             -v "$(pwd)/logbundle:/var/log/" \
             debian:stable-slim bash -euxo pipefail -c '
               apt-get update
-              apt-get install -y sudo bash gnupg curl whiptail coreutils
+              apt-get install -y sudo bash gnupg curl whiptail coreutils zip
               dpkg -i /tmp/hardn.deb || true
               apt-get install -f -y
 
@@ -148,79 +155,51 @@ jobs:
               done
               echo "Total failures: $fail_count" | tee -a /var/log/hardn-ci/modules.log
               echo "$fail_count" > /var/log/hardn-ci/fail_count.txt
+              chmod -R a+r /var/log/hardn-ci || true
+              chown -R 1000:1000 /var/log/hardn-ci || true
             '
 
+          mkdir -p release_assets/hardn-logs-${{ matrix.arch }}
+          cp -r ./logbundle/* release_assets/hardn-logs-${{ matrix.arch }}/ || true
+
           echo "passed=false" >> $GITHUB_OUTPUT
-          if [ ! -s logbundle/hardn-ci/fail_count.txt ] || grep -q '^0$' logbundle/hardn-ci/fail_count.txt; then
+          if [ ! -s release_assets/hardn-logs-${{ matrix.arch }}/hardn-ci/fail_count.txt ] || grep -q '^0$' release_assets/hardn-logs-${{ matrix.arch }}/hardn-ci/fail_count.txt; then
             echo "passed=true" >> $GITHUB_OUTPUT
           fi
 
-      - name: Upload logs
+      - name: Zip logs
+        run: |
+          mkdir -p release_assets/hardn-logs-zip
+          zip -r release_assets/hardn-logs-zip/hardn_logs_bundle_${{ matrix.arch }}.zip release_assets/hardn-logs-${{ matrix.arch }}
+
+      - name: Upload zipped logs
         uses: actions/upload-artifact@v4
         with:
-          name: full-system-test-logs-${{ matrix.arch }}
-          path: logbundle
-
-  report-failures:
-    needs: test-deployment
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download logs
-        uses: actions/download-artifact@v4
-        with:
-          name: full-system-test-logs-amd64
-          path: logs
-
-      - name: Parse failed modules and open/update issue
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: |
-          issue_title="HARDN-XDR Module Failures Detected"
-          body="## Module Failures Report\n\nThe following modules failed:\n\n"
-
-          fail_modules=$(grep "\[FAIL\]" logs/hardn-ci/modules.log | cut -d' ' -f2)
-          count=0
-
-          for module in $fail_modules; do
-            body+="### $module\n"
-            body+="\`\`\`\n"
-            if [ -f logs/hardn-ci/$module.log ]; then
-              tail -n 20 logs/hardn-ci/$module.log >> temp.log
-              body+="$(cat temp.log)\n"
-            else
-              body+="No log output found.\n"
-            fi
-            body+="\`\`\`\n"
-            count=$((count+1))
-          done
-
-          if [ "$count" -gt 0 ]; then
-            issue_number=$(gh issue list --state open --limit 1 --search "$issue_title" --json number -q '.[0].number' || echo "")
-            if [ -n "$issue_number" ]; then
-              gh issue comment "$issue_number" --body "$body"
-            else
-              gh issue create --title "$issue_title" --body "$body"
-            fi
-          else
-            echo "No failed modules detected."
+          name: hardn-logs-zip-${{ matrix.arch }}
+          path: release_assets/hardn-logs-zip/hardn_logs_bundle_${{ matrix.arch }}.zip
 
   release:
     needs: [build-and-test, test-deployment]
     if: needs.test-deployment.outputs.passed == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Download .deb
+      - name: Download all release assets
         uses: actions/download-artifact@v4
         with:
-          name: deb-amd64
-          path: .
+          path: release_assets
+
+      - name: Copy logo into release
+        run: cp "docs/assets/HARDN (1).png" release_assets/hardn_logo.png
 
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          gh release create "${{ needs.build-and-test.outputs.new_tag }}" \
-            ./hardn_*.deb \
-            --title "Release ${{ needs.build-and-test.outputs.new_tag }}" \
-            --notes "Automated release for HARDN-XDR"
+          tag="${{ needs.build-and-test.outputs.new_tag }}"
+          gh release create "$tag" \
+            release_assets/deb-amd64/*.deb \
+            release_assets/deb-arm64/*.deb \
+            release_assets/hardn-logs-zip/hardn_logs_bundle_*.zip \
+            release_assets/hardn_logo.png \
+            --title "Release $tag" \
+            --notes "![HARDN-XDR Logo](https://raw.githubusercontent.com/OpenSource-For-Freedom/HARDN-XDR/main/docs/assets/HARDN%20(1).png)\n\nAutomated release for HARDN-XDR"
