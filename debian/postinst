@@ -1,48 +1,11 @@
 #!/bin/sh
 set -e
 
-LOG_FILE="/var/log/hardn-postinst.log"
-
-echo "[postinst] Executed on $(date)" > "$LOG_FILE"
-echo "[postinst] Performing manual setup..." >> "$LOG_FILE"
-
-# Set executable permissions for installed files
+# Simple post-installation script
 if [ -f /usr/bin/hardn-xdr ]; then
   chmod +x /usr/bin/hardn-xdr
-  echo "[postinst] Set executable permissions for /usr/bin/hardn-xdr" >> "$LOG_FILE"
-else
-  echo "[postinst] ERROR: hardn-xdr not found in /usr/bin/" >> "$LOG_FILE"
 fi
 
-if [ -f /usr/lib/hardn-xdr/src/setup/hardn-main.sh ]; then
-  chmod +x /usr/lib/hardn-xdr/src/setup/hardn-main.sh
-  echo "[postinst] Set executable permissions for hardn-main.sh" >> "$LOG_FILE"
-else
-  echo "[postinst] ERROR: hardn-main.sh not found." >> "$LOG_FILE"
-fi
-
-# Common file
-if [ -f /usr/lib/hardn-xdr/src/setup/hardn-common.sh ]; then
-  chmod +x /usr/lib/hardn-xdr/src/setup/hardn-common.sh
-  echo "[postinst] Verified hardn-common.sh is executable." >> "$LOG_FILE"
-else
-  echo "[postinst] ERROR: hardn-common.sh not found." >> "$LOG_FILE"
-fi
-
-# Modules
-if [ -d /usr/lib/hardn-xdr/src/setup/modules ]; then
-  chmod 755 /usr/lib/hardn-xdr/src/setup/modules
-  find /usr/lib/hardn-xdr/src/setup/modules -type f -name "*.sh" -exec chmod 755 {} + || true
-  echo "[postinst] Module permissions set." >> "$LOG_FILE"
-else
-  echo "[postinst] WARNING: Modules directory not found." >> "$LOG_FILE"
-fi
-
-# Log dirs
-mkdir -p /var/log/debsums
-mkdir -p /usr/local/var/log/suricata
-echo "[postinst] Created log directories." >> "$LOG_FILE"
-
-echo "[postinst] HARDN-XDR installed successfully. Run it with: sudo hardn-xdr" >> "$LOG_FILE"
+echo "HARDN-XDR installed successfully. Run it with: hardn-xdr --help"
 
 exit 0
