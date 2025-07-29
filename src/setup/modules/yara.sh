@@ -1,3 +1,4 @@
+#!/bin/bash
 # Function to create integration script with AIDE
 create_aide_integration() {
     cat > /usr/local/bin/aide-with-yara.sh << 'EOF'

@@ -3,5 +3,3 @@ hardn (1.1.161) unstable; urgency=medium
   * Automated release v1.1.161
 
  -- Tim Burns <cyborgcreations01@gmail.com>  Mon, 08 Jul 2024 10:48:00 +0000
-
- - updated whiptail to factor all modules for choice and tested first 3 succesfully

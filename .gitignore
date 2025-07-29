@@ -1,2 +1,13 @@
 # IDE files
 .idea/
+# Build artifacts
+debian/.debhelper/
+debian/debhelper-build-stamp
+debian/files
+debian/*.substvars
+debian/hardn/
+*.deb
+*.buildinfo
+*.changes
+*.dsc
+*.tar.xz

@@ -1,6 +1,7 @@
 #!/bin/sh
+set -e
 
-LOG_FILE="/tmp/postinst.log"
+LOG_FILE="/var/log/hardn-postinst.log"
 
 echo "[postinst] Executed on $(date)" > "$LOG_FILE"
 echo "[postinst] Performing manual setup..." >> "$LOG_FILE"
@@ -30,7 +31,8 @@ fi
 
 # Modules
 if [ -d /usr/lib/hardn-xdr/src/setup/modules ]; then
-  find /usr/lib/hardn-xdr/src/setup/modules -type f -name "*.sh" -exec chmod +x {} \;
+  chmod 755 /usr/lib/hardn-xdr/src/setup/modules
+  find /usr/lib/hardn-xdr/src/setup/modules -type f -name "*.sh" -exec chmod 755 {} + || true
   echo "[postinst] Module permissions set." >> "$LOG_FILE"
 else
   echo "[postinst] WARNING: Modules directory not found." >> "$LOG_FILE"

@@ -56,7 +56,8 @@ jobs:
 
       - name: Set executable permissions
         run: |
-          chmod +x debian/postinst hardn-xdr src/setup/hardn-main.sh
+          chmod +x hardn-xdr src/setup/hardn-main.sh src/setup/hardn-common.sh
+          chmod +x debian/postinst
           find src/setup/modules -type f -name "*.sh" -exec chmod +x {} \;
 
       - name: Update changelog for ${{ matrix.arch }}
@@ -77,8 +78,19 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
           SKIP_WHIPTAIL: 1
         run: |
-          dpkg-buildpackage -us -uc
+          # Build for specific architecture
+          if [ "${{ matrix.arch }}" = "amd64" ]; then
+            dpkg-buildpackage -us -uc --host-arch amd64
+          else
+            dpkg-buildpackage -us -uc --host-arch ${{ matrix.arch }}
+          fi
           sudo apt install -f -y
+
+      - name: Lint package
+        run: |
+          # Run lintian to check package quality
+          deb_file=$(ls ../*.deb | head -n 1)
+          lintian "$deb_file" || echo "Lintian warnings found, but continuing..."
 
       - name: Rename .deb
         id: rename
@@ -183,6 +195,9 @@ jobs:
     if: needs.test-deployment.outputs.passed == 'true'
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Download all release assets
         uses: actions/download-artifact@v4
         with:
@@ -191,17 +206,34 @@ jobs:
       - name: Copy logo into release
         run: |
            mkdir -p release_assets
-           cp "docs/assets/sig_logo.png" release_assets/sig_logo.png
+           if [ -f "docs/assets/sig_logo.png" ]; then
+             cp "docs/assets/sig_logo.png" release_assets/sig_logo.png
+           else
+             echo "Warning: Logo file not found, creating placeholder"
+             echo "HARDN-XDR Logo not available" > release_assets/sig_logo.txt
+           fi
 
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           tag="${{ needs.build-and-test.outputs.new_tag }}"
+          
+          # Check if logo exists and prepare release files
+          release_files=(
+            release_assets/deb-amd64/*.deb
+            release_assets/deb-arm64/*.deb
+            release_assets/hardn-logs-zip/hardn_logs_bundle_*.zip
+          )
+          
+          if [ -f "release_assets/sig_logo.png" ]; then
+            release_files+=(release_assets/sig_logo.png)
+            logo_note="![HARDN-XDR Logo](sig_logo.png)\n\n"
+          else
+            logo_note=""
+          fi
+          
           gh release create "$tag" \
-            release_assets/deb-amd64/*.deb \
-            release_assets/deb-arm64/*.deb \
-            release_assets/hardn-logs-zip/hardn_logs_bundle_*.zip \
-            release_assets/sig_logo.png \
+            "${release_files[@]}" \
             --title "Release $tag" \
-            --notes "![HARDN-XDR Logo](HARDN-XDR/docs/assets/sig_logo.png)\n\nAutomated release for HARDN-XDR"
+            --notes "${logo_note}Automated release for HARDN-XDR"
