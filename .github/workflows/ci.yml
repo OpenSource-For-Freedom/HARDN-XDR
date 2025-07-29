@@ -69,7 +69,7 @@ jobs:
               --force-distribution
           dch --release --force-distribution ""
 
-      - name: Build package (Architecture: all)
+      - name: Build package - Architecture all
         env:
           DEBIAN_FRONTEND: noninteractive
           SKIP_WHIPTAIL: 1
@@ -90,19 +90,19 @@ jobs:
           raw_tag="${{ steps.bump.outputs.new_tag }}"
           version="${raw_tag#v}"
           deb_file=$(ls ../*.deb | head -n 1)
-          
+
           # Create architecture-specific names for the same package
           amd64_name="hardn_${version}_amd64.deb"
           arm64_name="hardn_${version}_arm64.deb"
-          
+
           # Create directories
           mkdir -p release_assets/deb-amd64
           mkdir -p release_assets/deb-arm64
-          
+
           # Copy the same .deb file with different names
           cp "$deb_file" "release_assets/deb-amd64/$amd64_name"
           cp "$deb_file" "release_assets/deb-arm64/$arm64_name"
-          
+
           echo "amd64_deb=release_assets/deb-amd64/$amd64_name" >> $GITHUB_OUTPUT
           echo "arm64_deb=release_assets/deb-arm64/$arm64_name" >> $GITHUB_OUTPUT
 
@@ -124,8 +124,6 @@ jobs:
     strategy:
       matrix:
         arch: [amd64, arm64]
-    outputs:
-      passed: ${{ steps.simulate.outputs.passed }}
     steps:
       - name: Register QEMU emulation
         uses: docker/setup-qemu-action@v3
@@ -198,9 +196,22 @@ jobs:
           name: hardn-logs-zip-${{ matrix.arch }}
           path: release_assets/hardn-logs-zip/hardn_logs_bundle_${{ matrix.arch }}.zip
 
+  check-deployment-results:
+    needs: test-deployment
+    runs-on: ubuntu-latest
+    outputs:
+      passed: ${{ steps.check.outputs.passed }}
+    steps:
+      - name: Check deployment results
+        id: check
+        run: |
+          # If we get here, all test-deployment matrix jobs succeeded
+          # (GitHub Actions fails the workflow if any matrix job fails)
+          echo "passed=true" >> $GITHUB_OUTPUT
+
   release:
-    needs: [build-and-test, test-deployment]
-    if: needs.test-deployment.outputs.passed == 'true'
+    needs: [build-and-test, check-deployment-results]
+    if: needs.check-deployment-results.outputs.passed == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -226,21 +237,21 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           tag="${{ needs.build-and-test.outputs.new_tag }}"
-          
+
           # Check if logo exists and prepare release files
           release_files=(
             release_assets/deb-amd64/*.deb
             release_assets/deb-arm64/*.deb
             release_assets/hardn-logs-zip/hardn_logs_bundle_*.zip
           )
-          
+
           if [ -f "release_assets/sig_logo.png" ]; then
             release_files+=(release_assets/sig_logo.png)
             logo_note="![HARDN-XDR Logo](sig_logo.png)\n\n"
           else
             logo_note=""
           fi
-          
+
           gh release create "$tag" \
             "${release_files[@]}" \
             --title "Release $tag" \
