@@ -119,6 +119,7 @@ jobs:
     strategy:
       matrix:
         arch: [amd64, arm64]
+        distro: [debian, centos]
     steps:
       - name: Register QEMU emulation
         uses: docker/setup-qemu-action@v3
@@ -133,63 +134,150 @@ jobs:
           name: deb-${{ matrix.arch }}
           path: release_assets/deb-${{ matrix.arch }}
 
-      - name: Simulate full HARDN deployment
+      - name: Simulate full HARDN deployment on ${{ matrix.distro }}
         id: simulate
         run: |
-          echo "Simulating full install for ${{ matrix.arch }}"
+          echo "Simulating full install for ${{ matrix.arch }} on ${{ matrix.distro }}"
           cp release_assets/deb-${{ matrix.arch }}/*.deb ./hardn.deb
-          mkdir -p ./logbundle/hardn-ci
+          mkdir -p ./logbundle/hardn-ci-${{ matrix.distro }}
+          
+          # Set proper permissions on log directory before mounting
+          chmod 777 ./logbundle
+          chmod 777 ./logbundle/hardn-ci-${{ matrix.distro }}
 
-          docker run --rm -i --platform linux/${{ matrix.arch }} \
-            --privileged \
-            -e SKIP_WHIPTAIL=1 \
-            -e DEBIAN_FRONTEND=noninteractive \
-            -e CI=true \
-            -v "$(pwd)/hardn.deb:/tmp/hardn.deb" \
-            -v "$(pwd)/logbundle:/var/log/" \
-            debian:stable-slim bash -euxo pipefail -c '
-              apt-get update
-              apt-get install -y sudo bash gnupg curl whiptail coreutils zip
-              dpkg -i /tmp/hardn.deb || true
-              apt-get install -f -y
-              chmod +x /usr/lib/hardn-xdr/src/setup/modules/*.sh || true
-              echo "Running HARDN-XDR"
-              /usr/bin/hardn-xdr || echo "HARDN-XDR exited"
+          if [ "${{ matrix.distro }}" = "debian" ]; then
+            # Debian/Ubuntu test (existing)
+            docker run --rm -i --platform linux/${{ matrix.arch }} \
+              --privileged \
+              -e SKIP_WHIPTAIL=1 \
+              -e DEBIAN_FRONTEND=noninteractive \
+              -e CI=true \
+              -v "$(pwd)/hardn.deb:/tmp/hardn.deb" \
+              -v "$(pwd)/logbundle:/var/log/" \
+              debian:stable-slim bash -euxo pipefail -c '
+                apt-get update
+                apt-get install -y sudo bash gnupg curl whiptail coreutils zip alien
+                dpkg -i /tmp/hardn.deb || true
+                apt-get install -f -y
+                chmod +x /usr/lib/hardn-xdr/src/setup/modules/*.sh || true
+                
+                # Ensure log directory has proper permissions
+                mkdir -p /var/log/hardn-ci-debian
+                chmod 777 /var/log/hardn-ci-debian
+                
+                echo "Running HARDN-XDR"
+                /usr/bin/hardn-xdr > /var/log/hardn-ci-debian/hardn-xdr.log 2>&1 || echo "HARDN-XDR exited"
 
-              echo "Running modules"
-              fail_count=0
-              for script in /usr/lib/hardn-xdr/src/setup/modules/*.sh; do
-                name=$(basename "$script")
-                echo "Running: $name" | tee -a /var/log/hardn-ci/modules.log
-                bash "$script" >> /var/log/hardn-ci/$name.log 2>&1 || {
-                  echo "[FAIL] $name failed" | tee -a /var/log/hardn-ci/modules.log
-                  fail_count=$((fail_count+1))
-                }
-              done
-              echo "Total failures: $fail_count" | tee -a /var/log/hardn-ci/modules.log
-              echo "$fail_count" > /var/log/hardn-ci/fail_count.txt
-              chmod -R a+r /var/log/hardn-ci || true
-              chown -R 1000:1000 /var/log/hardn-ci || true
-            '
+                echo "Running modules"
+                fail_count=0
+                total_count=0
+                for script in /usr/lib/hardn-xdr/src/setup/modules/*.sh; do
+                  if [ -f "$script" ]; then
+                    name=$(basename "$script")
+                    total_count=$((total_count+1))
+                    echo "[$total_count] Running: $name" | tee -a /var/log/hardn-ci-debian/modules.log
+                    if timeout 300 bash "$script" > /var/log/hardn-ci-debian/$name.log 2>&1; then
+                      echo "[$total_count] PASS: $name" | tee -a /var/log/hardn-ci-debian/modules.log
+                    else
+                      exit_code=$?
+                      echo "[$total_count] FAIL: $name (exit code: $exit_code)" | tee -a /var/log/hardn-ci-debian/modules.log
+                      fail_count=$((fail_count+1))
+                    fi
+                  fi
+                done
+                echo "Total modules: $total_count" | tee -a /var/log/hardn-ci-debian/modules.log
+                echo "Total failures: $fail_count" | tee -a /var/log/hardn-ci-debian/modules.log
+                echo "$fail_count" > /var/log/hardn-ci-debian/fail_count.txt
+                echo "$total_count" > /var/log/hardn-ci-debian/total_count.txt
+                
+                # Set world-readable permissions on all log files
+                find /var/log/hardn-ci-debian -type f -exec chmod 644 {} \;
+                find /var/log/hardn-ci-debian -type d -exec chmod 755 {} \;
+              '
+          else
+            # CentOS/RHEL test (RPM-based)
+            docker run --rm -i --platform linux/${{ matrix.arch }} \
+              --privileged \
+              -e SKIP_WHIPTAIL=1 \
+              -e CI=true \
+              -v "$(pwd)/hardn.deb:/tmp/hardn.deb" \
+              -v "$(pwd)/logbundle:/var/log/" \
+              quay.io/centos/centos:stream9 bash -euxo pipefail -c '
+                dnf update -y
+                dnf install -y sudo bash gnupg2 curl newt zip alien coreutils
+                
+                # Convert DEB to RPM and install
+                alien --to-rpm --scripts /tmp/hardn.deb
+                rpm -ivh *.rpm || true
+                
+                # Ensure permissions are set correctly after RPM install
+                chmod +x /usr/lib/hardn-xdr/src/setup/modules/*.sh || true
+                
+                # Ensure log directory has proper permissions
+                mkdir -p /var/log/hardn-ci-centos
+                chmod 777 /var/log/hardn-ci-centos
+                
+                echo "Running HARDN-XDR"
+                /usr/bin/hardn-xdr > /var/log/hardn-ci-centos/hardn-xdr.log 2>&1 || echo "HARDN-XDR exited"
 
-          mkdir -p release_assets/hardn-logs-${{ matrix.arch }}
-          cp -r ./logbundle/* release_assets/hardn-logs-${{ matrix.arch }}/ || true
+                echo "Running modules on CentOS/RHEL"
+                fail_count=0
+                total_count=0
+                for script in /usr/lib/hardn-xdr/src/setup/modules/*.sh; do
+                  if [ -f "$script" ]; then
+                    name=$(basename "$script")
+                    total_count=$((total_count+1))
+                    echo "[$total_count] Running: $name" | tee -a /var/log/hardn-ci-centos/modules.log
+                    if timeout 300 bash "$script" > /var/log/hardn-ci-centos/$name.log 2>&1; then
+                      echo "[$total_count] PASS: $name" | tee -a /var/log/hardn-ci-centos/modules.log
+                    else
+                      exit_code=$?
+                      echo "[$total_count] FAIL: $name (exit code: $exit_code)" | tee -a /var/log/hardn-ci-centos/modules.log
+                      fail_count=$((fail_count+1))
+                    fi
+                  fi
+                done
+                echo "Total modules: $total_count" | tee -a /var/log/hardn-ci-centos/modules.log
+                echo "Total failures: $fail_count" | tee -a /var/log/hardn-ci-centos/modules.log
+                echo "$fail_count" > /var/log/hardn-ci-centos/fail_count.txt
+                echo "$total_count" > /var/log/hardn-ci-centos/total_count.txt
+                
+                # Set world-readable permissions on all log files
+                find /var/log/hardn-ci-centos -type f -exec chmod 644 {} \;
+                find /var/log/hardn-ci-centos -type d -exec chmod 755 {} \;
+              '
+          fi
+
+          mkdir -p release_assets/hardn-logs-${{ matrix.arch }}-${{ matrix.distro }}
+          cp -r ./logbundle/* release_assets/hardn-logs-${{ matrix.arch }}-${{ matrix.distro }}/ || true
+          
+          # Output detailed information about test results
+          log_dir="release_assets/hardn-logs-${{ matrix.arch }}-${{ matrix.distro }}/hardn-ci-${{ matrix.distro }}"
+          if [ -f "$log_dir/total_count.txt" ]; then
+            total_modules=$(cat "$log_dir/total_count.txt")
+            echo "Total modules tested: $total_modules"
+          fi
+          
+          if [ -f "$log_dir/fail_count.txt" ]; then
+            failed_modules=$(cat "$log_dir/fail_count.txt")
+            echo "Failed modules: $failed_modules"
+          fi
 
           echo "passed=false" >> $GITHUB_OUTPUT
-          if [ ! -s release_assets/hardn-logs-${{ matrix.arch }}/hardn-ci/fail_count.txt ] || grep -q '^0$' release_assets/hardn-logs-${{ matrix.arch }}/hardn-ci/fail_count.txt; then
+          if [ -f "$log_dir/fail_count.txt" ] && grep -q '^0$' "$log_dir/fail_count.txt"; then
             echo "passed=true" >> $GITHUB_OUTPUT
           fi
 
       - name: Zip logs
         run: |
           mkdir -p release_assets/hardn-logs-zip
-          zip -r release_assets/hardn-logs-zip/hardn_logs_bundle_${{ matrix.arch }}.zip release_assets/hardn-logs-${{ matrix.arch }}
+          zip -r release_assets/hardn-logs-zip/hardn_logs_bundle_${{ matrix.arch }}_${{ matrix.distro }}.zip release_assets/hardn-logs-${{ matrix.arch }}-${{ matrix.distro }}
 
       - name: Upload zipped logs
         uses: actions/upload-artifact@v4
         with:
-          name: hardn-logs-zip-${{ matrix.arch }}
-          path: release_assets/hardn-logs-zip/hardn_logs_bundle_${{ matrix.arch }}.zip
+          name: hardn-logs-zip-${{ matrix.arch }}-${{ matrix.distro }}
+          path: release_assets/hardn-logs-zip/hardn_logs_bundle_${{ matrix.arch }}_${{ matrix.distro }}.zip
 
   check-deployment-results:
     needs: test-deployment
@@ -250,4 +338,4 @@ jobs:
           gh release create "$tag" \
             "${release_files[@]}" \
             --title "Release $tag" \
-            --notes "${logo_note}Automated release for HARDN-XDR"
+            --notes "${logo_note}Multi-architecture release (AMD64/ARM64) with comprehensive testing on Debian/Ubuntu and CentOS/RHEL systems."
