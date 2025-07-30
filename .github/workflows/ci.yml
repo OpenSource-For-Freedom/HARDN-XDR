@@ -13,6 +13,9 @@ permissions:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
     outputs:
       new_tag: ${{ steps.bump.outputs.new_tag }}
     steps:
@@ -57,24 +60,26 @@ jobs:
           chmod +x debian/postinst
           find src/setup/modules -type f -name "*.sh" -exec chmod +x {} \;
 
-      - name: Update changelog
+      - name: Update changelog for ${{ matrix.arch }}
         run: |
           raw_tag="${{ steps.bump.outputs.new_tag }}"
           version="${raw_tag#v}"
           export DEBCHANGE_RELEASE_DATE="$(date -R)"
+          arch="${{ matrix.arch }}"
           if [ ! -f debian/changelog ]; then touch debian/changelog; fi
           dch --newversion "$version" \
-              "Automated release $version (Architecture: all package)." \
+              "Automated release $version for architecture: $arch (Architecture: all package)." \
               --distribution unstable \
               --force-distribution
           dch --release --force-distribution ""
 
-      - name: Build package - Architecture all
+      - name: Build package for ${{ matrix.arch }} - Architecture all
         env:
           DEBIAN_FRONTEND: noninteractive
           SKIP_WHIPTAIL: 1
         run: |
-          # Build architecture-independent package
+          # Build architecture-independent package (same for all architectures)
+          # No cross-compilation needed for Architecture: all packages
           dpkg-buildpackage -us -uc
           sudo apt install -f -y
 
@@ -84,39 +89,29 @@ jobs:
           deb_file=$(ls ../*.deb | head -n 1)
           lintian "$deb_file" || echo "Lintian warnings found, but continuing..."
 
-      - name: Prepare release assets for both architectures
+      - name: Prepare release assets for ${{ matrix.arch }}
         id: prepare
         run: |
           raw_tag="${{ steps.bump.outputs.new_tag }}"
           version="${raw_tag#v}"
           deb_file=$(ls ../*.deb | head -n 1)
 
-          # Create architecture-specific names for the same package
-          amd64_name="hardn_${version}_amd64.deb"
-          arm64_name="hardn_${version}_arm64.deb"
+          # Create architecture-specific name for this matrix job
+          arch_name="hardn_${version}_${{ matrix.arch }}.deb"
 
-          # Create directories
-          mkdir -p release_assets/deb-amd64
-          mkdir -p release_assets/deb-arm64
+          # Create directory for this architecture
+          mkdir -p release_assets/deb-${{ matrix.arch }}
 
-          # Copy the same .deb file with different names
-          cp "$deb_file" "release_assets/deb-amd64/$amd64_name"
-          cp "$deb_file" "release_assets/deb-arm64/$arm64_name"
+          # Copy the .deb file with architecture-specific name
+          cp "$deb_file" "release_assets/deb-${{ matrix.arch }}/$arch_name"
 
-          echo "amd64_deb=release_assets/deb-amd64/$amd64_name" >> $GITHUB_OUTPUT
-          echo "arm64_deb=release_assets/deb-arm64/$arm64_name" >> $GITHUB_OUTPUT
+          echo "arch_deb=release_assets/deb-${{ matrix.arch }}/$arch_name" >> $GITHUB_OUTPUT
 
-      - name: Upload .deb for amd64
+      - name: Upload .deb for ${{ matrix.arch }}
         uses: actions/upload-artifact@v4
         with:
-          name: deb-amd64
-          path: ${{ steps.prepare.outputs.amd64_deb }}
-
-      - name: Upload .deb for arm64
-        uses: actions/upload-artifact@v4
-        with:
-          name: deb-arm64
-          path: ${{ steps.prepare.outputs.arm64_deb }}
+          name: deb-${{ matrix.arch }}
+          path: ${{ steps.prepare.outputs.arch_deb }}
 
   test-deployment:
     needs: build-and-test
