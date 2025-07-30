@@ -2,7 +2,7 @@
 
 # Root/sudo detection
 if [ "$EUID" -ne 0 ]; then
-    if command -v whiptail >/dev/null 2>&1; then
+    if [[ "$SKIP_WHIPTAIL" != "1" ]] && command -v whiptail >/dev/null 2>&1; then
         whiptail --title "Root Privileges Required" --msgbox "This script must be run as root. Please re-run with sudo." 10 60
     else
         echo "[ERROR] This script must be run as root. Please re-run with sudo."
@@ -21,7 +21,7 @@ install_suricata() {
     local install_mode="basic"
     local rules_selected="etopen"
 
-    if command -v whiptail >/dev/null 2>&1; then
+    if [[ "$SKIP_WHIPTAIL" != "1" ]] && command -v whiptail >/dev/null 2>&1; then
         # Install mode selection
         install_mode=$(whiptail --title "Suricata Install Mode" --radiolist "Choose install mode:" 12 60 2 \
             "basic" "Minimal config, default rules only" ON \
@@ -43,6 +43,8 @@ install_suricata() {
             fi
             rules_selected=$(echo $rules_selected | tr -d '"')
         fi
+    else
+        HARDN_STATUS "info" "Running in non-interactive mode, using basic Suricata installation"
     fi
 
     HARDN_STATUS "info" "Installing Suricata and dependencies..."
@@ -71,7 +73,7 @@ install_suricata() {
 
     # After installing Suricata, update and validate the config
     local selected_interface=""
-    if command -v whiptail >/dev/null 2>&1; then
+    if [[ "$SKIP_WHIPTAIL" != "1" ]] && command -v whiptail >/dev/null 2>&1; then
         # Gather available interfaces
         local interfaces_list
         interfaces_list=$(ip -o link show | awk -F': ' '{print $2}' | grep -v "lo" | tr '\n' ' ')
@@ -83,6 +85,7 @@ install_suricata() {
     else
         selected_interface=$(ip route | grep default | awk '{print $5}' | head -n 1)
         [ -z "$selected_interface" ] && selected_interface="eth0"
+        HARDN_STATUS "info" "Running in non-interactive mode, auto-detected interface: $selected_interface"
     fi
 
     if [[ "$install_mode" == "advanced" ]]; then

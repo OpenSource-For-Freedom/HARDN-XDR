@@ -104,15 +104,21 @@ for proto in "${!protocols_defaults[@]}"; do
 	checklist_args+=("$proto" "$desc" "${protocols_defaults[$proto]}")
 done
 
-selected=$(whiptail --title "Network Protocol Hardening" --checklist "Select protocols to DISABLE (SPACE to select, TAB to move):" 25 80 15 "${checklist_args[@]}" 3>&1 1>&2 2>&3)
+if [[ "$SKIP_WHIPTAIL" != "1" ]] && command -v whiptail >/dev/null 2>&1; then
+    selected=$(whiptail --title "Network Protocol Hardening" --checklist "Select protocols to DISABLE (SPACE to select, TAB to move):" 25 80 15 "${checklist_args[@]}" 3>&1 1>&2 2>&3)
 
-if [[ $? -ne 0 ]]; then
-	HARDN_STATUS "info" "No changes made to network protocol blacklist. Exiting."
-	return 0
+    if [[ $? -ne 0 ]]; then
+        HARDN_STATUS "info" "No changes made to network protocol blacklist. Exiting."
+        return 0
+    fi
+
+    # Remove quotes from whiptail output
+    selected=$(echo $selected | tr -d '"')
+else
+    # Default selection for non-interactive mode - disable vulnerable/legacy protocols
+    selected="tipc dccp sctp rds ax25 netrom rose decnet econet ipx appletalk x25 netbeui firewire slip ftp telnet"
+    HARDN_STATUS "info" "Running in non-interactive mode, disabling vulnerable/legacy protocols: $selected"
 fi
-
-# Remove quotes from whiptail output
-selected=$(echo $selected | tr -d '"')
 
 # Backup existing blacklist file
 if [[ -f /etc/modprobe.d/blacklist-rare-network.conf ]]; then
