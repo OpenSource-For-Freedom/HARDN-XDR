@@ -45,8 +45,8 @@ suricata_module() {
         HARDN_STATUS "warning" "suricata-update timed out or failed."
     fi
 
-    systemctl enable suricata.service || HARDN_STATUS "warning" "Failed to enable suricata service"
-    systemctl restart suricata.service || HARDN_STATUS "warning" "Failed to restart suricata service"
+    systemctl enable suricata.service 2>/dev/null || HARDN_STATUS "warning" "Failed to enable suricata service"
+    systemctl restart suricata.service 2>/dev/null || HARDN_STATUS "warning" "Failed to restart suricata service"
 
     if systemctl is-active --quiet suricata.service; then
         HARDN_STATUS "pass" "Suricata service is running."

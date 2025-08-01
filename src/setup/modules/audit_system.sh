@@ -134,7 +134,12 @@ RestrictSUIDSGID=yes
 EOF
 done
 
-systemctl daemon-reload || HARDN_STATUS "warning" "systemctl daemon-reload failed, continuing..."
+# Skip systemd operations in CI environment
+if [[ -n "$CI" || -n "$GITHUB_ACTIONS" ]]; then
+    HARDN_STATUS "info" "CI environment detected, skipping systemd daemon-reload"
+else
+    systemctl daemon-reload 2>/dev/null || HARDN_STATUS "warning" "systemctl daemon-reload failed, continuing..."
+fi
 
 # Set secure umask
 if ! grep -q "umask 027" /etc/profile; then
