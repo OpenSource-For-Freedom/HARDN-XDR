@@ -4,6 +4,9 @@ set -e
 
 service_name="$1"
 
+# Create log directory if it doesn't exist
+mkdir -p /var/log/hardn
+
 # Sanity 
 if [[ -z "$service_name" ]]; then
     HARDN_STATUS "error" "No service name provided. Usage: $0 <service-name>"

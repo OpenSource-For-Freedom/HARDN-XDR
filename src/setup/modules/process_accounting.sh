@@ -2,8 +2,7 @@
 source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
 set -e
 
-HARDN_STATUS "error" "Enabling process accounting (acct) and system statistics (sysstat)..."
-local changed_acct changed_sysstat
+HARDN_STATUS "info" "Enabling process accounting (acct) and system statistics (sysstat)..."
 changed_acct=false
 changed_sysstat=false
 
@@ -62,7 +61,6 @@ else
 fi
 
 if is_installed sysstat; then
-	local sysstat_conf
 	sysstat_conf="/etc/default/sysstat"
 	if [[ -f "$sysstat_conf" ]]; then
 		if ! grep -qE '^\s*ENABLED="true"' "$sysstat_conf"; then

@@ -133,3 +133,18 @@ export -f hardn_msgbox
 export -f hardn_infobox
 export -f hardn_menu
 export -f hardn_yesno
+
+# Detect OS information for scripts that need it
+if [[ -f /etc/os-release ]]; then
+    # Source os-release to get ID and VERSION_CODENAME
+    . /etc/os-release
+    export ID
+    export VERSION_CODENAME
+    # For compatibility, also export as CURRENT_DEBIAN_CODENAME
+    export CURRENT_DEBIAN_CODENAME="${VERSION_CODENAME:-unknown}"
+else
+    # Fallback values
+    export ID="unknown"
+    export VERSION_CODENAME="unknown"
+    export CURRENT_DEBIAN_CODENAME="unknown"
+fi

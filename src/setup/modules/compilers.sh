@@ -2,9 +2,8 @@
 source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
 set -e
 
-HARDN_STATUS "error" "Restricting compiler access to root only (HRDN-7222)..."
+HARDN_STATUS "info" "Restricting compiler access to root only (HRDN-7222)..."
 
-local compilers
 compilers="/usr/bin/gcc /usr/bin/g++ /usr/bin/make /usr/bin/cc /usr/bin/c++ /usr/bin/as /usr/bin/ld"
 for bin in $compilers; do
 	if [[ -f "$bin" ]]; then

@@ -38,7 +38,10 @@ set -e
 # Function to install YARA and dependencies
 install_yara() {
     HARDN_STATUS "info" "Installing YARA and related packages..."
-    apt-get install -y yara python3-yara libyara-dev
+    apt-get update || true
+    apt-get install -y yara python3-yara libyara-dev || {
+        HARDN_STATUS "warning" "Failed to install some YARA packages, continuing anyway"
+    }
 
     # Create directories for YARA rules
     mkdir -p /etc/yara/rules
@@ -47,6 +50,12 @@ install_yara() {
 
 # Function to download YARA rules from GitHub
 download_yara_rules() {
+    # Check if git is available first
+    if ! command -v git >/dev/null 2>&1; then
+        HARDN_STATUS "warning" "git not available, skipping GitHub rules download"
+        return 1
+    fi
+
     # Create a temporary directory for cloning rules
     local temp_dir
     temp_dir=$(mktemp -d -t yara-rules-XXXXXXXX)
@@ -54,12 +63,12 @@ download_yara_rules() {
     HARDN_STATUS "info" "Cloning YARA rules from GitHub to ${temp_dir}..."
 
     # Clone the repository with YARA rules
-    if git clone --depth 1 https://github.com/Yara-Rules/rules "${temp_dir}"; then
+    if git clone --depth 1 https://github.com/Yara-Rules/rules "${temp_dir}" 2>/dev/null; then
         HARDN_STATUS "pass" "YARA rules cloned successfully."
 
         # Copy .yar files to the rules directory
         HARDN_STATUS "info" "Copying .yar rules to /etc/yara/rules/..."
-        find "${temp_dir}" -type f -name "*.yar" -exec cp {} /etc/yara/rules/ \;
+        find "${temp_dir}" -type f -name "*.yar" -exec cp {} /etc/yara/rules/ \; 2>/dev/null || true
 
         # Check if any rules were copied
         if [ "$(ls -A /etc/yara/rules/)" ]; then
@@ -83,12 +92,18 @@ download_yara_rules() {
 
 # Function to download basic YARA rules directly
 download_basic_rules() {
+    # Check if curl is available first
+    if ! command -v curl >/dev/null 2>&1; then
+        HARDN_STATUS "warning" "curl not available, skipping basic rules download"
+        return 1
+    fi
+
     HARDN_STATUS "warning" "Downloading some basic rules directly..."
 
     # Download some basic YARA rules directly
-    curl -s https://raw.githubusercontent.com/Yara-Rules/rules/master/malware/MALW_Eicar.yar -o /etc/yara/rules/MALW_Eicar.yar
-    curl -s https://raw.githubusercontent.com/Yara-Rules/rules/master/malware/MALW_Ransomware.yar -o /etc/yara/rules/MALW_Ransomware.yar
-    curl -s https://raw.githubusercontent.com/Yara-Rules/rules/master/malware/MALW_Backdoor.yar -o /etc/yara/rules/MALW_Backdoor.yar
+    curl -s https://raw.githubusercontent.com/Yara-Rules/rules/master/malware/MALW_Eicar.yar -o /etc/yara/rules/MALW_Eicar.yar 2>/dev/null || true
+    curl -s https://raw.githubusercontent.com/Yara-Rules/rules/master/malware/MALW_Ransomware.yar -o /etc/yara/rules/MALW_Ransomware.yar 2>/dev/null || true
+    curl -s https://raw.githubusercontent.com/Yara-Rules/rules/master/malware/MALW_Backdoor.yar -o /etc/yara/rules/MALW_Backdoor.yar 2>/dev/null || true
 
     if [ "$(ls -A /etc/yara/rules/)" ]; then
         HARDN_STATUS "pass" "Basic YARA rules downloaded successfully."
@@ -156,7 +171,7 @@ yara_module() {
 
     # Multi-whiptail ruleset selection (basic, advanced, custom)
     local ruleset_choice=""
-    if command -v whiptail >/dev/null 2>&1; then
+    if [[ "$SKIP_WHIPTAIL" != "1" ]] && command -v whiptail >/dev/null 2>&1; then
         ruleset_choice=$(whiptail --title "YARA Ruleset Selection" --checklist "Select YARA rulesets to download and enable:\n\n- Full GitHub repo: Most comprehensive, covers many threats\n- Basic: Eicar, Ransomware, Backdoor\n- ThreatFox: Community IOC rules\n- MalwareBazaar: Recent malware samples\n- APT: Targeted attack rules\n- Custom: Enter your own .yar or .zip URL\n\nYou can select multiple options." 20 100 8 \
             "github" "Full YARA-Rules GitHub repo (comprehensive)" ON \
             "basic" "Basic malware rules (Eicar, Ransomware, Backdoor)" ON \
@@ -169,7 +184,9 @@ yara_module() {
             HARDN_STATUS "info" "No YARA ruleset selected. Skipping rules download."
         fi
     else
-        ruleset_choice="github basic"
+        # Default for non-interactive mode - just basic rules
+        ruleset_choice="basic"
+        HARDN_STATUS "info" "Running in non-interactive mode, downloading basic rules only"
     fi
 
     # Download selected rulesets

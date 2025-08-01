@@ -9,13 +9,13 @@ HARDN_STATUS "info" "Applying general system hardening settings..."
 install_package_if_missing() {
 	if ! dpkg -s "$1" &>/dev/null; then
 		HARDN_STATUS "info" "Package '$1' not found. Installing..."
-		sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$1"
+		DEBIAN_FRONTEND=noninteractive apt-get install -y "$1"
 	else
 		HARDN_STATUS "info" "Package '$1' is already installed."
 	fi
 }
 
-sudo apt-get update
+apt-get update
 install_package_if_missing "libpam-tmpdir"
 install_package_if_missing "apt-listbugs"
 install_package_if_missing "needrestart"
@@ -28,13 +28,13 @@ COMPILERS=(gcc g++ make cpp clang clang++ nasm perl python2 python2.7)
 for bin in "${COMPILERS[@]}"; do
 	if command -v "$bin" &>/dev/null; then
 		HARDN_STATUS "info" "Removing $bin..."
-		sudo apt-get remove --purge -y "$bin" || true
+		apt-get remove --purge -y "$bin" || true
 	fi
 done
 
-sudo apt-get remove --purge -y build-essential gcc-* g++-* clang-* || true
-sudo apt-get autoremove -y
-sudo apt-get autoclean -y
+apt-get remove --purge -y build-essential gcc-* g++-* clang-* || true
+apt-get autoremove -y
+apt-get autoclean -y
 
 # Crypto/entropy audit
 HARDN_STATUS "info" "Checking cryptography and entropy sources..."
@@ -120,8 +120,8 @@ HARDENED_SERVICES=(
 
 for svc in "${HARDENED_SERVICES[@]}"; do
 	unit_dir="/etc/systemd/system/${svc}.d"
-	sudo mkdir -p "$unit_dir"
-	sudo tee "$unit_dir/10-hardening.conf" > /dev/null <<EOF
+	mkdir -p "$unit_dir"
+	tee "$unit_dir/10-hardening.conf" > /dev/null <<EOF
 [Service]
 ProtectSystem=full
 ProtectHome=yes
@@ -134,7 +134,7 @@ RestrictSUIDSGID=yes
 EOF
 done
 
-sudo systemctl daemon-reload
+systemctl daemon-reload
 
 # Set secure umask
 if ! grep -q "umask 027" /etc/profile; then

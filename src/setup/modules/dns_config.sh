@@ -18,7 +18,6 @@ declare -A dns_providers=(
 # Create menu options for whiptail
 
 # A through selection of recommended Secured DNS provider
-local selected_provider
 selected_provider=$(hardn_menu \
 	"Select a DNS provider for enhanced security and privacy:" 18 78 6 \
 	"Quad9" "DNSSEC, Malware Blocking, No Logging (Recommended)" \
@@ -35,21 +34,19 @@ if [[ -z "$selected_provider" ]]; then
 	return 0
 fi
 
-# Get the selected DNS servers
 read -r primary_dns secondary_dns <<< "${dns_providers[$selected_provider]}"
 HARDN_STATUS "info" "Selected $selected_provider DNS: Primary $primary_dns, Secondary $secondary_dns"
 
-local resolv_conf="/etc/resolv.conf"
-local configured_persistently=false
-local changes_made=false
+resolv_conf="/etc/resolv.conf"
+configured_persistently=false
+changes_made=false
 
-# Check for systemd-resolved
 if systemctl is-active --quiet systemd-resolved && \
    [[ -L "$resolv_conf" ]] && \
    (readlink "$resolv_conf" | grep -qE "systemd/resolve/(stub-resolv.conf|resolv.conf)"); then
 	HARDN_STATUS "info" "systemd-resolved is active and manages $resolv_conf."
-	local resolved_conf_systemd="/etc/systemd/resolved.conf"
-	local temp_resolved_conf=$(mktemp)
+	resolved_conf_systemd="/etc/systemd/resolved.conf"
+	temp_resolved_conf=$(mktemp)
 
 	if [[ ! -f "$resolved_conf_systemd" ]]; then
 		HARDN_STATUS "info" "Creating $resolved_conf_systemd as it does not exist."
@@ -108,12 +105,10 @@ if systemctl is-active --quiet systemd-resolved && \
 	rm -f "$temp_resolved_conf"
 fi
 
-# Check for NetworkManager
 if [[ "$configured_persistently" = false ]] && command -v nmcli >/dev/null 2>&1; then
 	HARDN_STATUS "info" "NetworkManager detected. Attempting to configure DNS via NetworkManager..."
 
 	# Get the current active connection
-	local active_conn
 	active_conn=$(nmcli -t -f NAME,TYPE,DEVICE,STATE c show --active | grep -E ':(ethernet|wifi):.+:activated' | head -1 | cut -d: -f1)
 
 	if [[ -n "$active_conn" ]]; then
@@ -164,8 +159,8 @@ if [[ "$configured_persistently" = false ]]; then
 
 # Create a persistent hook for dhclient if it exists
 if command -v dhclient >/dev/null 2>&1; then
-	local dhclient_dir="/etc/dhcp/dhclient-enter-hooks.d"
-	local hook_file="$dhclient_dir/hardn-dns"
+	dhclient_dir="/etc/dhcp/dhclient-enter-hooks.d"
+	hook_file="$dhclient_dir/hardn-dns"
 
 	if [[ ! -d "$dhclient_dir" ]]; then
 		mkdir -p "$dhclient_dir"

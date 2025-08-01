@@ -19,8 +19,27 @@ is_installed() {
 HARDN_STATUS "info" "Configuring automatic security updates for Debian-based systems..."
 
 if ! is_installed unattended-upgrades; then
-    HARDN_STATUS "warning" "unattended-upgrades package not found, skipping configuration."
-    return 0
+    HARDN_STATUS "warning" "unattended-upgrades package not found, attempting to install..."
+    apt-get update || true
+    apt-get install -y unattended-upgrades || {
+        HARDN_STATUS "warning" "Failed to install unattended-upgrades, skipping configuration."
+        return 0
+    }
+fi
+
+# Ensure we have the OS variables available
+if [[ -z "$ID" ]]; then
+    if [[ -f /etc/os-release ]]; then
+        . /etc/os-release
+    else
+        ID="unknown"
+        CURRENT_DEBIAN_CODENAME="unknown"
+    fi
+fi
+
+# Set a default codename if not available
+if [[ -z "$CURRENT_DEBIAN_CODENAME" ]]; then
+    CURRENT_DEBIAN_CODENAME="${VERSION_CODENAME:-unknown}"
 fi
 
 case "${ID}" in # Use ${ID} from /etc/os-release

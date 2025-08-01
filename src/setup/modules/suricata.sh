@@ -4,7 +4,11 @@ set -euo pipefail
 
 suricata_module() {
     HARDN_STATUS "info" "Installing Suricata (basic mode)..."
-    apt-get install -y suricata python3-suricata-update
+    apt-get update || true
+    if ! apt-get install -y suricata python3-suricata-update; then
+        HARDN_STATUS "error" "Failed to install Suricata packages"
+        return 100
+    fi
 
     # Auto-detect interface
     local iface
@@ -12,11 +16,17 @@ suricata_module() {
     iface=${iface:-eth0}
     HARDN_STATUS "info" "Using detected interface: $iface"
 
+    # Check if suricata.yaml exists before modifying
+    if [[ ! -f /etc/suricata/suricata.yaml ]]; then
+        HARDN_STATUS "error" "Suricata configuration file not found"
+        return 100
+    fi
+
     sed -i "s/interface: .*/interface: $iface/" /etc/suricata/suricata.yaml
 
     if ! timeout 60 suricata -T -c /etc/suricata/suricata.yaml > /dev/null 2>&1; then
         HARDN_STATUS "error" "Suricata configuration test failed."
-        return 1
+        return 100
     fi
     HARDN_STATUS "pass" "Suricata configuration is valid."
 
@@ -27,7 +37,6 @@ suricata_module() {
         HARDN_STATUS "warning" "suricata-update timed out or failed."
     fi
 
-
     systemctl enable suricata.service || true
     systemctl restart suricata.service
 
@@ -35,7 +44,7 @@ suricata_module() {
         HARDN_STATUS "pass" "Suricata service is running."
     else
         HARDN_STATUS "error" "Suricata service failed to start."
-        return 1
+        return 100
     fi
 
     # daily rule update
