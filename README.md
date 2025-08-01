@@ -100,6 +100,7 @@ man hardn-xdr
 > - A monitoring and reporting system will be activated. 
 - For a detailed list of all that will be changed, please refer to [HARDN.md](docs/HARDN.md).
 - For an overview of HARDN-Debian STIG Compliance, please refer to [deb_stig.md](docs/deb_stig.md).
+- For threat research and security enhancements, please refer to [Threat Research](docs/threat-research/).
 
 ---
 
