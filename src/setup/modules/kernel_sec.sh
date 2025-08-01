@@ -60,17 +60,22 @@ for param in "${!kernel_params[@]}"; do
 	current_value=$(sysctl -n "$param" 2>/dev/null)
 
 	if [[ -z "$current_value" ]]; then
+		HARDN_STATUS "warning" "Parameter $param not available in this environment, skipping"
 		continue
 	fi
 
 	if [[ "$current_value" != "$expected_value" ]]; then
-		sed -i "/^$param\s*=/d" /etc/sysctl.conf
+		sed -i "/^$param\s*=/d" /etc/sysctl.conf 2>/dev/null || true
 		echo "$param = $expected_value" >> /etc/sysctl.conf
-		sysctl -w "$param=$expected_value" >/dev/null 2>&1
+		if sysctl -w "$param=$expected_value" >/dev/null 2>&1; then
+			HARDN_STATUS "info" "Set $param = $expected_value"
+		else
+			HARDN_STATUS "warning" "Failed to set $param = $expected_value (may not be supported)"
+		fi
 	fi
 done
 
-sysctl --system >/dev/null 2>&1
+sysctl --system >/dev/null 2>&1 || HARDN_STATUS "warning" "Some sysctl parameters may not have been applied"
 HARDN_STATUS "pass" "Kernel hardening applied successfully."
 #Safe return or exit
 return 0 2>/dev/null || exit 0
