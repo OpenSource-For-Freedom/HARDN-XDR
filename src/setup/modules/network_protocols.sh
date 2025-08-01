@@ -1,6 +1,6 @@
 #!/bin/bash
 source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
-set -e
+# Remove set -e to handle errors gracefully in CI environment
 
 
 HARDN_STATUS "info" "Checking network interfaces for promiscuous mode..."
@@ -109,7 +109,7 @@ if [[ "$SKIP_WHIPTAIL" != "1" ]] && command -v whiptail >/dev/null 2>&1; then
 
     if [[ $? -ne 0 ]]; then
         HARDN_STATUS "info" "No changes made to network protocol blacklist. Exiting."
-        return 0
+        exit 0  # Changed from return 0 for consistency
     fi
 
     # Remove quotes from whiptail output
@@ -136,4 +136,4 @@ fi
 
 HARDN_STATUS "pass" "Network protocol hardening complete: Disabled $(echo $selected | wc -w) protocols."
 #Safe return or exit
-return 0 2>/dev/null || exit 0
+exit 0

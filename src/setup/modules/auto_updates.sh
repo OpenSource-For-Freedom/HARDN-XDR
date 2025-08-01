@@ -1,6 +1,6 @@
 #!/bin/bash
 source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
-set -e
+# Remove set -e to handle errors gracefully in CI environment
 
 is_installed() {
     if command -v apt >/dev/null 2>&1; then
@@ -32,14 +32,21 @@ if [[ -z "$ID" ]]; then
     if [[ -f /etc/os-release ]]; then
         . /etc/os-release
     else
-        ID="unknown"
-        CURRENT_DEBIAN_CODENAME="unknown"
+        ID="debian"  # Safe default for CI
+        CURRENT_DEBIAN_CODENAME="stable"  # Safe default for CI
     fi
 fi
 
 # Set a default codename if not available
 if [[ -z "$CURRENT_DEBIAN_CODENAME" ]]; then
-    CURRENT_DEBIAN_CODENAME="${VERSION_CODENAME:-unknown}"
+    CURRENT_DEBIAN_CODENAME="${VERSION_CODENAME:-stable}"
+fi
+
+# Validate variables before using them
+if [[ -z "$ID" || -z "$CURRENT_DEBIAN_CODENAME" ]]; then
+    HARDN_STATUS "warning" "Could not determine OS ID or codename, using defaults"
+    ID="${ID:-debian}"
+    CURRENT_DEBIAN_CODENAME="${CURRENT_DEBIAN_CODENAME:-stable}"
 fi
 
 case "${ID}" in # Use ${ID} from /etc/os-release

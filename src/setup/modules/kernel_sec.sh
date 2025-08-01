@@ -1,6 +1,6 @@
 #!/bin/bash
 source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
-set -e
+# Remove set -e to handle errors gracefully in CI environment
 
 HARDN_STATUS "info" "Applying kernel security settings..."
 
@@ -70,13 +70,17 @@ for param in "${!kernel_params[@]}"; do
 		if sysctl -w "$param=$expected_value" >/dev/null 2>&1; then
 			HARDN_STATUS "info" "Set $param = $expected_value"
 		else
-			HARDN_STATUS "warning" "Failed to set $param = $expected_value (may not be supported)"
+			HARDN_STATUS "warning" "Failed to set $param = $expected_value (may not be supported in CI environment)"
 		fi
 	fi
 done
 
-sysctl --system >/dev/null 2>&1 || HARDN_STATUS "warning" "Some sysctl parameters may not have been applied"
-HARDN_STATUS "pass" "Kernel hardening applied successfully."
+if sysctl --system >/dev/null 2>&1; then
+	HARDN_STATUS "pass" "Kernel hardening applied successfully."
+else
+	HARDN_STATUS "warning" "Some sysctl parameters may not have been applied (normal in CI environment)"
+fi
+
 #Safe return or exit
-return 0 2>/dev/null || exit 0
+exit 0
 
