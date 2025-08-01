@@ -1,9 +1,8 @@
 #!/bin/bash
 
-# UNC2891 Behavioral Monitoring Module - Proof of Concept
+# Behavioral Monitoring Module - Proof of Concept
 # Part of HARDN-XDR Security Framework
-# Purpose: Detect behavioral patterns associated with UNC2891-style attacks
-# Status: Proof of Concept - NOT FOR PRODUCTION USE
+# Purpose: Detect behavioral patterns associated with advanced threats
 
 set -euo pipefail
 
@@ -14,8 +13,8 @@ source "/usr/share/hardn-xdr/hardn-common.sh" 2>/dev/null || {
     check_root() { [[ $EUID -eq 0 ]]; }
 }
 
-MODULE_NAME="UNC2891 Behavioral Monitoring"
-LOG_FILE="/var/log/security/unc2891-behavior.log"
+MODULE_NAME="Behavioral Monitoring"
+LOG_FILE="/var/log/security/behavioral-monitoring.log"
 CONFIG_DIR="/etc/hardn-xdr/behavioral-monitoring"
 BASELINE_FILE="$CONFIG_DIR/system-baseline.json"
 
@@ -117,7 +116,7 @@ EOF
 # Continuously monitors system for behavioral indicators
 
 CONFIG_FILE="/etc/hardn-xdr/behavioral-monitoring/behavioral-config.conf"
-LOG_FILE="/var/log/security/unc2891-behavior.log"
+LOG_FILE="/var/log/security/behavioral-monitoring.log"
 
 # Source configuration
 [[ -f "$CONFIG_FILE" ]] && source "$CONFIG_FILE"

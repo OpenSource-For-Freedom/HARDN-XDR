@@ -157,7 +157,7 @@ The proof-of-concept behavioral monitoring module demonstrates the feasibility o
 
 ---
 
-**Spike Status**: ✅ **COMPLETED**  
+**Spike Status**: **COMPLETED**  
 **Next Phase**: Implementation Planning  
 **Document Owner**: HARDN-XDR Security Research Team  
 **Review Date**: [30 days from current date]
