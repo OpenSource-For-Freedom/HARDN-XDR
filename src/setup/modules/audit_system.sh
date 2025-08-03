@@ -2,9 +2,8 @@
 
 # shellcheck disable=SC1091
 source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
-# Remove set -e to handle errors gracefully in CI environment
 
-HARDN_STATUS "info" "Applying general system hardening settings..."
+HARDN_STATUS "info" "Auditing System for STIG Compliance.."
 
 
 install_package_if_missing() {
@@ -168,5 +167,5 @@ echo "  - Verbose mode                                              [ $VERBOSE_M
 echo "  - Debug mode                                                [ $DEBUG_MODE ]"
 echo
 
-# shellcheck disable=SC2317
+
 return 0 2>/dev/null || hardn_module_exit 0

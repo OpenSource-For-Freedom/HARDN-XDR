@@ -1,26 +1,21 @@
 #!/bin/bash
 
-# shellcheck disable=SC1091
 source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
+set -e
 
 
 HARDN_STATUS "info" "Setting up central logging for security tools..."
-
-# Universal package installer
-is_installed() {
-    command -v "$1" &>/dev/null
-}
 
 install_logging_packages() {
     HARDN_STATUS "info" "Checking and installing logging packages (rsyslog, logrotate)..."
     for pkg in rsyslog logrotate; do
         if ! is_installed "$pkg"; then
-            if is_installed apt-get; then
+            if command -v apt-get >/dev/null 2>&1; then
                 sudo apt-get update >/dev/null 2>&1
                 sudo apt-get install -y "$pkg" >/dev/null 2>&1
-            elif is_installed dnf; then
+            elif command -v dnf >/dev/null 2>&1; then
                 sudo dnf install -y "$pkg" >/dev/null 2>&1
-            elif is_installed yum; then
+            elif command -v yum >/dev/null 2>&1; then
                 sudo yum install -y "$pkg" >/dev/null 2>&1
             else
                 HARDN_STATUS "error" "Unsupported package manager. Cannot install $pkg."
@@ -138,5 +133,4 @@ HARDN_STATUS "pass" "Symlink created at /var/log/hardn-xdr.log."
 
 
 HARDN_STATUS "pass" "Central logging setup complete. All security logs will be collected in /usr/local/var/log/suricata/hardn-xdr.log"
-# shellcheck disable=SC2317
 return 0 2>/dev/null || hardn_module_exit 0

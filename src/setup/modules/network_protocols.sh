@@ -1,7 +1,7 @@
 #!/bin/bash
 # shellcheck source=/usr/lib/hardn-xdr/src/setup/hardn-common.sh
 source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
-# Remove set -e to handle errors gracefully in CI environment
+set -e
 
 
 HARDN_STATUS "info" "Checking network interfaces for promiscuous mode..."
@@ -123,7 +123,7 @@ if [[ "$SKIP_WHIPTAIL" != "1" ]] && command -v whiptail >/dev/null 2>&1; then
         "appletalk" "AppleTalk Protocol" ON \
         "psnap" "SubNetwork Access Protocol" ON 3>&1 1>&2 2>&3); then
         HARDN_STATUS "info" "No changes made to network protocol blacklist. Exiting."
-        exit 0  # Changed from return 0 for consistency
+        return 0 2>/dev/null || hardn_module_exit 0
     fi
 
     # Remove quotes from whiptail output

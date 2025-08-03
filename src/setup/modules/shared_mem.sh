@@ -1,5 +1,4 @@
 #!/bin/bash
-# shellcheck source=/usr/lib/hardn-xdr/src/setup/hardn-common.sh
 source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
 set -e
 
@@ -13,5 +12,5 @@ fi
 
 HARDN_STATUS "pass" "Shared memory hardening completed"
 
-#Safe return or exit
-return 0 2>/dev/null || exit 0
+return 0 2>/dev/null || hardn_module_exit 0
+

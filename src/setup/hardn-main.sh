@@ -11,7 +11,7 @@ fi
 
 
 if [ -f /usr/lib/hardn-xdr/src/setup/hardn-common.sh ]; then
-# shellcheck source=/usr/lib/hardn-xdr/src/setup/hardn-common.sh
+    # shellcheck source=src/setup/hardn-common.sh
     source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
 else
     echo "[ERROR] hardn-common.sh not found at expected path!"
@@ -130,10 +130,16 @@ run_module() {
     for module_path in "${module_paths[@]}"; do
         if [[ -f "$module_path" ]]; then
             HARDN_STATUS "info" "Executing module: ${module_file} from ${module_path}"
-            # shellcheck source=/usr/lib/hardn-xdr/src/setup/modules/
-            # shellcheck source=./modules/
-            source "$module_path"
-            return 0
+            # shellcheck source=src/setup/modules/aide.sh
+            source "$module_path" >/dev/null 2>&1
+            local source_result=$?
+
+            if [[ $source_result -eq 0 ]]; then
+                return 0
+            else
+                HARDN_STATUS "error" "Module execution failed: $module_path"
+                return 1
+            fi
         fi
     done
 

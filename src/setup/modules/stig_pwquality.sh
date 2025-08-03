@@ -1,29 +1,34 @@
 #!/bin/bash
-# shellcheck source=/usr/lib/hardn-xdr/src/setup/hardn-common.sh
 source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
 set -e
-
-is_installed() {
-    local pkg="$1"
-    if command -v dpkg &>/dev/null; then
-        dpkg -s "$pkg" &>/dev/null
-    elif command -v rpm &>/dev/null; then
-        rpm -q "$pkg" &>/dev/null
-    else
-        return 1
-    fi
-}
 
 # --------- Password Validator --------
 validate_password() {
     local pw="$1"
     local minlen="$2" u="$3" l="$4" d="$5" o="$6"
 
+    # Check minimum length
     [[ ${#pw} -lt $minlen ]] && return 1
-    [[ $u -gt 0 && ! "$pw" =~ [A-Z] ]] && return 1
-    [[ $l -gt 0 && ! "$pw" =~ [a-z] ]] && return 1
-    [[ $d -gt 0 && ! "$pw" =~ [0-9] ]] && return 1
-    [[ $o -gt 0 && ! "$pw" =~ [\!\@\#\$\%\^\&\*\(\)\_\+\-=\[\]\{\}\;\:\'\",.\<\>\/?\\|] ]] && return 1
+
+    # Check uppercase letters (if required)
+    if [[ $u -gt 0 ]]; then
+        [[ ! "$pw" =~ [A-Z] ]] && return 1
+    fi
+
+    # Check lowercase letters (if required)
+    if [[ $l -gt 0 ]]; then
+        [[ ! "$pw" =~ [a-z] ]] && return 1
+    fi
+
+    # Check digits (if required)
+    if [[ $d -gt 0 ]]; then
+        [[ ! "$pw" =~ [0-9] ]] && return 1
+    fi
+
+    # Check special characters (if required)
+    if [[ $o -gt 0 ]]; then
+        [[ ! "$pw" =~ [^a-zA-Z0-9] ]] && return 1
+    fi
 
     return 0
 }
@@ -36,24 +41,24 @@ elif [ -f /etc/pam.d/system-auth ]; then
     PAM_FILE="/etc/pam.d/system-auth"
 else
     HARDN_STATUS "error" "No standard PAM password file found."
-    return 0 2>/dev/null || exit 0
+    return 0 2>/dev/null || hardn_module_exit 0
 fi
 
 # --------- Skip if no TTY or container ----------
 if grep -qa container /proc/1/environ || systemd-detect-virt --quiet --container || ! [ -t 0 ]; then
     HARDN_STATUS "info" "Skipping password policy setup (container or non-interactive)."
-    return 0 2>/dev/null || exit 0
+    return 0 2>/dev/null || hardn_module_exit 0
 fi
 
 # --------- Check whiptail ----------
 if ! command -v whiptail &>/dev/null; then
     HARDN_STATUS "warning" "whiptail not found. Skipping password policy wizard."
-    return 0 2>/dev/null || exit 0
+    return 0 2>/dev/null || hardn_module_exit 0
 fi
 
 # --------- Intro Message ----------
 whiptail --title "Password Policy Setup" --msgbox \
-"This wizard will configure password strength rules.\n\n\
+"This application will configure password strength rules.\n\n\
 Be careful: improper settings may lock out users.\n\
 After applying, you should run 'passwd' to verify compliance." 12 70
 
@@ -89,15 +94,15 @@ The following password policy will be applied to $PAM_FILE:\n\
 • Digits: $dcredit\n• Special characters: $ocredit\n\n\
 Continue?" 18 70; then
     HARDN_STATUS "info" "User cancelled password policy setup."
-    return 0 2>/dev/null || exit 0
+    return 0 2>/dev/null || hardn_module_exit 0
 fi
 
 # --------- Ensure Package Installed ----------
-if command -v apt &>/dev/null && ! is_installed libpam-pwquality; then
+if command -v apt &>/dev/null && ! command -v pwscore &>/dev/null; then
     apt install -y libpam-pwquality
-elif command -v dnf &>/dev/null && ! is_installed pam_pwquality; then
+elif command -v dnf &>/dev/null && ! command -v pwscore &>/dev/null; then
     dnf install -y pam_pwquality
-elif command -v yum &>/dev/null && ! is_installed pam_pwquality; then
+elif command -v yum &>/dev/null && ! command -v pwscore &>/dev/null; then
     yum install -y pam_pwquality
 fi
 
@@ -121,4 +126,4 @@ HARDN_STATUS "pass" "Password policy successfully applied."
 whiptail --title "Reminder" --msgbox \
 "The policy is now active.\nRun 'passwd' to change your password and test compliance." 10 60
 
-return 0 2>/dev/null || exit 0
+return 0 2>/dev/null || hardn_module_exit 0

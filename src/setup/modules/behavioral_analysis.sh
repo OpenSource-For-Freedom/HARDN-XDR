@@ -4,8 +4,7 @@
 # Part of HARDN-XDR Security Framework
 # Purpose: System behavior baselining and anomaly detection
 
-# shellcheck disable=SC1091
-source "/usr/share/hardn-xdr/hardn-common.sh" 2>/dev/null || {
+source "/usr/lib/hardn-xdr/src/setup/hardn-common.sh" 2>/dev/null || {
     echo "Warning: Could not source hardn-common.sh, using basic functions"
     log_message() { echo "$(date '+%Y-%m-%d %H:%M:%S') - $1"; }
     check_root() { [[ $EUID -eq 0 ]]; }
@@ -71,5 +70,4 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     behavioral_analysis_setup
 fi
 
-# shellcheck disable=SC2317
 return 0 2>/dev/null || hardn_module_exit 0

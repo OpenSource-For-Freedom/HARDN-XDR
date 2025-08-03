@@ -2,7 +2,6 @@
 
 # shellcheck disable=SC1091
 source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
-# Remove set -e to handle errors gracefully in CI environment
 
 is_installed() {
     if command -v apt >/dev/null 2>&1; then
@@ -14,7 +13,7 @@ is_installed() {
     elif command -v rpm >/dev/null 2>&1; then
         rpm -q "$1" >/dev/null 2>&1
     else
-        return 1 # Cannot determine package manager
+        return 1
     fi
 }
 
@@ -207,7 +206,6 @@ cat <<EOF > "$audit_rules_file" 2>/dev/null || { HARDN_STATUS "warning" "Could n
 -a always,exit -F path=/usr/sbin/usernetctl -F perm=x -F auid>=500 -F auid!=4294967295 -k T1078_Valid_Accounts
 -a always,exit -F path=/usr/sbin/ccreds_validate -F perm=x -F auid>=500 -F auid!=4294967295 -k T1078_Valid_Accounts
 -a always,exit -F path=/usr/sbin/userhelper -F perm=x -F auid>=500 -F auid!=4294967295 -k T1078_Valid_Accounts
-##-a always,exit -F path=/usr/libexec/openssh/ssh-keysign -F perm=x -F auid>=500 -F auid!=4294967295 -k T1078_Valid_Accounts
 -a always,exit -F path=/usr/bin/Xorg -F perm=x -F auid>=500 -F auid!=4294967295 -k T1078_Valid_Accounts
 -a always,exit -F path=/usr/bin/rlogin -F perm=x -F auid>=500 -F auid!=4294967295 -k T1078_Valid_Accounts
 -a always,exit -F path=/usr/bin/sudoedit -F perm=x -F auid>=500 -F auid!=4294967295 -k T1078_Valid_Accounts
@@ -299,7 +297,7 @@ cat <<EOF > "$audit_rules_file" 2>/dev/null || { HARDN_STATUS "warning" "Could n
 -a always,exit -F arch=b32 -S setuid -S setgid -S setreuid -S setregid -k T1166_Seuid_and_Setgid
 -a always,exit -F arch=b64 -S setuid -S setgid -S setreuid -S setregid -F exit=EPERM -k T1166_Seuid_and_Setgid
 -a always,exit -F arch=b32 -S setuid -S setgid -S setreuid -S setregid -F exit=EPERM -k T1166_Seuid_and_Setgid
- -w /usr/bin/ -p wa -k T1068_Exploitation_for_Privilege_Escalation
+-w /usr/bin/ -p wa -k T1068_Exploitation_for_Privilege_Escalation
 
 ## Recon Related Events
 -w /etc/group -p wa -k T1087_Account_Discovery
@@ -400,7 +398,6 @@ EOF
 chmod 600 "$audit_rules_file" 2>/dev/null || HARDN_STATUS "warning" "Could not set permissions on audit rules file in CI environment"
 chown root:root "$audit_rules_file" 2>/dev/null || HARDN_STATUS "warning" "Could not set ownership on audit rules file in CI environment"
 
-# Reload auditd rules - handle gracefully in CI environment
 if [[ -n "$CI" || -n "$GITHUB_ACTIONS" ]]; then
     HARDN_STATUS "warning" "Could not load audit rules - auditd may not be running in CI environment"
 elif augenrules --load 2>/dev/null; then
@@ -411,5 +408,5 @@ else
     HARDN_STATUS "warning" "Could not load audit rules - auditd may not be running in CI environment"
 fi
 
-# shellcheck disable=SC2317
+
 return 0 2>/dev/null || hardn_module_exit 0

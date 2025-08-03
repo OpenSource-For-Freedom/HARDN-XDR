@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck source=/usr/lib/hardn-xdr/src/setup/hardn-common.sh
+# shellcheck disable=SC1091
 source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
 set -e
 
@@ -21,5 +21,6 @@ fi
 HARDN_STATUS "[*] Usage example:"
 HARDN_STATUS "    sudo unhide proc"
 HARDN_STATUS "    sudo unhide sys"
-# Safe return
-return 0 2>/dev/null || exit 0
+
+# shellcheck disable=SC2317
+return 0 2>/dev/null || hardn_module_exit 0

@@ -1,12 +1,11 @@
 #!/bin/bash
-# shellcheck disable=SC1091
 source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
-
+set -e
 
 HARDN_STATUS "info" "Restricting compiler access to root only (HRDN-7222)..."
 
-compilers="/usr/bin/gcc /usr/bin/g++ /usr/bin/make /usr/bin/cc /usr/bin/c++ /usr/bin/as /usr/bin/ld"
-for bin in $compilers; do
+compilers=("/usr/bin/gcc" "/usr/bin/g++" "/usr/bin/make" "/usr/bin/cc" "/usr/bin/c++" "/usr/bin/as" "/usr/bin/ld")
+for bin in "${compilers[@]}"; do
 	if [[ -f "$bin" ]]; then
 		chmod 755 "$bin"
 		chown root:root "$bin"
@@ -14,8 +13,7 @@ for bin in $compilers; do
 	fi
 done
 
-#Safe return or exit
+HARDN_STATUS "pass" "Compiler access restrictions applied successfully."
 
-# shellcheck disable=SC2317
 return 0 2>/dev/null || hardn_module_exit 0
 

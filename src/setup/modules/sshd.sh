@@ -1,12 +1,6 @@
 #!/bin/bash
-# shellcheck source=/usr/lib/hardn-xdr/src/setup/hardn-common.sh
 source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
 set -e
-
-# Universal package installer
-is_installed() {
-    command -v "$1" &>/dev/null
-}
 
 # Check if systemd is available and running
 is_systemd_available() {
@@ -25,13 +19,16 @@ hardn_msgbox "Installing OpenSSH server...\n\nThis may take a few minutes."
 hardn_infobox "Please have your ssh key stored and login backup...\n\nThis process disables certain processes."
 
 # Install OpenSSH server
-if is_installed apt-get; then
-    sudo apt-get update
-    sudo apt-get install -y openssh-server
-elif is_installed yum; then
-    sudo yum install -y openssh-server
-elif is_installed dnf; then
-    sudo dnf install -y openssh-server
+if command -v apt-get &>/dev/null; then
+    apt-get install -y openssh-server
+elif command -v yum &>/dev/null; then
+    yum install -y openssh-server
+elif command -v dnf &>/dev/null; then
+    dnf install -y openssh-server
+elif command -v pacman &>/dev/null; then
+    pacman -S --noconfirm openssh
+elif command -v zypper &>/dev/null; then
+    zypper install -y openssh
 else
     HARDN_STATUS "error" "Unsupported package manager. Please install OpenSSH server manually."
     return 1
@@ -71,8 +68,8 @@ hardn_msgbox "Press OK to continue."
 
 # Enable and start sshd service
 if is_systemd_available; then
-    sudo systemctl enable "$SERVICE_NAME"
-    sudo systemctl start "$SERVICE_NAME"
+    systemctl enable "$SERVICE_NAME"
+    systemctl start "$SERVICE_NAME"
     HARDN_STATUS "pass" "SSH service enabled and started using systemd"
 else
     HARDN_STATUS "warning" "systemd not available - skipping service enable/start operations"
@@ -99,14 +96,13 @@ fi
 
 # Restart sshd to apply changes (minimal changes now)
 if is_systemd_available; then
-    sudo systemctl restart "$SERVICE_NAME"
+    systemctl restart "$SERVICE_NAME"
     HARDN_STATUS "pass" "SSH service restarted using systemd"
 else
     HARDN_STATUS "warning" "systemd not available - skipping service restart"
     HARDN_STATUS "info" "Configuration changes will take effect on next SSH service restart"
 fi
 
-HARDN_STATUS "pass" "OpenSSH server installed with MINIMAL hardening for testing."
+HARDN_STATUS "pass" "OpenSSH server installed."
 
-#Safe return or exit
-return 0 2>/dev/null || exit 0
+return 0 2>/dev/null || hardn_module_exit 0

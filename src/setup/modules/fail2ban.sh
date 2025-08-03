@@ -7,13 +7,13 @@ set -e
 # -------- Check for interactive and container --------
 if grep -qa container /proc/1/environ || systemd-detect-virt --quiet --container || ! [ -t 0 ]; then
     HARDN_STATUS "info" "Skipping Fail2ban setup (container or non-interactive)."
-    return 0 2>/dev/null || exit 0
+    return 0 2>/dev/null || hardn_module_exit 0
 fi
 
 # -------- Ensure whiptail exists --------
 if ! command -v whiptail &>/dev/null; then
     HARDN_STATUS "warning" "whiptail not found. Skipping Fail2ban wizard."
-    return 0 2>/dev/null || exit 0
+    return 0 2>/dev/null || hardn_module_exit 0
 fi
 
 # -------- Prompt user to continue --------
@@ -21,7 +21,7 @@ if ! whiptail --title "Fail2ban Setup" --yesno \
 "Fail2ban protects your server from brute force attacks by banning IPs.\n\n\
 Setup will:\n• Install Fail2ban\n• Harden its systemd service\n• Enable and start the service\n• Optionally integrate with UFW\n\nDo you want to continue?" 18 70; then
     HARDN_STATUS "info" "User cancelled Fail2ban setup."
-    return 0 2>/dev/null || exit 0
+    return 0 2>/dev/null || hardn_module_exit 0
 fi
 
 # -------- Installation --------

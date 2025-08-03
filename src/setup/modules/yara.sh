@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# shellcheck source=/usr/lib/hardn-xdr/src/setup/hardn-common.sh
+# shellcheck disable=SC1091
 source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
 set -e
 
@@ -263,5 +263,5 @@ yara_module() {
 # Execute the module function when sourced from hardn-main.sh
 yara_module
 
-
+# shellcheck disable=SC2317
 return 0 2>/dev/null || hardn_module_exit 0

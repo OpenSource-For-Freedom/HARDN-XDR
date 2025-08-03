@@ -1,30 +1,15 @@
 #!/bin/bash
-# shellcheck source=/usr/lib/hardn-xdr/src/setup/hardn-common.sh
 source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
 set -e
 
-is_installed() {
-    if command -v apt >/dev/null 2>&1; then
-        dpkg -s "$1" >/dev/null 2>&1
-    elif command -v dnf >/dev/null 2>&1; then
-        dnf list installed "$1" >/dev/null 2>&1
-    elif command -v yum >/dev/null 2>&1; then
-        yum list installed "$1" >/dev/null 2>&1
-    elif command -v rpm >/dev/null 2>&1; then
-        rpm -q "$1" >/dev/null 2>&1
-    else
-        return 1
-    fi
-}
-
-HARDN_STATUS "error" "Purging configuration files of old/removed packages..."
+HARDN_STATUS "info" "Purging configuration files of old/removed packages..."
 
 if ! command -v dpkg >/dev/null 2>&1; then
     HARDN_STATUS "warning" "This script is intended for Debian-based systems. Skipping."
-    return 0
+    return 0 2>/dev/null || hardn_module_exit 0
 fi
 
-if ! is_installed whiptail; then
+if ! command -v whiptail >/dev/null 2>&1; then
     apt-get install -y whiptail >/dev/null 2>&1
 fi
 
@@ -39,7 +24,7 @@ if [[ "$packages_to_purge" ]]; then
     fi
 
     for pkg in $packages_to_purge; do
-        HARDN_STATUS "error" "Purging $pkg..."
+        HARDN_STATUS "info" "Purging $pkg..."
         if apt-get purge -y "$pkg" >/dev/null 2>&1; then
             HARDN_STATUS "pass" "Successfully purged $pkg."
         else
@@ -57,10 +42,9 @@ else
     hardn_infobox "No leftover package configurations to purge." 7 70
 fi
 
-HARDN_STATUS "error" "Running apt-get autoremove and clean to free up space..."
+HARDN_STATUS "info" "Running apt-get autoremove and clean to free up space..."
 apt-get autoremove -y >/dev/null 2>&1
 apt-get clean >/dev/null 2>&1
 hardn_infobox "Apt cache cleaned." 7 70
 
-#Safe return or exit
-return 0 2>/dev/null || exit 0
+return 0 2>/dev/null || hardn_module_exit 0

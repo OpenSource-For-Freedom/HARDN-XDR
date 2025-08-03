@@ -1,20 +1,19 @@
 #!/bin/bash
-# shellcheck source=/usr/lib/hardn-xdr/src/setup/hardn-common.sh
 source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
-# Remove set -e to handle errors gracefully in CI environment
+set -e
 
 service_name="$1"
 
 # Create log directory if it doesn't exist
 mkdir -p /var/log/hardn
 
-# Sanity 
+# Sanity
 if [[ -z "$service_name" ]]; then
     HARDN_STATUS "info" "No service name provided, running service disable checks..."
     # In CI mode, just do a general service review
     if [[ -n "$CI" || -n "$GITHUB_ACTIONS" ]]; then
         HARDN_STATUS "pass" "Service disable module completed (CI mode)"
-        exit 0
+        return 0 2>/dev/null || hardn_module_exit 0
     fi
 fi
 
@@ -22,23 +21,52 @@ HARDN_STATUS "info" "Preparing to disable: $service_name"
 
 # Critical system services that must not be disabled
 protected_services=(
-  # Login/session
-  "gdm" "lightdm" "sddm" "display-manager"
-  "systemd-logind" "accounts-daemon" "polkit"
+  # Login/session/authentication - CRITICAL for user access
+  "gdm" "lightdm" "sddm" "display-manager" "login"
+  "systemd-logind" "accounts-daemon" "polkit" "pam-systemd"
+  "getty@tty1" "console-getty" "serial-getty@ttyS0"
 
-  # Desktop environment essentials
+  # SSH and remote access - CRITICAL for remote management
+  "ssh" "sshd" "openssh-server" "dropbear"
+
+  # Desktop environment essentials - CRITICAL for GUI
   "xdg-desktop-portal" "xdg-desktop-portal-gtk" "xdg-desktop-portal-kde"
   "gnome-shell" "gnome-session" "plasma-workspace"
+  "xorg" "wayland" "x11-common" "xinit"
 
-  # Core user and device mgmt
-  "network-manager" "bluetooth" "wpa_supplicant" "avahi-daemon"
-  "udisks2" "upower" "colord"
+  # Core networking - CRITICAL for connectivity
+  "network-manager" "networkd" "systemd-networkd" "systemd-resolved"
+  "dhcpcd" "networking" "network" "wpa_supplicant"
 
-  # Security and entropy
-  "dbus" "haveged" "rngd" "gcr-ssh-agent"
+  # Audio/Video - ESSENTIAL for desktop use
+  "pulseaudio" "pipewire" "alsa-utils" "alsa-state"
+  "bluetooth" "bluez" "bluetooth-daemon"
 
-  # Optional DE/system helpers
-  "speech-dispatcher" "rtkit-daemon"
+  # Core user and device management - CRITICAL for hardware
+  "udisks2" "upower" "colord" "cups" "cups-browsed"
+  "avahi-daemon" "dbus" "systemd-user-sessions"
+
+  # Security and entropy - CRITICAL for system security
+  "haveged" "rngd" "gcr-ssh-agent" "gnome-keyring"
+  "apparmor" "selinux" "fail2ban"
+
+  # Package management - CRITICAL for updates
+  "packagekit" "apt-daily" "apt-daily-upgrade" "unattended-upgrades"
+
+  # Time synchronization - IMPORTANT for system stability
+  "ntp" "ntpd" "systemd-timesyncd" "chrony"
+
+  # File systems and storage - CRITICAL for data access
+  "systemd-tmpfiles-setup" "systemd-tmpfiles-clean"
+  "systemd-journal-flush" "systemd-journald"
+
+  # Optional DE/system helpers - IMPORTANT for user experience
+  "speech-dispatcher" "rtkit-daemon" "at-spi-dbus-bus"
+  "gvfs-daemon" "gvfs-udisks2-volume-monitor"
+
+  # Hardware support - IMPORTANT for device functionality
+  "acpid" "thermald" "irqbalance" "cpufrequtils"
+  "hdparm" "smartd" "lm-sensors"
 )
 
 # Never disable protected services
@@ -50,7 +78,7 @@ for protected in "${protected_services[@]}"; do
   fi
 done
 
-# Attempt to disable the service 
+# Attempt to disable the service
 if systemctl is-active --quiet "$service_name"; then
   HARDN_STATUS "info" "Disabling active service: $service_name..."
   if systemctl disable --now "$service_name"; then
@@ -72,5 +100,4 @@ else
   echo "$(date) - NOT FOUND: $service_name" >> /var/log/hardn/service_disable.log
 fi
 
-#Safe return or exit
-exit 0
+return 0 2>/dev/null || hardn_module_exit 0

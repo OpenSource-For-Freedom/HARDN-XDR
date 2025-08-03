@@ -1,7 +1,6 @@
 #!/bin/bash
-# shellcheck source=/usr/lib/hardn-xdr/src/setup/hardn-common.sh
 source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
-# Remove set -e to handle errors gracefully in CI environment
+set -e
 
 HARDN_STATUS "info" "Applying kernel security settings..."
 
@@ -82,6 +81,6 @@ else
 	HARDN_STATUS "warning" "Some sysctl parameters may not have been applied (normal in CI environment)"
 fi
 
-#Safe return or exit
-exit 0
+
+return 0 2>/dev/null || hardn_module_exit 0
 

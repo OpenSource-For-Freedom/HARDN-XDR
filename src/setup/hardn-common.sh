@@ -1,11 +1,9 @@
 #!/bin/bash
 
-# Auto-detect CI or headless environments and skip whiptail
 if [[ -n "$CI" || -n "$GITHUB_ACTIONS" || -n "$GITLAB_CI" || -n "$JENKINS_URL" || -n "$BUILDKITE" || ! -t 0 ]]; then
     export SKIP_WHIPTAIL=1
 fi
 
-# Color-coded CLI status output
 HARDN_STATUS() {
     local status="$1"
     local message="$2"
@@ -18,7 +16,6 @@ HARDN_STATUS() {
     esac
 }
 
-# Package presence checker across multiple distros
 is_installed() {
     local pkg="$1"
     if command -v dpkg >/dev/null 2>&1; then
@@ -148,3 +145,10 @@ else
     export VERSION_CODENAME="unknown"
     export CURRENT_DEBIAN_CODENAME="unknown"
 fi
+
+# Module exit function - used by modules when they need to exit
+# (when run standalone rather than sourced)
+hardn_module_exit() {
+    local exit_code="${1:-0}"
+    exit "$exit_code"
+}

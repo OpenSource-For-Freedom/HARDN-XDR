@@ -1,8 +1,7 @@
 #!/bin/bash
 
-# shellcheck source=/usr/lib/hardn-xdr/src/setup/hardn-common.sh
 source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
-# Remove set -e to handle errors gracefully in CI environment
+set -e
 
 HARDN_STATUS "info" "Configuring DNS nameservers..."
 
@@ -39,7 +38,7 @@ fi
 # Exit if user cancels (but not in CI mode)
 if [[ -z "$selected_provider" ]]; then
 	HARDN_STATUS "warning" "DNS configuration cancelled by user. Using system defaults."
-	exit 0  # Use exit 0 instead of return 0 for compatibility
+	return 0 2>/dev/null || hardn_module_exit 0
 fi
 
 read -r primary_dns secondary_dns <<< "${dns_providers[$selected_provider]}"
@@ -100,7 +99,7 @@ if systemctl is-active --quiet systemd-resolved && \
 	if ! cmp -s "$temp_resolved_conf" "$resolved_conf_systemd"; then
 		cp "$temp_resolved_conf" "$resolved_conf_systemd"
 		HARDN_STATUS "pass" "Updated $resolved_conf_systemd. Restarting systemd-resolved..."
-		
+
 		# Handle systemctl restart in CI environment
 		if [[ -n "$CI" || -n "$GITHUB_ACTIONS" ]]; then
 			HARDN_STATUS "info" "CI environment detected, skipping systemd-resolved restart"
@@ -190,7 +189,7 @@ if [[ "$configured_persistently" = false ]]; then
 			fi
 
 			if mkdir -p "$dhclient_dir" 2>/dev/null; then
-				cat > "$hook_file" << 'EOF'
+				cat > "$hook_file" << EOF
 #!/bin/sh
 # HARDN-XDR DNS configuration hook
 make_resolv_conf() {
@@ -202,10 +201,10 @@ nameserver $secondary_dns
 RESOLVCONF
 
 # Preserve any search domains from DHCP
-if [ -n "$new_domain_search" ]; then
-	echo "search $new_domain_search" >> /etc/resolv.conf
-elif [ -n "$new_domain_name" ]; then
-	echo "search $new_domain_name" >> /etc/resolv.conf
+if [ -n "\$new_domain_search" ]; then
+	echo "search \$new_domain_search" >> /etc/resolv.conf
+elif [ -n "\$new_domain_name" ]; then
+	echo "search \$new_domain_name" >> /etc/resolv.conf
 fi
 
 return 0
@@ -226,5 +225,4 @@ else
 	hardn_infobox "DNS configuration checked. No changes made or needed." 8 70
 fi
 
-#Safe return or exit
-exit 0
+return 0 2>/dev/null || hardn_module_exit 0

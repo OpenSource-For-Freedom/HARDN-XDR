@@ -21,5 +21,4 @@ HARDN_STATUS "info" "Configuring secure network parameters..."
 	echo "net.ipv6.conf.default.disable_ipv6 = 1"
 } >> /etc/sysctl.conf
 
-#Safe return or exit
-return 0 2>/dev/null || exit 0
+return 0 2>/dev/null || hardn_module_exit 0

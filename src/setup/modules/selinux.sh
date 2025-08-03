@@ -3,21 +3,6 @@
 source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
 set -e
 
-# --------- is_installed ----------
-is_installed() {
-    if command -v apt >/dev/null 2>&1; then
-        dpkg -s "$1" >/dev/null 2>&1
-    elif command -v dnf >/dev/null 2>&1; then
-        dnf list installed "$1" >/dev/null 2>&1
-    elif command -v yum >/dev/null 2>&1; then
-        yum list installed "$1" >/dev/null 2>&1
-    elif command -v rpm >/dev/null 2>&1; then
-        rpm -q "$1" >/dev/null 2>&1
-    else
-        return 1
-    fi
-}
-
 # --------- OS Detection ----------
 get_os_id() {
     awk -F= '/^ID=/{gsub("\"", "", $2); print $2}' /etc/os-release
@@ -28,13 +13,13 @@ OS_ID=$(get_os_id)
 # Only allow execution on RHEL-based systems
 if [[ ! "$OS_ID" =~ ^(rhel|centos|fedora|rocky|almalinux)$ ]]; then
     HARDN_STATUS "info" "This SELinux module is only supported on RHEL-based systems. Skipping..."
-    return 0 2>/dev/null || exit 0
+    return 0 2>/dev/null || hardn_module_exit 0
 fi
 
 # --------- Container Detection ----------
 if grep -qa container /proc/1/environ || systemd-detect-virt --quiet --container; then
     HARDN_STATUS "info" "Container environment detected. Skipping SELinux setup."
-    return 0 2>/dev/null || exit 0
+    return 0 2>/dev/null || hardn_module_exit 0
 fi
 
 # --------- Interactive Menu ---------
@@ -55,7 +40,7 @@ if $SHOW_MENU; then
     EXIT_STATUS=$?
     if [[ $EXIT_STATUS -ne 0 || "$CHOICE" == "skip" ]]; then
         HARDN_STATUS "info" "User cancelled or skipped SELinux setup."
-        return 0 2>/dev/null || exit 0
+        return 0 2>/dev/null || hardn_module_exit 0
     fi
 else
     CHOICE="basic"
@@ -67,7 +52,7 @@ HARDN_STATUS "info" "Installing SELinux for $OS_ID..."
 PKG_MGR=$(command -v dnf || command -v yum)
 $PKG_MGR install -y selinux-policy selinux-policy-targeted policycoreutils policycoreutils-python-utils audit || {
     HARDN_STATUS "warning" "Failed to install SELinux packages."
-    return 0 2>/dev/null || exit 0
+    return 0 2>/dev/null || hardn_module_exit 0
 }
 
 # --------- Config File Setup ---------
