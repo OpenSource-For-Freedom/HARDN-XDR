@@ -281,6 +281,21 @@ measure_execution_time() {
     HARDN_STATUS "info" "Debsums check completed in: $time_str"
 }
 
+# Function to install GNU Parallel if not already installed
+install_parallel() {
+    if ! command -v parallel >/dev/null 2>&1; then
+        HARDN_STATUS "info" "GNU Parallel not found. Installing..."
+        if command -v apt-get >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y parallel
+        else
+            HARDN_STATUS "error" "No supported package manager found to install GNU Parallel."
+            return 1
+        fi
+    else
+        HARDN_STATUS "info" "GNU Parallel is already installed."
+    fi
+}
 # Install parallel for better performance
 install_parallel
 
