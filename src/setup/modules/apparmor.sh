@@ -9,10 +9,36 @@ if grep -qa container /proc/1/environ || systemd-detect-virt --quiet --container
     return 0 2>/dev/null || exit 0
 fi
 
+# --------- Check for desktop environment ----------
+DESKTOP_DETECTED=false
+if systemctl is-active --quiet gdm3 2>/dev/null || systemctl is-active --quiet gdm 2>/dev/null; then
+    DESKTOP_DETECTED=true
+    HARDN_STATUS "info" "GDM desktop manager detected."
+elif systemctl is-active --quiet lightdm 2>/dev/null; then
+    DESKTOP_DETECTED=true
+    HARDN_STATUS "info" "LightDM desktop manager detected."
+elif systemctl is-active --quiet sddm 2>/dev/null; then
+    DESKTOP_DETECTED=true
+    HARDN_STATUS "info" "SDDM desktop manager detected."
+elif [ -n "$DISPLAY" ] || [ -n "$XDG_SESSION_TYPE" ]; then
+    DESKTOP_DETECTED=true
+    HARDN_STATUS "info" "Desktop environment detected via environment variables."
+fi
+
+if [ "$DESKTOP_DETECTED" = "true" ]; then
+    HARDN_STATUS "info" "Desktop environment detected - will use safe AppArmor configuration."
+fi
+
 # --------- Set Default Mode ----------
 # AppArmor will run in enforce mode by default for maximum security
-MODE="enforce"
-HARDN_STATUS "info" "AppArmor configured to run in enforce mode (default secure setting)."
+# But use complain mode if desktop environment is detected for safety
+if [ "$DESKTOP_DETECTED" = "true" ]; then
+    MODE="complain"
+    HARDN_STATUS "info" "AppArmor configured to run in complain mode (desktop environment detected - safer mode)."
+else
+    MODE="enforce"
+    HARDN_STATUS "info" "AppArmor configured to run in enforce mode (default secure setting)."
+fi
 
 # --------- Begin Installation ----------
 HARDN_STATUS "info" "Initializing AppArmor security module..."
@@ -40,8 +66,28 @@ fi
 # --------- Ensure Kernel Boot Flag ----------
 if ! grep -q "apparmor=1" /proc/cmdline; then
     if grep -q '^GRUB_CMDLINE_LINUX="' /etc/default/grub; then
-        HARDN_STATUS "info" "Updating GRUB to enable AppArmor..."
-        sed -i 's/^GRUB_CMDLINE_LINUX="/GRUB_CMDLINE_LINUX="apparmor=1 security=apparmor /' /etc/default/grub
+        # Backup GRUB configuration before modification
+        GRUB_BACKUP="/etc/default/grub.hardn-backup-$(date +%Y%m%d%H%M%S)"
+        if ! cp /etc/default/grub "$GRUB_BACKUP"; then
+            HARDN_STATUS "error" "Failed to backup GRUB configuration. Skipping AppArmor kernel parameters."
+            return 0 2>/dev/null || exit 0
+        fi
+        HARDN_STATUS "info" "GRUB configuration backed up to $GRUB_BACKUP"
+        
+        # Check if apparmor parameters already exist to avoid duplicates
+        if grep -q "apparmor=1\|security=apparmor" /etc/default/grub; then
+            HARDN_STATUS "info" "AppArmor parameters already present in GRUB configuration."
+        else
+            HARDN_STATUS "info" "Updating GRUB to enable AppArmor..."
+            sed -i 's/^GRUB_CMDLINE_LINUX="/GRUB_CMDLINE_LINUX="apparmor=1 security=apparmor /' /etc/default/grub
+            
+            # Validate the modification was successful
+            if ! grep -q "apparmor=1.*security=apparmor" /etc/default/grub; then
+                HARDN_STATUS "error" "GRUB modification failed. Restoring backup."
+                cp "$GRUB_BACKUP" /etc/default/grub
+                return 0 2>/dev/null || exit 0
+            fi
+        fi
         
         if grep -q "ID=debian" /etc/os-release || grep -q "ID=ubuntu" /etc/os-release; then
             if timeout 60 update-grub 2>/dev/null; then
@@ -79,14 +125,7 @@ fi
 if [[ "$MODE" == "enforce" ]]; then
     HARDN_STATUS "info" "Enforcing AppArmor profiles (with exceptions for critical services)..."
     
-    # First, enforce all profiles
-    if timeout 30 aa-enforce /etc/apparmor.d/* 2>/dev/null; then
-        HARDN_STATUS "info" "AppArmor profiles enforced successfully."
-    else
-        HARDN_STATUS "warning" "Some profiles could not be enforced or operation timed out."
-    fi
-    
-    # protected services 
+    # protected services - Define BEFORE enforcement to prevent login breakage
     CRITICAL_SERVICES=(
         # Display managers
         "/etc/apparmor.d/usr.sbin.gdm3"
@@ -163,6 +202,7 @@ if [[ "$MODE" == "enforce" ]]; then
         "/etc/apparmor.d/usr.lib.hardn-xdr"
     )
     
+    # Set critical services to complain mode FIRST to prevent service breakage
     HARDN_STATUS "info" "Setting critical services to complain mode to prevent service breakage..."
     for service in "${CRITICAL_SERVICES[@]}"; do
         if [[ -f "$service" ]]; then
@@ -173,6 +213,14 @@ if [[ "$MODE" == "enforce" ]]; then
             fi
         fi
     done
+    
+    # Now enforce all profiles (critical services already protected)
+    HARDN_STATUS "info" "Enforcing remaining AppArmor profiles..."
+    if timeout 30 aa-enforce /etc/apparmor.d/* 2>/dev/null; then
+        HARDN_STATUS "info" "AppArmor profiles enforced successfully."
+    else
+        HARDN_STATUS "warning" "Some profiles could not be enforced or operation timed out."
+    fi
     
 elif [[ "$MODE" == "complain" ]]; then
     HARDN_STATUS "info" "Setting all AppArmor profiles to complain mode..."

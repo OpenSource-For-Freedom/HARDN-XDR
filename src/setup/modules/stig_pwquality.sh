@@ -78,8 +78,17 @@ fi
 
 # --------- Backup Current PAM File ----------
 STAMP=$(date +%Y%m%d%H%M%S)
-cp "$PAM_FILE" "${PAM_FILE}.bak-$STAMP"
+if ! cp "$PAM_FILE" "${PAM_FILE}.bak-$STAMP"; then
+    HARDN_STATUS "error" "Failed to backup PAM file. Aborting password policy changes."
+    return 0 2>/dev/null || hardn_module_exit 0
+fi
 HARDN_STATUS "info" "Backup saved to ${PAM_FILE}.bak-$STAMP"
+
+# Validate backup was created successfully
+if [[ ! -f "${PAM_FILE}.bak-$STAMP" ]]; then
+    HARDN_STATUS "error" "PAM backup validation failed. Aborting password policy changes."
+    return 0 2>/dev/null || hardn_module_exit 0
+fi
 
 # --------- Apply Password Policy ----------
 if grep -q "pam_pwquality.so" "$PAM_FILE"; then
@@ -91,9 +100,27 @@ else
     HARDN_STATUS "warning" "Added new line to $PAM_FILE — review manually if needed."
 fi
 
-# --------- CLI Interactive Password Reset (Default for TTY) ----------
-if [ -t 0 ] && [ -t 1 ]; then
-    HARDN_STATUS "info" "Starting interactive password reset for current user..."
+# Validate PAM configuration syntax
+if ! pam-config --create 2>/dev/null && ! pamtester login root authenticate 2>/dev/null; then
+    # Basic syntax check - ensure the file is readable and has expected content
+    if ! grep -q "pam_pwquality.so\|pam_cracklib.so" "$PAM_FILE"; then
+        HARDN_STATUS "error" "PAM configuration appears corrupted. Restoring backup."
+        cp "${PAM_FILE}.bak-$STAMP" "$PAM_FILE"
+        return 0 2>/dev/null || hardn_module_exit 0
+    fi
+fi
+
+# --------- CLI Interactive Password Reset (Optional and Safe) ----------
+# Only perform interactive password reset if explicitly requested and in safe conditions
+if [ -t 0 ] && [ -t 1 ] && [ -z "$HARDN_SKIP_PASSWORD_RESET" ] && [ -z "$CI" ]; then
+    # Ask user if they want to reset password immediately
+    echo ""
+    echo "Password policy has been updated. Current user password may need to be changed."
+    read -p "Do you want to reset your password now? (y/N): " -n 1 -r
+    echo ""
+    
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        HARDN_STATUS "info" "Starting interactive password reset for current user..."
     
     # Get current username
     CURRENT_USER=$(whoami)
@@ -138,8 +165,12 @@ if [ -t 0 ] && [ -t 1 ]; then
             echo "   Please try again."
         fi
     done
+    else
+        HARDN_STATUS "info" "Password reset skipped. Users can run 'passwd' to update passwords when ready."
+    fi
 else
-    HARDN_STATUS "info" "Non-interactive mode: Password policy applied without user interaction."
+    HARDN_STATUS "info" "Non-interactive mode or automated environment: Password policy applied without user interaction."
+    HARDN_STATUS "info" "Users can run 'passwd' to update passwords to meet new requirements."
 fi
 
 # --------- Final Message ----------
