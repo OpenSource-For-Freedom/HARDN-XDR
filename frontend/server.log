@@ -3,9 +3,9 @@
 Serving from: ./dashboard
 URL: http://localhost:8021
 Report: http://localhost:8021/hardn-compliance.html
-Last Scan: 2025-08-05 01:42:35
-Scan User: root@debian
-System: Linux 6.1.0-37-amd64
+Last Scan: 2025-08-07 21:32:56
+Scan User: runner@pkrvmjbmru5nbw0
+System: Linux 6.11.0-1018-azure
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Press Ctrl+C to stop the server
@@ -13,13 +13,3 @@ Press Ctrl+C to stop the server
  Using Python 3 HTTP server...
  Server starting on http://localhost:8021
 
-127.0.0.1 - - [05/Aug/2025 01:47:32] "GET /hardn-compliance.html?id=bc71f67e-60d9-437d-bc80-d1e921f2d73b&vscodeBrowserReqId=1754372852967 HTTP/1.1" 200 -
-127.0.0.1 - - [05/Aug/2025 01:47:33] "GET /sig_logo.png HTTP/1.1" 200 -
-127.0.0.1 - - [05/Aug/2025 01:49:06] "GET /hardn-compliance.html HTTP/1.1" 200 -
-127.0.0.1 - - [05/Aug/2025 01:49:06] "GET /sig_logo.png HTTP/1.1" 200 -
-127.0.0.1 - - [05/Aug/2025 01:55:58] "GET /hardn-compliance.html HTTP/1.1" 200 -
-127.0.0.1 - - [05/Aug/2025 01:55:58] "GET /sig_logo.png HTTP/1.1" 304 -
-127.0.0.1 - - [05/Aug/2025 02:01:42] "GET /hardn-compliance.html HTTP/1.1" 304 -
-127.0.0.1 - - [05/Aug/2025 02:01:42] "GET /sig_logo.png HTTP/1.1" 304 -
-127.0.0.1 - - [05/Aug/2025 12:08:16] "GET /hardn-compliance.html HTTP/1.1" 304 -
-127.0.0.1 - - [05/Aug/2025 12:08:16] "GET /sig_logo.png HTTP/1.1" 304 -

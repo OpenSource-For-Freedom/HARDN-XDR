@@ -6,11 +6,11 @@
 
 REPORT_DIR="$(dirname "$0")/dashboard"
 PORT=8021
-TIMESTAMP="2025-08-05 01:42:35"
-SCAN_USER="root@debian"
-SYSTEM_INFO="Linux 6.1.0-37-amd64"
+TIMESTAMP="2025-08-07 21:32:56"
+SCAN_USER="runner@pkrvmjbmru5nbw0"
+SYSTEM_INFO="Linux 6.11.0-1018-azure"
 
-echo "🌐 Starting HARDN-XDR Dashboard"
+echo "🌐 Starting HARDN-XDR Dashboard Server"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "Serving from: $REPORT_DIR"
 echo "URL: http://localhost:$PORT"
