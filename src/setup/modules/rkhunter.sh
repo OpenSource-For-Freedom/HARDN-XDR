@@ -3,6 +3,13 @@
 source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
 # Remove set -e to handle errors gracefully in CI environment
 
+# Check for container environment
+if is_container_environment; then
+    HARDN_STATUS "info" "Container environment detected - rootkit detection tools may have limited functionality"
+    HARDN_STATUS "warning" "Container filesystems are typically managed by the container runtime"
+    # Continue anyway but with warnings, as some checks might still be useful
+fi
+
 is_installed() {
     if command -v apt >/dev/null 2>&1; then
         dpkg -s "$1" >/dev/null 2>&1
@@ -16,6 +23,7 @@ is_installed() {
         return 1
     fi
 }
+
 # for arch status first , arm64 wont support this package
 ARCH=$(uname -m)
 HARDN_STATUS "info" "Detected architecture: $ARCH"
@@ -25,26 +33,22 @@ if [[ "$ARCH" == "aarch64" || "$ARCH" == "arm64" ]]; then
 fi
 
 HARDN_STATUS "info" "Installing rkhunter prerequisites..."
-apt-get update
-apt-get install -y curl file gnupg2 net-tools sudo bash binutils whiptail lsof findutils || {
-    HARDN_STATUS "error" "Failed to install prerequisites"
-    return 1
-}
+safe_package_install curl file gnupg2 net-tools sudo bash binutils whiptail lsof findutils
 
 HARDN_STATUS "info" "Configuring rkhunter..."
 
 if ! is_installed rkhunter; then
     HARDN_STATUS "info" "rkhunter not found in system. Trying apt install..."
-    apt-get install -y rkhunter || HARDN_STATUS "warning" "rkhunter not found in apt, trying GitHub fallback."
+    safe_package_install rkhunter
 fi
 
 if ! is_installed rkhunter; then
     if ! is_installed git; then
         HARDN_STATUS "info" "Installing git for GitHub fallback..."
-        apt-get install -y git || {
-            HARDN_STATUS "error" "Git install failed. Cannot proceed."
+        if ! safe_package_install git; then
+            HARDN_STATUS "error" "Git install failed. Cannot proceed with GitHub fallback."
             return 1
-        }
+        fi
     fi
 
     cd /tmp || return 1

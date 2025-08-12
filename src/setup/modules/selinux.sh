@@ -17,8 +17,9 @@ if [[ ! "$OS_ID" =~ ^(rhel|centos|fedora|rocky|almalinux)$ ]]; then
 fi
 
 # --------- Container Detection ----------
-if grep -qa container /proc/1/environ || systemd-detect-virt --quiet --container; then
-    HARDN_STATUS "info" "Container environment detected. Skipping SELinux setup."
+if is_container_environment; then
+    HARDN_STATUS "info" "Container environment detected - SELinux is typically managed by the container runtime"
+    HARDN_STATUS "info" "SELinux policies in containers are inherited from the host system"
     return 0 2>/dev/null || hardn_module_exit 0
 fi
 

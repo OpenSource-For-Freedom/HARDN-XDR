@@ -3,6 +3,14 @@
 source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
 set -e
 
+# Check for container environment
+if is_container_environment; then
+    HARDN_STATUS "info" "Container environment detected - time synchronization typically managed by host"
+    HARDN_STATUS "info" "Container clocks are usually synchronized with the container host"
+    HARDN_STATUS "pass" "NTP module completed (container environment)"
+    return 0 2>/dev/null || hardn_module_exit 0
+fi
+
 is_installed() {
 	if command -v apt >/dev/null 2>&1; then
 		dpkg -s "$1" >/dev/null 2>&1

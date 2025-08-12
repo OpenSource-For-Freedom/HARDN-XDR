@@ -16,15 +16,16 @@ set -e
 
 HARDN_STATUS "info" "Installing Suricata (basic mode)..."
 
-# Handle CI environment
-if [[ -n "$CI" || -n "$GITHUB_ACTIONS" ]]; then
-    HARDN_STATUS "info" "CI environment detected, skipping Suricata installation"
-    HARDN_STATUS "pass" "Suricata module completed (skipped in CI environment)"
+# Check for container environment
+if is_container_environment; then
+    HARDN_STATUS "info" "Container environment detected - Suricata IDS may not be suitable"
+    HARDN_STATUS "info" "Container networking is typically managed by the container runtime"
+    HARDN_STATUS "info" "Consider running Suricata on the container host instead"
+    HARDN_STATUS "pass" "Suricata module completed (skipped in container environment)"
     exit 0
 fi
 
-apt-get update || true
-if ! apt-get install -y suricata suricata-update; then
+if ! safe_package_install suricata suricata-update; then
     HARDN_STATUS "warning" "Failed to install Suricata packages, skipping configuration"
     exit 0
 fi
@@ -105,11 +106,11 @@ ExecStart=/usr/bin/suricata -D --af-packet=$iface -c /etc/suricata/suricata.yaml
 EOF
 
 # Reload systemd and enable/restart service
-systemctl daemon-reload
-systemctl enable suricata.service 2>/dev/null || HARDN_STATUS "warning" "Failed to enable suricata service"
-systemctl restart suricata.service 2>/dev/null || HARDN_STATUS "warning" "Failed to restart suricata service"
+safe_systemctl "daemon-reload"
+safe_systemctl "enable" "suricata.service"
+safe_systemctl "restart" "suricata.service"
 
-if systemctl is-active --quiet suricata.service; then
+if safe_systemctl "status" "suricata.service" "--quiet"; then
     HARDN_STATUS "pass" "Suricata service is running."
 else
     HARDN_STATUS "warning" "Suricata service failed to start (may be normal in CI environment)."

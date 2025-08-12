@@ -2,6 +2,12 @@
 source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
 set -e
 
+# Check for container environment
+if is_container_environment; then
+    HARDN_STATUS "info" "Container environment detected - package integrity checks may be limited"
+    HARDN_STATUS "info" "Container images typically have minimal package sets with different integrity expectations"
+fi
+
 export LC_ALL=C
 export LANG=C
 
@@ -93,11 +99,10 @@ setup_debsums() {
     # Install if not present
     if ! is_installed debsums; then
         HARDN_STATUS "info" "Installing debsums..."
-        apt-get update -qq || true
-        apt-get install -y debsums || {
+        if ! safe_package_install debsums; then
             HARDN_STATUS "error" "Failed to install debsums"
             return 0  # Changed from return 1 for CI compatibility
-        }
+        fi
     fi
 
     # Verify installation
@@ -216,10 +221,10 @@ install_parallel() {
     [ "$PARALLEL_AVAILABLE" = "yes" ] && return 0
 
     HARDN_STATUS "info" "Installing GNU parallel for faster debsums processing..."
-    apt-get install -y parallel || {
+    if ! safe_package_install parallel; then
         HARDN_STATUS "warning" "Failed to install GNU parallel, will use standard method"
         return 0  # Changed from return 1 for CI compatibility
-    }
+    fi
 
     # Update availability status
     PARALLEL_AVAILABLE="yes"
