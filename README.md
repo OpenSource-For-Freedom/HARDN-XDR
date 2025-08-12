@@ -154,6 +154,11 @@ pkill -f 'python.*8021'
 - For an overview of HARDN-Debian STIG Compliance, please refer to [deb_stig.md](docs/deb_stig.md).
 - For threat research and security enhancements, please refer to [Threat Research](docs/threat-research/).
 
+### Multi-Architecture CI Support
+- **AMD64**: Full module testing including resource-intensive security tools
+- **ARM64**: Optimized testing that skips heavy modules (YARA, RKHunter, AIDE, etc.) during CI due to QEMU emulation performance limitations
+- **Production**: All modules are fully functional on both architectures in production deployments
+
 ---
 
 ## File Structure
