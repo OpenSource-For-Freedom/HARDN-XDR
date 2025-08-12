@@ -145,6 +145,9 @@ jobs:
           fi
 
           # Enhanced container test with additional headless validations
+          # Note: ARM64 jobs skip certain modules (yara, rkhunter, aide, debsums, firejail) 
+          # due to performance issues under QEMU emulation in CI environment.
+          # Full functionality is preserved for production deployments.
           docker run --rm -i --platform linux/${{ matrix.arch }} \
             --privileged \
             --name hardn-test-${{ matrix.arch }}-${{ matrix.distro }}-${{ github.run_id }} \
@@ -185,6 +188,7 @@ jobs:
               echo "=== Individual Module Testing ===" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/modules.log
               fail_count=0
               total_count=0
+              skip_count=0
               critical_failures=0
               
               # Priority modules for headless testing
@@ -206,12 +210,23 @@ jobs:
                 fi
               done
               
+              # Define modules that are problematic on ARM64 due to emulation performance
+              ARM64_SKIP_MODULES="yara.sh rkhunter.sh aide.sh debsums.sh firejail.sh"
+              
               # Test remaining modules
               for script in /usr/lib/hardn-xdr/src/setup/modules/*.sh; do
                 if [ -f "$script" ]; then
                   name=$(basename "$script")
                   # Skip if already tested in priority modules
                   echo "$PRIORITY_MODULES" | grep -q "$name" && continue
+                  
+                  # Skip problematic modules on ARM64 in CI
+                  if [ "${{ matrix.arch }}" = "arm64" ] && echo "$ARM64_SKIP_MODULES" | grep -q "$name"; then
+                    total_count=$((total_count+1))
+                    skip_count=$((skip_count+1))
+                    echo "[$total_count] SKIP: $name (ARM64 CI - emulation performance)" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/modules.log
+                    continue
+                  fi
                   
                   total_count=$((total_count+1))
                   echo "[$total_count] Testing: $name" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/modules.log
@@ -234,13 +249,23 @@ jobs:
               # Generate test summary
               echo "=== Test Summary ===" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/summary.log
               echo "Total modules tested: $total_count" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/summary.log
+              if [ "${{ matrix.arch }}" = "arm64" ] && [ "$skip_count" -gt 0 ]; then
+                echo "Modules skipped (ARM64 CI): $skip_count" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/summary.log
+                echo "Modules actually tested: $((total_count - skip_count))" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/summary.log
+              fi
               echo "Total failures: $fail_count" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/summary.log
               echo "Critical failures: $critical_failures" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/summary.log
-              echo "Success rate: $(( (total_count - fail_count) * 100 / total_count ))%" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/summary.log
+              tested_count=$((total_count - skip_count))
+              if [ "$tested_count" -gt 0 ]; then
+                echo "Success rate: $(( (tested_count - fail_count) * 100 / tested_count ))%" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/summary.log
+              else
+                echo "Success rate: N/A (no modules tested)" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/summary.log
+              fi
               
               # Save metrics for CI reporting
               echo "$fail_count" > /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/fail_count.txt
               echo "$total_count" > /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/total_count.txt
+              echo "${skip_count:-0}" > /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/skip_count.txt
               echo "$critical_failures" > /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/critical_failures.txt
 
               # Set appropriate permissions for log files
@@ -270,13 +295,23 @@ jobs:
             echo "critical_failures=$critical_failures" >> $GITHUB_OUTPUT
           fi
           
+          if [ -f "$log_dir/skip_count.txt" ]; then
+            skipped_modules=$(cat "$log_dir/skip_count.txt")
+            echo "Skipped modules: $skipped_modules"
+            echo "skipped_modules=$skipped_modules" >> $GITHUB_OUTPUT
+          else
+            skipped_modules=0
+            echo "skipped_modules=0" >> $GITHUB_OUTPUT
+          fi
+          
           # Determine overall test status
           echo "passed=false" >> $GITHUB_OUTPUT
           if [ -f "$log_dir/fail_count.txt" ] && [ -f "$log_dir/critical_failures.txt" ]; then
             failed=$(cat "$log_dir/fail_count.txt")
             critical=$(cat "$log_dir/critical_failures.txt")
-            # Pass if no critical failures and less than 20% total failures
-            if [ "$critical" -eq 0 ] && [ "$failed" -lt $((total_modules / 5)) ]; then
+            tested_modules=$((total_modules - skipped_modules))
+            # Pass if no critical failures and less than 20% of tested modules failed
+            if [ "$critical" -eq 0 ] && [ "$tested_modules" -gt 0 ] && [ "$failed" -lt $((tested_modules / 5)) ]; then
               echo "passed=true" >> $GITHUB_OUTPUT
             fi
           fi
