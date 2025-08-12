@@ -117,7 +117,6 @@ if safe_systemctl "status" "systemd-resolved" "--quiet" && \
 			configured_persistently=true
 			changes_made=true
 		fi
-		fi
 	else
 		HARDN_STATUS "info" "No effective changes to $resolved_conf_systemd were needed."
 	fi
