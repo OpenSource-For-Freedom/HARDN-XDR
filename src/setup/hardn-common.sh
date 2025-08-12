@@ -343,6 +343,45 @@ check_container_limitations() {
     return 0
 }
 
+# Safe kernel parameter modification for container environments
+safe_sysctl_set() {
+    local param="$1"
+    local value="$2"
+    local config_file="${3:-/etc/sysctl.conf}"
+    
+    # Check if we can modify kernel parameters
+    if [[ ! -w /proc/sys ]]; then
+        HARDN_STATUS "warning" "Cannot modify kernel parameter $param (read-only /proc/sys)"
+        return 0
+    fi
+    
+    # Try to set the parameter immediately
+    if echo "$value" > "/proc/sys/${param//./\/}" 2>/dev/null; then
+        HARDN_STATUS "pass" "Set kernel parameter: $param = $value"
+    else
+        HARDN_STATUS "warning" "Failed to set kernel parameter: $param = $value (may not be supported)"
+        return 0
+    fi
+    
+    # Add to persistent configuration if not in container
+    if ! is_container_environment; then
+        if [[ -w "$config_file" ]] || [[ ! -f "$config_file" ]]; then
+            if ! grep -q "^$param.*=" "$config_file" 2>/dev/null; then
+                echo "$param = $value" >> "$config_file"
+                HARDN_STATUS "info" "Added persistent setting: $param = $value"
+            else
+                sed -i "s/^$param.*=.*/$param = $value/" "$config_file"
+                HARDN_STATUS "info" "Updated persistent setting: $param = $value"
+            fi
+        fi
+    else
+        HARDN_STATUS "info" "Container environment - skipping persistent configuration for $param"
+    fi
+    
+    return 0
+}
+
+export -f safe_sysctl_set
 export -f check_container_limitations
 export -f safe_package_install
 

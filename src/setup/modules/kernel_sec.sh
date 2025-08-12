@@ -2,6 +2,12 @@
 source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
 set -e
 
+# Check for container environment
+if is_container_environment; then
+    check_container_limitations
+    HARDN_STATUS "info" "Container environment detected - kernel security parameter modifications may be limited"
+fi
+
 HARDN_STATUS "info" "Applying kernel security settings..."
 
 declare -A kernel_params=(
@@ -57,28 +63,13 @@ declare -A kernel_params=(
 
 for param in "${!kernel_params[@]}"; do
 	expected_value="${kernel_params[$param]}"
-	current_value=$(sysctl -n "$param" 2>/dev/null)
-
-	if [[ -z "$current_value" ]]; then
-		HARDN_STATUS "warning" "Parameter $param not available in this environment, skipping"
-		continue
-	fi
-
-	if [[ "$current_value" != "$expected_value" ]]; then
-		sed -i "/^$param\s*=/d" /etc/sysctl.conf 2>/dev/null || true
-		echo "$param = $expected_value" >> /etc/sysctl.conf
-		if sysctl -w "$param=$expected_value" >/dev/null 2>&1; then
-			HARDN_STATUS "info" "Set $param = $expected_value"
-		else
-			HARDN_STATUS "warning" "Failed to set $param = $expected_value (may not be supported in CI environment)"
-		fi
-	fi
+	safe_sysctl_set "$param" "$expected_value"
 done
 
-if sysctl --system >/dev/null 2>&1; then
+if ! is_container_environment && sysctl --system >/dev/null 2>&1; then
 	HARDN_STATUS "pass" "Kernel hardening applied successfully."
 else
-	HARDN_STATUS "warning" "Some sysctl parameters may not have been applied (normal in CI environment)"
+	HARDN_STATUS "info" "Kernel security parameters configured (some limitations may apply in containers)"
 fi
 
 

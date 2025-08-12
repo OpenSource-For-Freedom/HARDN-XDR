@@ -2,6 +2,11 @@
 
 source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
 
+# Check for container environment
+if is_container_environment; then
+    HARDN_STATUS "info" "Container environment detected - banner configuration may be limited"
+    HARDN_STATUS "info" "Some container environments may override login banners"
+fi
 
 HARDN_STATUS "info" "Setting up the HARDN XDR Banner..."
 

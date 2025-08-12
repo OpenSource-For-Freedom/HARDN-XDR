@@ -3,38 +3,47 @@
 # shellcheck disable=SC1091
 source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
 
+# Check for container environment
+if is_container_environment; then
+    HARDN_STATUS "info" "Container environment detected - system audit capabilities may be limited"
+    HARDN_STATUS "info" "Some audit features may not be available in containerized environments"
+fi
+
 HARDN_STATUS "info" "Auditing System for STIG Compliance.."
 
-
 install_package_if_missing() {
-	if ! dpkg -s "$1" &>/dev/null; then
-		HARDN_STATUS "info" "Package '$1' not found. Installing..."
-		DEBIAN_FRONTEND=noninteractive apt-get install -y "$1"
-	else
-		HARDN_STATUS "info" "Package '$1' is already installed."
-	fi
+    if ! dpkg -s "$1" &>/dev/null; then
+        HARDN_STATUS "info" "Package '$1' not found. Installing..."
+        safe_package_install "$1"
+    else
+        HARDN_STATUS "info" "Package '$1' is already installed."
+    fi
 }
 
-apt-get update || HARDN_STATUS "warning" "apt-get update failed, continuing..."
 install_package_if_missing "libpam-tmpdir"
 install_package_if_missing "apt-listbugs"
 install_package_if_missing "needrestart"
 
 # Remove compilers and uneeded binaries
-HARDN_STATUS "info" "Removing compilers and unnecessary binaries..."
+if is_container_environment; then
+    HARDN_STATUS "info" "Container environment detected - skipping compiler removal"
+    HARDN_STATUS "info" "Container images may require build tools for runtime operations"
+else
+    HARDN_STATUS "info" "Removing compilers and unnecessary binaries..."
 
-COMPILERS=(gcc g++ make cpp clang clang++ nasm perl python2 python2.7)
+    COMPILERS=(gcc g++ make cpp clang clang++ nasm perl python2 python2.7)
 
-for bin in "${COMPILERS[@]}"; do
-	if command -v "$bin" &>/dev/null; then
-		HARDN_STATUS "info" "Removing $bin..."
-		apt-get remove --purge -y "$bin" || true
-	fi
-done
+    for bin in "${COMPILERS[@]}"; do
+        if command -v "$bin" &>/dev/null; then
+            HARDN_STATUS "info" "Removing $bin..."
+            apt-get remove --purge -y "$bin" >/dev/null 2>&1 || true
+        fi
+    done
 
-apt-get remove --purge -y build-essential gcc-* g++-* clang-* || true
-apt-get autoremove -y
-apt-get autoclean -y
+    apt-get remove --purge -y build-essential gcc-* g++-* clang-* >/dev/null 2>&1 || true
+    apt-get autoremove -y >/dev/null 2>&1 || true
+    apt-get autoclean -y >/dev/null 2>&1 || true
+fi
 
 # Crypto/entropy audit
 HARDN_STATUS "info" "Checking cryptography and entropy sources..."
