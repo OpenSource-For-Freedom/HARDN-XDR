@@ -150,23 +150,118 @@ run_module() {
     return 1
 }
 
+# Container/VM essential modules for DISA/FEDHIVE compliance
+get_container_vm_essential_modules() {
+    echo "auditd.sh kernel_sec.sh sshd.sh credential_protection.sh aide.sh"
+    echo "auto_updates.sh file_perms.sh shared_mem.sh coredumps.sh"
+    echo "network_protocols.sh process_accounting.sh debsums.sh purge_old_pkgs.sh"
+    echo "banner.sh central_logging.sh audit_system.sh ntp.sh dns_config.sh"
+    echo "binfmt.sh service_disable.sh stig_pwquality.sh"
+}
+
+# Container/VM conditional modules (performance vs security trade-off)
+get_container_vm_conditional_modules() {
+    echo "ufw.sh fail2ban.sh selinux.sh apparmor.sh suricata.sh yara.sh"
+    echo "rkhunter.sh chkrootkit.sh unhide.sh secure_net.sh"
+}
+
+# Desktop-focused modules (skip in container/VM environments for performance)
+get_desktop_focused_modules() {
+    echo "usb.sh firewire.sh firejail.sh compilers.sh pentest.sh"
+    echo "behavioral_analysis.sh persistence_detection.sh process_protection.sh"
+    echo "deleted_files.sh unnecesary_services.sh"
+}
+
+# Legacy full module list for backwards compatibility
+get_full_module_list() {
+    echo "ufw.sh fail2ban.sh sshd.sh auditd.sh kernel_sec.sh"
+    echo "stig_pwquality.sh aide.sh rkhunter.sh chkrootkit.sh"
+    echo "auto_updates.sh central_logging.sh audit_system.sh ntp.sh"
+    echo "debsums.sh yara.sh suricata.sh firejail.sh selinux.sh"
+    echo "unhide.sh pentest.sh compilers.sh purge_old_pkgs.sh dns_config.sh"
+    echo "file_perms.sh apparmor.sh shared_mem.sh coredumps.sh secure_net.sh"
+    echo "network_protocols.sh usb.sh firewire.sh binfmt.sh"
+    echo "process_accounting.sh unnecesary_services.sh banner.sh"
+    echo "deleted_files.sh credential_protection.sh service_disable.sh"
+}
+
+# Detect if we're in a container/VM optimized environment
+is_container_vm_environment() {
+    # Check for container environment
+    if is_container_environment; then
+        return 0
+    fi
+    
+    # Check for VM indicators
+    if command -v systemd-detect-virt >/dev/null 2>&1; then
+        if systemd-detect-virt --quiet 2>/dev/null; then
+            return 0
+        fi
+    fi
+    
+    # Check for VM-specific indicators
+    if [[ -d /proc/vz ]] || \
+       [[ -f /proc/user_beancounters ]] || \
+       grep -qi hypervisor /proc/cpuinfo 2>/dev/null || \
+       [[ -n "$HARDN_CONTAINER_VM_MODE" ]]; then
+        return 0
+    fi
+    
+    return 1
+}
+
 setup_security_modules() {
-    HARDN_STATUS "info" "Installing security modules..."
-    local modules=(
-        "ufw.sh" "fail2ban.sh" "sshd.sh" "auditd.sh" "kernel_sec.sh"
-        "stig_pwquality.sh" "aide.sh" "rkhunter.sh" "chkrootkit.sh"
-        "auto_updates.sh" "central_logging.sh" "audit_system.sh" "ntp.sh"
-        "debsums.sh" "yara.sh" "suricata.sh" "firejail.sh" "selinux.sh"
-        "unhide.sh" "pentest.sh" "compilers.sh" "purge_old_pkgs.sh" "dns_config.sh"
-        "file_perms.sh" "apparmor.sh" "shared_mem.sh" "coredumps.sh" "secure_net.sh"
-        "network_protocols.sh" "usb.sh" "firewire.sh" "binfmt.sh"
-        "process_accounting.sh" "unnecesary_services.sh" "banner.sh"
-        "deleted_files.sh"
-    )
+    local environment_type=""
+    local modules=()
+    
+    # Determine environment and select appropriate modules
+    if is_container_vm_environment; then
+        environment_type="Container/VM"
+        HARDN_STATUS "info" "Container/VM environment detected - optimizing for DISA/FEDHIVE compliance"
+        
+        # Essential modules for compliance
+        readarray -t modules < <(get_container_vm_essential_modules | tr ' ' '\n')
+        
+        # Add conditional modules with user choice in interactive mode
+        if [[ "$SKIP_WHIPTAIL" != "1" ]]; then
+            if hardn_yesno "Include additional security modules (may impact performance)?" 10 60; then
+                readarray -t conditional < <(get_container_vm_conditional_modules | tr ' ' '\n')
+                modules+=("${conditional[@]}")
+            fi
+        else
+            # In non-interactive mode, include conditional modules
+            readarray -t conditional < <(get_container_vm_conditional_modules | tr ' ' '\n')
+            modules+=("${conditional[@]}")
+        fi
+        
+        # Skip desktop-focused modules
+        HARDN_STATUS "info" "Skipping desktop-focused modules for optimal container/VM performance"
+        
+    else
+        environment_type="Desktop/Physical"
+        HARDN_STATUS "info" "Desktop/Physical environment detected - applying full hardening suite"
+        readarray -t modules < <(get_full_module_list | tr ' ' '\n')
+    fi
+    
+    HARDN_STATUS "info" "Applying ${#modules[@]} security modules for $environment_type environment..."
+    
+    local failed_modules=0
     for module in "${modules[@]}"; do
-        run_module "$module"
+        if [[ -n "$module" ]]; then
+            if run_module "$module"; then
+                HARDN_STATUS "pass" "Module completed: $module"
+            else
+                HARDN_STATUS "warning" "Module failed: $module"
+                ((failed_modules++))
+            fi
+        fi
     done
-    HARDN_STATUS "pass" "All security modules have been applied."
+    
+    if [[ $failed_modules -eq 0 ]]; then
+        HARDN_STATUS "pass" "All $environment_type security modules have been applied successfully."
+    else
+        HARDN_STATUS "warning" "$failed_modules modules failed. Check logs for details."
+    fi
 }
 
 cleanup() {
@@ -185,25 +280,65 @@ cleanup() {
 }
 
 main_menu() {
-    local modules=(
-        "ufw.sh" "apparmor.sh" "fail2ban.sh" "sshd.sh" "auditd.sh" "kernel_sec.sh"
-        "stig_pwquality.sh" "aide.sh" "rkhunter.sh" "chkrootkit.sh"
-        "auto_updates.sh" "central_logging.sh" "audit_system.sh" "ntp.sh"
-        "debsums.sh" "yara.sh" "suricata.sh" "firejail.sh" "selinux.sh"
-        "unhide.sh" "pentest.sh" "compilers.sh" "purge_old_pkgs.sh" "dns_config.sh"
-        "file_perms.sh" "shared_mem.sh" "coredumps.sh" "secure_net.sh"
-        "network_protocols.sh" "usb.sh" "firewire.sh" "binfmt.sh"
-        "process_accounting.sh" "unnecesary_services.sh" "banner.sh"
-        "deleted_files.sh" "persistence_protection.sh" "process_protections.sh" "behavioral_analysis.sh"
-    )
+    local environment_type=""
+    local modules=()
+    
+    # Determine environment and get appropriate module list
+    if is_container_vm_environment; then
+        environment_type="Container/VM (DISA/FEDHIVE optimized)"
+        # Combine essential and conditional modules for menu
+        readarray -t essential < <(get_container_vm_essential_modules | tr ' ' '\n')
+        readarray -t conditional < <(get_container_vm_conditional_modules | tr ' ' '\n')
+        readarray -t desktop < <(get_desktop_focused_modules | tr ' ' '\n')
+        
+        modules=("${essential[@]}" "${conditional[@]}" "${desktop[@]}")
+    else
+        environment_type="Desktop/Physical (Full suite)"
+        readarray -t modules < <(get_full_module_list | tr ' ' '\n')
+    fi
+    
+    HARDN_STATUS "info" "Environment detected: $environment_type"
+    
     local checklist_args=()
-    for module in "${modules[@]}"; do
-        checklist_args+=("$module" "Install $module" "OFF")
-    done
-    checklist_args+=("ALL" "Install all modules" "OFF")
+    
+    # Add modules with categorization for container/VM environments
+    if is_container_vm_environment; then
+        # Essential modules (pre-selected)
+        readarray -t essential < <(get_container_vm_essential_modules | tr ' ' '\n')
+        for module in "${essential[@]}"; do
+            if [[ -n "$module" ]]; then
+                checklist_args+=("$module" "[ESSENTIAL] Install $module (DISA/FEDHIVE compliance)" "ON")
+            fi
+        done
+        
+        # Conditional modules (optional)
+        readarray -t conditional < <(get_container_vm_conditional_modules | tr ' ' '\n')
+        for module in "${conditional[@]}"; do
+            if [[ -n "$module" ]]; then
+                checklist_args+=("$module" "[OPTIONAL] Install $module (performance trade-off)" "OFF")
+            fi
+        done
+        
+        # Desktop modules (discouraged)
+        readarray -t desktop < <(get_desktop_focused_modules | tr ' ' '\n')
+        for module in "${desktop[@]}"; do
+            if [[ -n "$module" ]]; then
+                checklist_args+=("$module" "[DESKTOP] Install $module (not recommended)" "OFF")
+            fi
+        done
+    else
+        # Full module list for desktop/physical systems
+        for module in "${modules[@]}"; do
+            if [[ -n "$module" ]]; then
+                checklist_args+=("$module" "Install $module" "OFF")
+            fi
+        done
+    fi
+    
+    checklist_args+=("ALL" "Install recommended modules for this environment" "OFF")
 
     local selected
-    if ! selected=$(whiptail --title "HARDN-XDR Module Selection" --checklist "Select modules to install (SPACE to select, TAB to move):" 25 80 15 "${checklist_args[@]}" 3>&1 1>&2 2>&3); then
+    if ! selected=$(whiptail --title "HARDN-XDR Module Selection - $environment_type" --checklist "Select modules to install (SPACE to select, TAB to move):" 25 80 15 "${checklist_args[@]}" 3>&1 1>&2 2>&3); then
         HARDN_STATUS "info" "No modules selected. Exiting."
         exit 1
     fi
@@ -216,10 +351,21 @@ main_menu() {
     else
         # Remove quotes from whiptail output
         selected=$(echo "$selected" | tr -d '"')
+        local failed_modules=0
         for module in $selected; do
-            run_module "$module"
+            if run_module "$module"; then
+                HARDN_STATUS "pass" "Module completed: $module"
+            else
+                HARDN_STATUS "warning" "Module failed: $module"
+                ((failed_modules++))
+            fi
         done
-        HARDN_STATUS "pass" "Selected security modules have been applied."
+        
+        if [[ $failed_modules -eq 0 ]]; then
+            HARDN_STATUS "pass" "Selected security modules have been applied successfully."
+        else
+            HARDN_STATUS "warning" "$failed_modules modules failed. Check logs for details."
+        fi
     fi
     cleanup
 }

@@ -2,9 +2,56 @@
 
 ## Overview
 
-This playbook provides systematic approaches for fixing and updating HARDN-XDR based on current GitHub issues and ongoing security compliance requirements. Focus areas include Lynis integration, CIS compliance, DISA STIG adherence, and CI testing enhancements for headless deployment across containers, VMs, and desktops.
+This playbook provides systematic approaches for fixing and updating HARDN-XDR based on current GitHub issues and ongoing security compliance requirements. **HARDN-XDR is now optimized for container and VM deployments** with a focus on DISA/FEDHIVE compliance while maintaining desktop compatibility.
+
+## Container and VM-First Architecture
+
+### Environment Detection and Module Selection
+HARDN-XDR automatically detects deployment environments and applies appropriate security hardening:
+
+- **Container/VM Environment**: Applies 21 essential DISA compliance modules + 10 optional modules
+- **Desktop/Physical Environment**: Maintains full compatibility with all 41+ security modules
+- **Performance Optimization**: Skips desktop-focused modules in containers/VMs for better performance
+
+### Module Categories
+1. **Essential Container/VM** (21 modules): Core DISA/FEDHIVE compliance requirements
+2. **Conditional Container/VM** (10 modules): Optional security vs performance trade-offs  
+3. **Desktop-Focused** (10 modules): Physical hardware specific (USB, FireWire, GUI sandboxing)
+
+### Key Optimizations
+- Intelligent systemd service handling in containers
+- Container-aware network security configuration
+- Optimized resource usage for virtualized environments
+- Maintained audit logging and compliance requirements
 
 ## Current Issue Inventory and Resolution Plan
+
+### Issue #188: Container and VM-First Refactoring (CURRENT)
+**Status**: ✅ Completed  
+**Priority**: High  
+**Category**: Architecture Refactoring
+
+**Objectives**:
+- ✅ Refactor project to prioritize container and VM compliance
+- ✅ Focus on DISA/FEDHIVE compliance over desktop features  
+- ✅ Optimize performance for containerized and virtualized environments
+- ✅ Maintain backwards compatibility for desktop users
+
+**Implementation Summary**:
+1. **Environment Detection**: Added intelligent container/VM detection
+2. **Module Categorization**: 
+   - 21 essential modules for DISA/FEDHIVE compliance
+   - 10 conditional modules for performance trade-offs
+   - 10 desktop-focused modules (skipped in containers/VMs)
+3. **Smart Module Selection**: Automatic environment-based module selection
+4. **Performance Optimization**: Reduced overhead in container/VM environments
+5. **Documentation Updates**: Updated README and playbook for container/VM focus
+
+**Benefits**:
+- Faster deployment in container/VM environments
+- Reduced resource consumption 
+- Maintained security compliance standards
+- Preserved desktop functionality
 
 ### Issue #182: Build - Copilot Instructions and Playbook
 **Status**: In Progress  

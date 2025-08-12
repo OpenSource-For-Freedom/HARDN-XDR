@@ -34,13 +34,15 @@
 
 ## HARDN-XDR
 - **Our Goal**: 
-  - Assist the open source community in building a Debian based **"GOLDEN IMAGE"** System, with Multi Architecture capabilities.
+  - Assist the open source community in building **Container and VM optimized** Debian based security hardening for **DISA/FEDHIVE compliance**, with Multi Architecture capabilities.
 - **Our Purpose**: 
-  - To empower IT administrators and users with the tools they need to ensure endpoint security, optimize performance, and maintain compliance across their organization.
+  - To empower IT administrators with automated container and VM security hardening tools that ensure DISA compliance, optimize performance, and maintain regulatory standards across containerized and virtualized environments.
 - **What we have to offer**:
-  - A robust and secure endpoint management solution designed to simplify and enhance the management of devices in your network. 
-  - Advanced features for monitoring, securing, and maintaining endpoints efficiently.
+  - A **container and VM-first** security hardening solution optimized for containerized workloads and virtual machines.
+  - Intelligent environment detection that applies appropriate security modules based on deployment context.
+  - **DISA/FEDHIVE compliance** focused hardening with performance optimization for container and VM environments.
   - `STIG` COMPLIANCE to align with the [Security Technical Information Guides](https://public.cyber.mil/stigs/) provided by the [DOD Cyber Exchange](https://public.cyber.mil/).
+  - Desktop compatibility maintained for traditional deployments.
 
 
 <br>
@@ -49,14 +51,58 @@
   <img src="https://img.shields.io/badge/FEATURES-white?style=for-the-badge&labelColor=black" alt="FEATURES"><br><br>
 </p>
 
+## Environment-Optimized Security
+- **Container/VM Priority**: Automatically detects container and VM environments and applies optimized security modules for performance and compliance.
+- **DISA/FEDHIVE Compliance**: Essential security modules specifically selected for government and enterprise compliance requirements.
+- **Performance Optimization**: Skips desktop-focused modules (USB/FireWire blocking, GUI sandboxing) in container/VM environments.
+- **Intelligent Module Selection**: Categorizes modules as Essential, Conditional, or Desktop-focused based on environment.
+
+## Core Security Features  
 - **Comprehensive Monitoring**: Real-time insights into endpoint performance and activity.
-- **Enhanced Security**: Protect endpoints with advanced security protocols.
-- **Scalability**: Manage endpoints across small to large-scale networks.
+- **Enhanced Security**: Protect endpoints with advanced security protocols optimized for containers and VMs.
+- **Scalability**: Manage security across small to large-scale containerized and virtualized networks.
 - **User-Friendly Interface**: Intuitive design for seamless navigation and management.
-- **Interactive Menu**: A user-friendly menu to select which hardening modules to apply.
-- **STIG Compliance**: This release brings the utmost security for Debian Government based information systems.
+- **Interactive Menu**: Environment-aware menu to select appropriate hardening modules.
+- **STIG Compliance**: Government-grade security hardening for containerized and virtualized information systems.
 - **Matrix-Themed Dashboard**: Cyberpunk-styled compliance dashboard with real-time security metrics and visual reporting. 
 
+
+<br>
+<br>
+<p align="center">
+  <img src="https://img.shields.io/badge/CONTAINER%2FVM OPTIMIZATION-white?style=for-the-badge&labelColor=black" alt="CONTAINER/VM OPTIMIZATION"><br><br>
+</p>
+
+## Container and VM-First Architecture
+
+HARDN-XDR automatically detects your deployment environment and optimizes security hardening accordingly:
+
+### Container/VM Environment (Recommended)
+When running in containers or VMs, HARDN-XDR:
+- **Essential Modules**: Applies 21 core DISA/FEDHIVE compliance modules
+- **Performance Optimized**: Skips desktop-focused modules (USB/FireWire, GUI sandboxing)  
+- **Container-Aware**: Handles systemd, networking, and service limitations gracefully
+- **Compliance Focused**: Prioritizes audit logging, access controls, and system hardening
+
+### Essential Container/VM Modules
+- Audit logging (auditd, audit_system)
+- Kernel security parameters
+- SSH hardening and access controls
+- File integrity monitoring (AIDE)
+- Password policies and credential protection
+- System logging and time synchronization
+- Package integrity and management
+
+### Optional Container/VM Modules
+- Network intrusion detection (Fail2ban, Suricata)
+- Malware detection (YARA, RKHunter)
+- Advanced access controls (SELinux, AppArmor)
+
+### Desktop/Physical Environment
+Maintains full compatibility with all 41+ security modules for traditional deployments.
+
+### Environment Variables
+Set `HARDN_CONTAINER_VM_MODE=1` to force container/VM optimization mode.
 
 <br>
 <br>
