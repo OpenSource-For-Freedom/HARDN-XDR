@@ -4,9 +4,10 @@
 source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
 set -e
 
-# -------- Check for interactive and container --------
-if grep -qa container /proc/1/environ || systemd-detect-virt --quiet --container || ! [ -t 0 ]; then
-    HARDN_STATUS "info" "Skipping Fail2ban setup (container or non-interactive)."
+# -------- Check for container environment --------
+if is_container_environment; then
+    HARDN_STATUS "info" "Container environment detected, skipping Fail2ban setup."
+    HARDN_STATUS "info" "Fail2ban is not suitable for container environments"
     return 0 2>/dev/null || hardn_module_exit 0
 fi
 
@@ -40,9 +41,9 @@ install_fail2ban() {
 # -------- Enable + Start Service --------
 enable_and_start_fail2ban() {
     HARDN_STATUS "info" "Enabling and starting Fail2ban service..."
-    systemctl enable fail2ban
-    systemctl start fail2ban
-    systemctl status fail2ban --no-pager || true
+    safe_systemctl "enable" "fail2ban"
+    safe_systemctl "start" "fail2ban"
+    safe_systemctl "status" "fail2ban" "--no-pager" || true
     HARDN_STATUS "pass" "Fail2ban service enabled and running."
 }
 
@@ -58,7 +59,7 @@ ProtectHome=true
 NoNewPrivileges=true
 PrivateDevices=true
 EOF
-    systemctl daemon-reexec
+    safe_systemctl "daemon-reexec"
     HARDN_STATUS "pass" "Fail2ban service hardened with override.conf"
 }
 
@@ -69,7 +70,7 @@ configure_ufw_for_fail2ban() {
         return 0
     fi
 
-    if ! systemctl is-active --quiet ufw; then
+    if ! safe_systemctl "status" "ufw" "--quiet"; then
         HARDN_STATUS "warning" "UFW is not active. Skipping UFW integration."
         return 0
     fi

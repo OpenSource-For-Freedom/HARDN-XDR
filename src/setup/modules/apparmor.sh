@@ -4,20 +4,21 @@ source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
 set -e
 
 # --------- Detect if in container or no TTY ----------
-if grep -qa container /proc/1/environ || systemd-detect-virt --quiet --container || ! [ -t 0 ]; then
-    HARDN_STATUS "info" "Skipping AppArmor setup (container or non-interactive)."
+if is_container_environment; then
+    HARDN_STATUS "info" "Container environment detected, skipping AppArmor setup."
+    HARDN_STATUS "info" "AppArmor is typically managed by the container runtime"
     return 0 2>/dev/null || exit 0
 fi
 
 # --------- Check for desktop environment ----------
 DESKTOP_DETECTED=false
-if systemctl is-active --quiet gdm3 2>/dev/null || systemctl is-active --quiet gdm 2>/dev/null; then
+if safe_systemctl "status" "gdm3" "--quiet" || safe_systemctl "status" "gdm" "--quiet"; then
     DESKTOP_DETECTED=true
     HARDN_STATUS "info" "GDM desktop manager detected."
-elif systemctl is-active --quiet lightdm 2>/dev/null; then
+elif safe_systemctl "status" "lightdm" "--quiet"; then
     DESKTOP_DETECTED=true
     HARDN_STATUS "info" "LightDM desktop manager detected."
-elif systemctl is-active --quiet sddm 2>/dev/null; then
+elif safe_systemctl "status" "sddm" "--quiet"; then
     DESKTOP_DETECTED=true
     HARDN_STATUS "info" "SDDM desktop manager detected."
 elif [ -n "$DISPLAY" ] || [ -n "$XDG_SESSION_TYPE" ]; then
@@ -233,17 +234,8 @@ fi
 
 # --------- Service Handling ----------
 HARDN_STATUS "info" "Managing AppArmor service..."
-if timeout 20 systemctl restart apparmor.service 2>/dev/null; then
-    HARDN_STATUS "info" "AppArmor service restarted successfully."
-else
-    HARDN_STATUS "warning" "AppArmor service restart failed or timed out."
-fi
-
-if systemctl enable apparmor.service 2>/dev/null; then
-    HARDN_STATUS "info" "AppArmor service enabled for startup."
-else
-    HARDN_STATUS "warning" "Failed to enable AppArmor service."
-fi
+safe_systemctl "restart" "apparmor.service"
+safe_systemctl "enable" "apparmor.service"
 
 # --------- Status Output ----------
 if command -v aa-status &>/dev/null; then

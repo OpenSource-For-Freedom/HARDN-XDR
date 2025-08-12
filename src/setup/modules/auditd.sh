@@ -28,25 +28,21 @@ if ! is_installed auditd; then
     fi
 fi
 
-# Handle systemctl operations in CI environment
-if [[ -n "$CI" || -n "$GITHUB_ACTIONS" ]]; then
-    HARDN_STATUS "info" "CI environment detected, skipping systemctl operations"
-else
-    systemctl daemon-reload 2>/dev/null || HARDN_STATUS "warning" "systemctl daemon-reload failed in CI environment"
-fi
+# Handle systemctl operations using safe wrapper
+safe_systemctl "daemon-reload"
 
-# Handle auditd service management more gracefully in CI
-if [[ -n "$CI" || -n "$GITHUB_ACTIONS" ]]; then
-    HARDN_STATUS "info" "CI environment detected, skipping auditd service management"
-    # In CI, just ensure rules are configured
-    if augenrules --load 2>/dev/null; then
+# Handle auditd service management more gracefully in containers
+if is_container_environment; then
+    HARDN_STATUS "info" "Container environment detected, auditd service may not be functional"
+    # In containers, just ensure rules are configured
+    if command -v augenrules >/dev/null 2>&1 && augenrules --load 2>/dev/null; then
         HARDN_STATUS "pass" "Audit rules loaded successfully"
     else
-        HARDN_STATUS "warning" "Failed to load audit rules, but continuing"
+        HARDN_STATUS "warning" "Failed to load audit rules, but continuing (normal in containers)"
     fi
 else
-    systemctl enable auditd 2>/dev/null || HARDN_STATUS "warning" "Failed to enable auditd service"
-    systemctl restart auditd 2>/dev/null || HARDN_STATUS "warning" "Failed to restart auditd service"
+    safe_systemctl "enable" "auditd"
+    safe_systemctl "restart" "auditd"
 fi
 
 HARDN_STATUS "info" "Configuring auditd rules for system security..."

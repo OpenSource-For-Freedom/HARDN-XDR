@@ -3,6 +3,20 @@
 source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
 set -e
 
+# Check for container environment
+if is_container_environment; then
+    HARDN_STATUS "info" "Container environment detected - DNS configuration may be managed by container runtime"
+    HARDN_STATUS "info" "Many containers inherit DNS from the host or orchestrator"
+    
+    # Check if DNS configuration is possible
+    if [[ ! -w /etc/resolv.conf ]] || [[ -L /etc/resolv.conf ]]; then
+        HARDN_STATUS "warning" "/etc/resolv.conf not writable or is a symlink - skipping DNS configuration"
+        return 0 2>/dev/null || hardn_module_exit 0
+    fi
+    
+    HARDN_STATUS "info" "Proceeding with minimal DNS configuration in container"
+fi
+
 HARDN_STATUS "info" "Configuring DNS nameservers..."
 
 # Define DNS providers with their primary and secondary servers
@@ -41,7 +55,7 @@ resolv_conf="/etc/resolv.conf"
 configured_persistently=false
 changes_made=false
 
-if systemctl is-active --quiet systemd-resolved && \
+if safe_systemctl "status" "systemd-resolved" "--quiet" && \
    [[ -L "$resolv_conf" ]] && \
    (readlink "$resolv_conf" | grep -qE "systemd/resolve/(stub-resolv.conf|resolv.conf)"); then
 	HARDN_STATUS "info" "systemd-resolved is active and manages $resolv_conf."
@@ -93,17 +107,16 @@ if systemctl is-active --quiet systemd-resolved && \
 		cp "$temp_resolved_conf" "$resolved_conf_systemd"
 		HARDN_STATUS "pass" "Updated $resolved_conf_systemd. Restarting systemd-resolved..."
 
-		# Handle systemctl restart in CI environment
-		if [[ -n "$CI" || -n "$GITHUB_ACTIONS" ]]; then
-			HARDN_STATUS "info" "CI environment detected, skipping systemd-resolved restart"
-			configured_persistently=true
-			changes_made=true
-		elif systemctl restart systemd-resolved 2>/dev/null; then
-			HARDN_STATUS "pass" "systemd-resolved restarted successfully."
+		# Handle systemctl restart using safe wrapper
+		if is_container_environment; then
+			HARDN_STATUS "info" "Container environment detected, skipping systemd-resolved restart"
 			configured_persistently=true
 			changes_made=true
 		else
-			HARDN_STATUS "warning" "Failed to restart systemd-resolved. Manual check may be required."
+			safe_systemctl "restart" "systemd-resolved"
+			configured_persistently=true
+			changes_made=true
+		fi
 		fi
 	else
 		HARDN_STATUS "info" "No effective changes to $resolved_conf_systemd were needed."

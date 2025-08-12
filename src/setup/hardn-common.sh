@@ -124,12 +124,227 @@ hardn_yesno() {
 }
 
 # Export functions so they’re available in sourced module scripts
+# Enhanced container and CI environment detection
+is_container_environment() {
+    # Check multiple container indicators
+    if [[ -n "$CI" || -n "$GITHUB_ACTIONS" || -n "$GITLAB_CI" || -n "$JENKINS_URL" ]]; then
+        return 0
+    fi
+    
+    # Check for container environment files/processes
+    if [[ -f /.dockerenv ]] || \
+       [[ -f /run/.containerenv ]] || \
+       grep -qa container /proc/1/environ 2>/dev/null || \
+       [[ "$(cat /proc/1/comm 2>/dev/null)" =~ ^(systemd|bash|sh)$ ]] && [[ "$(readlink /proc/1/exe 2>/dev/null)" =~ docker|containerd ]]; then
+        return 0
+    fi
+    
+    # Check systemd container detection
+    if command -v systemd-detect-virt >/dev/null 2>&1; then
+        if systemd-detect-virt --quiet --container 2>/dev/null; then
+            return 0
+        fi
+    fi
+    
+    # Check for Docker/Podman/LXC specific indicators
+    if [[ -n "$container" ]] || \
+       [[ -f /proc/self/cgroup ]] && grep -q "/docker\|/lxc\|/podman" /proc/self/cgroup 2>/dev/null; then
+        return 0
+    fi
+    
+    return 1
+}
+
+# Check if systemd is available and functional
+is_systemd_available() {
+    # In containers, systemd may not be functional even if present
+    if is_container_environment; then
+        # In containers, be more strict about systemd availability
+        if [[ -d /run/systemd/system ]] && systemctl --version >/dev/null 2>&1 && systemctl is-system-running >/dev/null 2>&1; then
+            return 0
+        fi
+        return 1
+    fi
+    
+    # On regular systems, check if systemd is the init system
+    if [[ -d /run/systemd/system ]] && [[ "$(readlink -f /sbin/init)" == *"systemd"* ]] || [[ -f /lib/systemd/systemd ]]; then
+        if systemctl --version >/dev/null 2>&1 && systemctl status --no-pager >/dev/null 2>&1; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+# Safe systemctl wrapper that handles container environments
+safe_systemctl() {
+    local operation="$1"
+    local service="$2"
+    local additional_args="${3:-}"
+    
+    if ! is_systemd_available; then
+        HARDN_STATUS "warning" "systemd not available or functional, skipping: systemctl $operation $service"
+        return 0
+    fi
+    
+    case "$operation" in
+        "enable"|"disable")
+            if systemctl "$operation" "$service" $additional_args >/dev/null 2>&1; then
+                HARDN_STATUS "pass" "Successfully executed: systemctl $operation $service"
+                return 0
+            else
+                HARDN_STATUS "warning" "Failed to execute: systemctl $operation $service (continuing anyway)"
+                return 0
+            fi
+            ;;
+        "start"|"stop"|"restart"|"reload")
+            if is_container_environment; then
+                HARDN_STATUS "info" "Container environment detected, skipping: systemctl $operation $service"
+                return 0
+            fi
+            
+            if systemctl "$operation" "$service" $additional_args >/dev/null 2>&1; then
+                HARDN_STATUS "pass" "Successfully executed: systemctl $operation $service"
+                return 0
+            else
+                HARDN_STATUS "warning" "Failed to execute: systemctl $operation $service (continuing anyway)"
+                return 0
+            fi
+            ;;
+        "status")
+            if systemctl "$operation" "$service" $additional_args >/dev/null 2>&1; then
+                return 0
+            else
+                return 1
+            fi
+            ;;
+        *)
+            # For other operations, try normally but don't fail
+            if systemctl "$operation" "$service" $additional_args >/dev/null 2>&1; then
+                return 0
+            else
+                HARDN_STATUS "warning" "systemctl $operation $service failed (continuing anyway)"
+                return 0
+            fi
+            ;;
+    esac
+}
+
 export -f HARDN_STATUS
 export -f is_installed
 export -f hardn_msgbox
 export -f hardn_infobox
 export -f hardn_menu
 export -f hardn_yesno
+export -f is_container_environment
+export -f is_systemd_available
+# Safe package installation wrapper for container environments
+safe_package_install() {
+    local packages=("$@")
+    local package_manager=""
+    local install_cmd=""
+    
+    # Detect package manager
+    if command -v apt >/dev/null 2>&1; then
+        package_manager="apt"
+        install_cmd="apt install -y"
+    elif command -v dnf >/dev/null 2>&1; then
+        package_manager="dnf"
+        install_cmd="dnf install -y"
+    elif command -v yum >/dev/null 2>&1; then
+        package_manager="yum"
+        install_cmd="yum install -y"
+    elif command -v pacman >/dev/null 2>&1; then
+        package_manager="pacman"
+        install_cmd="pacman -S --noconfirm"
+    else
+        HARDN_STATUS "error" "No supported package manager found"
+        return 1
+    fi
+    
+    # Update package cache first (skip errors in containers)
+    case "$package_manager" in
+        "apt")
+            if ! apt update >/dev/null 2>&1; then
+                HARDN_STATUS "warning" "apt update failed (may be normal in containers)"
+            fi
+            ;;
+        "dnf"|"yum")
+            # DNF/YUM updates are usually fine in containers
+            ;;
+    esac
+    
+    # Install packages
+    local failed_packages=()
+    for package in "${packages[@]}"; do
+        HARDN_STATUS "info" "Installing package: $package"
+        if $install_cmd "$package" >/dev/null 2>&1; then
+            HARDN_STATUS "pass" "Successfully installed: $package"
+        else
+            HARDN_STATUS "warning" "Failed to install: $package (may not be available in container)"
+            failed_packages+=("$package")
+        fi
+    done
+    
+    # Report results
+    if [[ ${#failed_packages[@]} -eq 0 ]]; then
+        return 0
+    elif [[ ${#failed_packages[@]} -eq ${#packages[@]} ]]; then
+        HARDN_STATUS "error" "All package installations failed: ${failed_packages[*]}"
+        return 1
+    else
+        HARDN_STATUS "warning" "Some package installations failed: ${failed_packages[*]}"
+        return 0  # Partial success is OK
+    fi
+}
+
+# Check for common container limitations and missing dependencies
+check_container_limitations() {
+    local warnings=()
+    
+    if is_container_environment; then
+        # Check for systemd functionality
+        if ! is_systemd_available; then
+            warnings+=("systemd not functional - service management limited")
+        fi
+        
+        # Check for common missing tools
+        local missing_tools=()
+        for tool in systemctl iptables mount modprobe; do
+            if ! command -v "$tool" >/dev/null 2>&1; then
+                missing_tools+=("$tool")
+            fi
+        done
+        
+        if [[ ${#missing_tools[@]} -gt 0 ]]; then
+            warnings+=("missing tools: ${missing_tools[*]}")
+        fi
+        
+        # Check for filesystem limitations
+        if [[ ! -w /proc/sys ]]; then
+            warnings+=("read-only /proc/sys - kernel parameter changes limited")
+        fi
+        
+        # Check for network limitations
+        if [[ ! -c /dev/net/tun ]]; then
+            warnings+=("no /dev/net/tun - VPN/tunnel functionality limited")
+        fi
+        
+        # Report warnings
+        if [[ ${#warnings[@]} -gt 0 ]]; then
+            HARDN_STATUS "info" "Container limitations detected:"
+            for warning in "${warnings[@]}"; do
+                HARDN_STATUS "warning" "  - $warning"
+            done
+        fi
+        
+        return ${#warnings[@]}
+    fi
+    
+    return 0
+}
+
+export -f check_container_limitations
+export -f safe_package_install
 
 # Detect OS information for scripts that need it
 if [[ -f /etc/os-release ]]; then

@@ -66,17 +66,19 @@ HARDN_STATUS "info" "Configuring SSH service for secure remote access"
 HARDN_STATUS "warning" "Ensure you have SSH key access or backup login method"
 HARDN_STATUS "info" "Proceeding with SSH hardening configuration"
 
-# Enable and start sshd service
-if is_systemd_available; then
-    systemctl enable "$SERVICE_NAME"
-    systemctl start "$SERVICE_NAME"
-    HARDN_STATUS "pass" "SSH service enabled and started using systemd"
+# Enable and start sshd service using safe wrapper
+if is_container_environment; then
+    HARDN_STATUS "info" "Container environment detected - SSH service management will be skipped"
+    HARDN_STATUS "info" "In containers, SSH service should be managed by the container orchestrator"
 else
-    HARDN_STATUS "warning" "systemd not available - skipping service enable/start operations"
-    HARDN_STATUS "info" "In non-systemd environments, SSH service management should be done manually"
-    # Check if SSH is already running
+    safe_systemctl "enable" "$SERVICE_NAME"
+    safe_systemctl "start" "$SERVICE_NAME"
+    
+    # Check if SSH is running
     if pgrep -x "sshd" >/dev/null; then
-        HARDN_STATUS "info" "SSH daemon appears to be already running"
+        HARDN_STATUS "pass" "SSH daemon is running"
+    elif safe_systemctl "status" "$SERVICE_NAME"; then
+        HARDN_STATUS "pass" "SSH service is active according to systemctl"
     else
         HARDN_STATUS "warning" "SSH daemon not detected running - manual start may be required"
     fi
@@ -95,12 +97,10 @@ else
 fi
 
 # Restart sshd to apply changes (minimal changes now)
-if is_systemd_available; then
-    systemctl restart "$SERVICE_NAME"
-    HARDN_STATUS "pass" "SSH service restarted using systemd"
+if ! is_container_environment; then
+    safe_systemctl "restart" "$SERVICE_NAME"
 else
-    HARDN_STATUS "warning" "systemd not available - skipping service restart"
-    HARDN_STATUS "info" "Configuration changes will take effect on next SSH service restart"
+    HARDN_STATUS "info" "Container environment - skipping SSH service restart"
 fi
 
 HARDN_STATUS "pass" "OpenSSH server installed."

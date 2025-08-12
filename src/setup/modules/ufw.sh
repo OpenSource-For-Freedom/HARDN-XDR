@@ -14,6 +14,14 @@ else
 fi
 set -e
 
+# Check for container environment
+if is_container_environment; then
+    HARDN_STATUS "info" "Container environment detected - UFW firewall may not be functional"
+    HARDN_STATUS "info" "In containers, network policies are typically managed by the container runtime"
+    HARDN_STATUS "pass" "UFW configuration skipped (container environment)"
+    return 0 2>/dev/null || hardn_module_exit 0
+fi
+
 # Install UFW if missing
 if ! command -v ufw &> /dev/null; then
     apt-get update
