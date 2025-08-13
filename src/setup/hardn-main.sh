@@ -293,7 +293,7 @@ main_menu() {
         
         modules=("${essential[@]}" "${conditional[@]}" "${desktop[@]}")
     else
-        environment_type="Desktop/Physical (Full suite)"
+        environment_type="Desktop/Physical"
         readarray -t modules < <(get_full_module_list | tr ' ' '\n')
     fi
     
@@ -301,7 +301,7 @@ main_menu() {
     
     local checklist_args=()
     
-    # Add modules with categorization for container/VM environments
+    # Add modules with categorization for container/VM environments only
     if is_container_vm_environment; then
         # Essential modules (pre-selected)
         readarray -t essential < <(get_container_vm_essential_modules | tr ' ' '\n')
@@ -326,19 +326,26 @@ main_menu() {
                 checklist_args+=("$module" "[DESKTOP] Install $module (not recommended)" "OFF")
             fi
         done
+        
+        checklist_args+=("ALL" "Install recommended modules for this environment" "OFF")
     else
-        # Full module list for desktop/physical systems
+        # Original clean interface for desktop/physical systems
         for module in "${modules[@]}"; do
             if [[ -n "$module" ]]; then
                 checklist_args+=("$module" "Install $module" "OFF")
             fi
         done
+        
+        checklist_args+=("ALL" "Install all modules" "OFF")
     fi
-    
-    checklist_args+=("ALL" "Install recommended modules for this environment" "OFF")
+
+    local title="HARDN-XDR Module Selection"
+    if is_container_vm_environment; then
+        title="$title - $environment_type"
+    fi
 
     local selected
-    if ! selected=$(whiptail --title "HARDN-XDR Module Selection - $environment_type" --checklist "Select modules to install (SPACE to select, TAB to move):" 25 80 15 "${checklist_args[@]}" 3>&1 1>&2 2>&3); then
+    if ! selected=$(whiptail --title "$title" --checklist "Select modules to install (SPACE to select, TAB to move):" 25 80 15 "${checklist_args[@]}" 3>&1 1>&2 2>&3); then
         HARDN_STATUS "info" "No modules selected. Exiting."
         exit 1
     fi
