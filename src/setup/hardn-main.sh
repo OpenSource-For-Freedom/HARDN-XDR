@@ -169,7 +169,7 @@ get_container_vm_conditional_modules() {
 get_desktop_focused_modules() {
     echo "usb.sh firewire.sh firejail.sh compilers.sh pentest.sh"
     echo "behavioral_analysis.sh persistence_detection.sh process_protection.sh"
-    echo "deleted_files.sh unnecesary_services.sh"
+    echo "deleted_files.sh unnecessary_services.sh"
 }
 
 # Legacy full module list for backwards compatibility
