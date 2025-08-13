@@ -181,7 +181,7 @@ get_full_module_list() {
     echo "unhide.sh pentest.sh compilers.sh purge_old_pkgs.sh dns_config.sh"
     echo "file_perms.sh apparmor.sh shared_mem.sh coredumps.sh secure_net.sh"
     echo "network_protocols.sh usb.sh firewire.sh binfmt.sh"
-    echo "process_accounting.sh unnecesary_services.sh banner.sh"
+    echo "process_accounting.sh unnecessary_services.sh banner.sh"
     echo "deleted_files.sh credential_protection.sh service_disable.sh"
 }
 
