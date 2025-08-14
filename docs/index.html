@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HARDN-XDR | Advanced Linux Security Platform</title>
+    <link rel="icon" type="image/png" href="assets/sig_logo.png">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Source+Code+Pro:wght@400;500;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Source Code Pro', monospace;
+            background: #0a0a0a;
+            color: #00ff00;
+            overflow-x: hidden;
+            min-height: 100vh;
+            position: relative;
+        }
+        
+        /* Matrix-style background effect */
+        .matrix-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: -1;
+            background: 
+                radial-gradient(circle at 20% 80%, rgba(0, 255, 0, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(0, 255, 255, 0.1) 0%, transparent 50%),
+                linear-gradient(90deg, transparent 49%, rgba(0, 255, 0, 0.03) 50%, transparent 51%),
+                linear-gradient(0deg, transparent 49%, rgba(0, 255, 0, 0.03) 50%, transparent 51%);
+            background-size: 100% 100%, 100% 100%, 50px 50px, 50px 50px;
+            animation: matrixFlow 20s linear infinite;
+        }
+        
+        @keyframes matrixFlow {
+            0% { background-position: 0% 0%, 0% 0%, 0px 0px, 0px 0px; }
+            100% { background-position: 0% 100%, 100% 0%, 50px 50px, -50px 50px; }
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 20px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        /* Header */
+        .header {
+            text-align: center;
+            padding: 40px 0;
+            background: rgba(0, 0, 0, 0.8);
+            border-bottom: 2px solid #00ff00;
+            margin-bottom: 40px;
+        }
+        
+        .logo {
+            font-family: 'Orbitron', monospace;
+            font-size: 3.5rem;
+            font-weight: 900;
+            color: #00ffff;
+            text-shadow: 0 0 20px #00ffff, 0 0 40px #00ffff;
+            margin-bottom: 10px;
+            letter-spacing: 3px;
+        }
+        
+        .tagline {
+            font-size: 1.2rem;
+            color: #00ff00;
+            margin-bottom: 20px;
+        }
+        
+        .subtitle {
+            font-size: 0.9rem;
+            color: #888;
+            max-width: 600px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+        
+        /* Main demo section */
+        .demo-section {
+            margin: 60px 0;
+        }
+        
+        .demo-title {
+            font-family: 'Orbitron', monospace;
+            font-size: 2.5rem;
+            text-align: center;
+            color: #00ffff;
+            text-shadow: 0 0 20px #00ffff;
+            margin-bottom: 20px;
+            letter-spacing: 2px;
+        }
+        
+        .demo-subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 40px;
+            font-size: 1.1rem;
+        }
+        
+        /* Terminal window */
+        .terminal-window {
+            background: rgba(0, 0, 0, 0.95);
+            border: 2px solid #00ff00;
+            border-radius: 8px;
+            box-shadow: 
+                0 0 30px rgba(0, 255, 0, 0.3),
+                inset 0 0 30px rgba(0, 255, 0, 0.1);
+            margin: 40px auto;
+            max-width: 1000px;
+            overflow: hidden;
+        }
+        
+        .terminal-header {
+            background: rgba(0, 255, 0, 0.1);
+            padding: 15px 20px;
+            border-bottom: 1px solid #00ff00;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .terminal-controls {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .terminal-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        
+        .dot-red { background: #ff5f56; }
+        .dot-yellow { background: #ffbd2e; }
+        .dot-green { background: #27ca3f; }
+        
+        .terminal-title {
+            color: #00ff00;
+            font-weight: 700;
+            letter-spacing: 1px;
+        }
+        
+        .terminal-content {
+            padding: 30px;
+            min-height: 400px;
+            background: rgba(0, 0, 0, 0.8);
+            font-family: 'Source Code Pro', monospace;
+            position: relative;
+        }
+        
+        .terminal-output {
+            color: #00ff00;
+            line-height: 1.8;
+            margin-bottom: 20px;
+        }
+        
+        .cursor {
+            animation: blink 1s infinite;
+        }
+        
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+        
+        /* Demo buttons */
+        .demo-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+            margin: 40px 0;
+        }
+        
+        .demo-btn {
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid #00ff00;
+            color: #00ff00;
+            padding: 12px 25px;
+            font-family: 'Source Code Pro', monospace;
+            font-size: 0.9rem;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+        }
+        
+        .demo-btn:hover {
+            background: rgba(0, 255, 0, 0.1);
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+            transform: translateY(-2px);
+        }
+        
+        .demo-btn.clear {
+            border-color: #ff6b6b;
+            color: #ff6b6b;
+        }
+        
+        .demo-btn.clear:hover {
+            background: rgba(255, 107, 107, 0.1);
+            box-shadow: 0 0 20px rgba(255, 107, 107, 0.3);
+        }
+        
+        /* Features grid */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin: 60px 0;
+        }
+        
+        .feature-card {
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 30px;
+            transition: all 0.3s ease;
+        }
+        
+        .feature-card:hover {
+            border-color: #00ff00;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.2);
+        }
+        
+        .feature-title {
+            color: #00ffff;
+            font-family: 'Orbitron', monospace;
+            font-size: 1.3rem;
+            margin-bottom: 15px;
+        }
+        
+        .feature-desc {
+            color: #ccc;
+            line-height: 1.6;
+        }
+        
+        /* Footer */
+        .footer {
+            background: rgba(0, 0, 0, 0.9);
+            border-top: 2px solid #00ff00;
+            padding: 40px 0;
+            text-align: center;
+            margin-top: 80px;
+        }
+        
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        
+        .footer-link {
+            color: #00ff00;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        
+        .footer-link:hover {
+            color: #00ffff;
+            text-shadow: 0 0 10px #00ffff;
+        }
+        
+        .coming-soon {
+            color: #ffff00;
+            font-weight: bold;
+            text-shadow: 0 0 10px #ffff00;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .logo {
+                font-size: 2.5rem;
+            }
+            
+            .demo-title {
+                font-size: 2rem;
+            }
+            
+            .terminal-content {
+                padding: 20px;
+                min-height: 300px;
+            }
+            
+            .demo-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .footer-links {
+                flex-direction: column;
+                gap: 15px;
+            }
+        }
+        
+        /* Modal for coming soon */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+        }
+        
+        .modal-content {
+            background: #0a0a0a;
+            margin: 15% auto;
+            padding: 30px;
+            border: 2px solid #00ff00;
+            border-radius: 8px;
+            width: 80%;
+            max-width: 500px;
+            text-align: center;
+            box-shadow: 0 0 30px rgba(0, 255, 0, 0.3);
+        }
+        
+        .close {
+            color: #ff6b6b;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            line-height: 1;
+        }
+        
+        .close:hover {
+            color: #ff4444;
+        }
+    </style>
+</head>
+<body>
+    <div class="matrix-bg"></div>
+    
+    <div class="container">
+        <header class="header">
+            <h1 class="logo">HARDN-XDR</h1>
+            <p class="tagline">Advanced Linux Security Hardening Platform</p>
+            <p class="subtitle">Government-grade security compliance for Debian-based systems with DISA STIG, CIS Controls, and FIPS 140-2 compliance</p>
+        </header>
+        
+        <section class="demo-section">
+            <h2 class="demo-title">LIVE DEMONSTRATION</h2>
+            <p class="demo-subtitle">Experience HARDN-XDR's capabilities in action</p>
+            
+            <div class="terminal-window">
+                <div class="terminal-header">
+                    <div class="terminal-controls">
+                        <div class="terminal-dot dot-red"></div>
+                        <div class="terminal-dot dot-yellow"></div>
+                        <div class="terminal-dot dot-green"></div>
+                    </div>
+                    <div class="terminal-title">HARDN-XDR Security Demonstration</div>
+                    <div></div>
+                </div>
+                <div class="terminal-content">
+                    <div class="terminal-output" id="terminal-output">
+                        <div>root@hardn-xdr:~# hardn-xdr --version</div>
+                        <div>HARDN-XDR v2.0.0 - Linux Security Hardening Platform</div>
+                        <div>Architecture: Multi-platform (AMD64/ARM64)</div>
+                        <div>Compliance: DISA STIG | CIS Controls | FIPS 140-2</div>
+                        <div>Status: Ready for demonstration</div>
+                        <div><br></div>
+                        <div>root@hardn-xdr:~# <span class="cursor">█</span></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="demo-buttons">
+                <button class="demo-btn" onclick="runDemo('scan')">
+                    🔍 Run Scan Demo
+                </button>
+                <button class="demo-btn" onclick="runDemo('monitor')">
+                    📊 Monitor Demo
+                </button>
+                <button class="demo-btn" onclick="runDemo('analysis')">
+                    🔬 Analysis Demo
+                </button>
+                <button class="demo-btn clear" onclick="clearTerminal()">
+                    🗑 Clear
+                </button>
+            </div>
+        </section>
+        
+        <section class="features-grid">
+            <div class="feature-card">
+                <h3 class="feature-title">🛡️ DISA STIG Compliance</h3>
+                <p class="feature-desc">Comprehensive implementation of Defense Information Systems Agency Security Technical Implementation Guides for government-grade security standards.</p>
+            </div>
+            <div class="feature-card">
+                <h3 class="feature-title">🎯 CIS Controls</h3>
+                <p class="feature-desc">Center for Internet Security benchmark implementation with automated hardening for industry-standard security configurations.</p>
+            </div>
+            <div class="feature-card">
+                <h3 class="feature-title">🔐 FIPS 140-2</h3>
+                <p class="feature-desc">Federal cryptographic standards compliance ensuring secure cryptographic implementations and key management.</p>
+            </div>
+            <div class="feature-card">
+                <h3 class="feature-title">🐧 Multi-Architecture</h3>
+                <p class="feature-desc">Native support for AMD64 and ARM64 architectures with optimized container and VM-first deployment strategies.</p>
+            </div>
+            <div class="feature-card">
+                <h3 class="feature-title">📊 Real-time Monitoring</h3>
+                <p class="feature-desc">Matrix-themed compliance dashboard with real-time security metrics, audit trails, and comprehensive reporting.</p>
+            </div>
+            <div class="feature-card">
+                <h3 class="feature-title">🚀 Automated Hardening</h3>
+                <p class="feature-desc">41+ security modules providing automated system hardening, malware detection, and continuous compliance validation.</p>
+            </div>
+        </section>
+    </div>
+    
+    <footer class="footer">
+        <div class="container">
+            <p>HARDN-XDR - The Linux Security Project</p>
+            <div class="footer-links">
+                <a href="#" class="footer-link" onclick="showComingSoon()">Documentation</a>
+                <a href="#" class="footer-link" onclick="showComingSoon()">Download</a>
+                <a href="#" class="footer-link" onclick="showComingSoon()">Support</a>
+                <a href="https://github.com/Security-International-Group" class="footer-link" target="_blank">GitHub</a>
+                <a href="#" class="footer-link" onclick="showComingSoon()">Contact</a>
+            </div>
+            <p style="color: #666; margin-top: 20px;">
+                Powered by <a href="https://github.com/Security-International-Group" style="color: #00ffff;">Security International Group</a>
+            </p>
+        </div>
+    </footer>
+    
+    <!-- Coming Soon Modal -->
+    <div id="comingSoonModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2 style="color: #00ffff; margin-bottom: 20px;">Coming Soon!</h2>
+            <p style="color: #00ff00; margin-bottom: 20px;">This feature is currently under development.</p>
+            <p style="color: #888;">Please visit our <a href="https://github.com/Security-International-Group" style="color: #00ffff;">GitHub repository</a> for the latest updates.</p>
+        </div>
+    </div>
+
+    <script>
+        const terminalOutput = document.getElementById('terminal-output');
+        let demoRunning = false;
+        
+        const demoScripts = {
+            scan: [
+                'root@hardn-xdr:~# hardn-xdr --scan --verbose',
+                'Initializing HARDN-XDR security scan...',
+                'Loading 41 security modules...',
+                '[✓] DISA STIG compliance check',
+                '[✓] CIS Controls validation', 
+                '[✓] FIPS 140-2 cryptographic validation',
+                '[✓] File integrity monitoring (AIDE)',
+                '[✓] Malware detection (YARA, ClamAV)',
+                '[✓] Network security assessment',
+                '[✓] System hardening verification',
+                'Scan completed: 98% compliance achieved',
+                'Recommendations: 3 items require attention'
+            ],
+            monitor: [
+                'root@hardn-xdr:~# hardn-xdr --monitor --dashboard',
+                'Starting real-time security monitoring...',
+                'Launching Matrix-themed compliance dashboard...',
+                'Port 8021: Dashboard server started',
+                '[MONITOR] Audit logging: ACTIVE',
+                '[MONITOR] Intrusion detection: ACTIVE', 
+                '[MONITOR] File integrity: ACTIVE',
+                '[MONITOR] Network monitoring: ACTIVE',
+                'Dashboard available at: http://localhost:8021/hardn-compliance.html',
+                'Real-time metrics streaming...'
+            ],
+            analysis: [
+                'root@hardn-xdr:~# hardn-xdr --analyze --compliance',
+                'Performing deep compliance analysis...',
+                'Analyzing STIG controls: 254 items',
+                'Validating CIS benchmarks: 187 controls',
+                'Checking FIPS compliance: 23 modules',
+                '[ANALYSIS] Critical: 0 findings',
+                '[ANALYSIS] High: 2 findings',
+                '[ANALYSIS] Medium: 5 findings',
+                '[ANALYSIS] Low: 12 findings',
+                'Generating compliance report...',
+                'Analysis complete: Overall score 94.2%'
+            ]
+        };
+        
+        function typeText(text, delay = 50) {
+            return new Promise(resolve => {
+                let i = 0;
+                const div = document.createElement('div');
+                terminalOutput.appendChild(div);
+                
+                function type() {
+                    if (i < text.length) {
+                        div.textContent += text.charAt(i);
+                        i++;
+                        setTimeout(type, delay);
+                    } else {
+                        resolve();
+                    }
+                }
+                type();
+            });
+        }
+        
+        async function runDemo(type) {
+            if (demoRunning) return;
+            demoRunning = true;
+            
+            const script = demoScripts[type];
+            for (const line of script) {
+                await typeText(line, 30);
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+            
+            await typeText('', 100);
+            await typeText('root@hardn-xdr:~# ', 50);
+            
+            demoRunning = false;
+        }
+        
+        function clearTerminal() {
+            terminalOutput.innerHTML = `
+                <div>root@hardn-xdr:~# clear</div>
+                <div>root@hardn-xdr:~# <span class="cursor">█</span></div>
+            `;
+        }
+        
+        function showComingSoon() {
+            document.getElementById('comingSoonModal').style.display = 'block';
+        }
+        
+        function closeModal() {
+            document.getElementById('comingSoonModal').style.display = 'none';
+        }
+        
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('comingSoonModal');
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
+        }
+        
+        // Add some dynamic matrix effects
+        function createMatrixRain() {
+            const canvas = document.createElement('canvas');
+            canvas.style.position = 'fixed';
+            canvas.style.top = '0';
+            canvas.style.left = '0';
+            canvas.style.width = '100%';
+            canvas.style.height = '100%';
+            canvas.style.pointerEvents = 'none';
+            canvas.style.zIndex = '-1';
+            canvas.style.opacity = '0.1';
+            document.body.appendChild(canvas);
+            
+            const ctx = canvas.getContext('2d');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            
+            const matrix = "HARDN-XDR0123456789ABCDEF";
+            const drops = [];
+            
+            for (let x = 0; x < canvas.width / 10; x++) {
+                drops[x] = 1;
+            }
+            
+            function draw() {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.04)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                ctx.fillStyle = '#00ff00';
+                ctx.font = '10px monospace';
+                
+                for (let i = 0; i < drops.length; i++) {
+                    const text = matrix[Math.floor(Math.random() * matrix.length)];
+                    ctx.fillText(text, i * 10, drops[i] * 10);
+                    
+                    if (drops[i] * 10 > canvas.height && Math.random() > 0.975) {
+                        drops[i] = 0;
+                    }
+                    drops[i]++;
+                }
+            }
+            
+            setInterval(draw, 35);
+        }
+        
+        // Initialize matrix rain effect
+        setTimeout(createMatrixRain, 1000);
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            const canvas = document.querySelector('canvas');
+            if (canvas) {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+            }
+        });
+    </script>
+</body>
+</html>
