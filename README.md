@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/OS: Debian Systems-red?style=for-the-badge&labelColor=grey" alt="OS: DEBIAN 12"><br><br>
+  <img src="https://img.shields.io/badge/OS: Debian|Ubuntu|PakOS-red?style=for-the-badge&labelColor=grey" alt="OS: DEBIAN|UBUNTU|PAKOS"><br><br>
 </p>
 
 <div align="center">
@@ -34,7 +34,7 @@
 
 ## HARDN-XDR
 - **Our Goal**: 
-  - Assist the open source community in building **Container and VM optimized** Debian based security hardening for **DISA/FEDHIVE compliance**, with Multi Architecture capabilities.
+  - Assist the open source community in building **Container and VM optimized** Debian-based security hardening for **DISA/FEDHIVE compliance**, with Multi Architecture capabilities and support for Debian, Ubuntu, and PakOS distributions.
 - **Our Purpose**: 
   - To empower IT administrators with automated container and VM security hardening tools that ensure DISA compliance, optimize performance, and maintain regulatory standards across containerized and virtualized environments.
 - **What we have to offer**:
@@ -156,7 +156,7 @@ HARDN-XDR includes a compliance dashboard that provides real-time security metri
 ### Dashboard Features
 - **Automated Deployment**: After running the auditing script, the dashboard produces compliance reporting.
 - **Real-Time Metrics**: Live compliance percentages and security status
-- **Multi-Standard Support**: DISA STIG, FIPS 140-2, CIS Controls, and Debian Security
+- **Multi-Standard Support**: DISA STIG, FIPS 140-2, CIS Controls, Debian Security, and PakOS compatibility
 - **Visual Charts**: Animated progress bars and compliance meters
 - **Auto-Server**: Automatically starts web server after audit completion
 - **Interactive Elements**: Hover effects and glowing animations
@@ -181,15 +181,15 @@ pkill -f 'python.*8021'
 
 ### Dashboard Sections
 - **Executive Summary**: Overall compliance percentage and critical findings
-- **Compliance Progress**: Standard-specific progress meters (STIG, FIPS, CIS, Debian)
+- **Compliance Progress**: Standard-specific progress meters (STIG, FIPS, CIS, Debian, PakOS)
 - **Detailed Findings**: Categorized security check results with status indicators
 - **Visual Charts**: Bar charts showing passed/failed/warning statistics
 
 ---
 
 ### Installation Notes
-- HARDN-XDR is currently being developed and tested for **BARE-METAL installs of Debian based distributions and Containers**.
-- Ensure you have the latest version of **Debian 12**.
+- HARDN-XDR is currently being developed and tested for **BARE-METAL installs of Debian-based distributions (Debian, Ubuntu, PakOS) and Containers**.
+- Ensure you have the latest version of **Debian 12**, **Ubuntu 24.04+**, or **PakOS**.
 - By installing HARDN-XDR the following changes will be made to your system:
 > - A collection of security focused packages will be installed.
 > - Security tools and services will be enabled.

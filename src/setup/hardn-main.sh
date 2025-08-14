@@ -30,9 +30,14 @@ show_system_info() {
     HARDN_STATUS "info" "HARDN-XDR v${HARDN_VERSION} - System Information"
     HARDN_STATUS "info" "================================================"
     HARDN_STATUS "info" "Script Version: ${HARDN_VERSION}"
-    HARDN_STATUS "info" "Target OS: Debian-based systems (Debian 12+, Ubuntu 24.04+)"
+    HARDN_STATUS "info" "Target OS: Debian-based systems (Debian 12+, Ubuntu 24.04+, PakOS)"
     if [[ -n "${CURRENT_DEBIAN_VERSION_ID}" && -n "${CURRENT_DEBIAN_CODENAME}" ]]; then
         HARDN_STATUS "info" "Detected OS: ${ID:-Unknown} ${CURRENT_DEBIAN_VERSION_ID} (${CURRENT_DEBIAN_CODENAME})"
+        
+        # Special message for PakOS
+        if [[ "${PAKOS_DETECTED:-0}" == "1" ]]; then
+            HARDN_STATUS "info" "PakOS Support: Enabled (Debian-derivative compatibility mode)"
+        fi
     fi
     HARDN_STATUS "info" "Features: STIG Compliance, Malware Detection, System Hardening"
 }
@@ -156,7 +161,7 @@ get_container_vm_essential_modules() {
     echo "auto_updates.sh file_perms.sh shared_mem.sh coredumps.sh"
     echo "network_protocols.sh process_accounting.sh debsums.sh purge_old_pkgs.sh"
     echo "banner.sh central_logging.sh audit_system.sh ntp.sh dns_config.sh"
-    echo "binfmt.sh service_disable.sh stig_pwquality.sh"
+    echo "binfmt.sh service_disable.sh stig_pwquality.sh pakos_config.sh"
 }
 
 # Container/VM conditional modules (performance vs security trade-off)

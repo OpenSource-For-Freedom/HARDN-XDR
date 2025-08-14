@@ -8,7 +8,7 @@ HARDN_STATUS() {
     local status="$1"
     local message="$2"
     case "$status" in
-        "pass")    echo -e "\033[1;32m[PASS]\033[0m $message" ;;
+        "pass"|"success") echo -e "\033[1;32m[PASS]\033[0m $message" ;;
         "warning") echo -e "\033[1;33m[WARNING]\033[0m $message" ;;
         "error")   echo -e "\033[1;31m[ERROR]\033[0m $message" ;;
         "info")    echo -e "\033[1;34m[INFO]\033[0m $message" ;;
@@ -243,10 +243,15 @@ safe_package_install() {
     local package_manager=""
     local install_cmd=""
     
-    # Detect package manager
+    # Detect package manager with PakOS awareness
     if command -v apt >/dev/null 2>&1; then
         package_manager="apt"
         install_cmd="apt install -y"
+        # Special handling for PakOS if needed
+        if [[ "${PAKOS_DETECTED:-0}" == "1" ]]; then
+            HARDN_STATUS "info" "Using apt package manager for PakOS"
+            # Could add PakOS-specific apt configurations here
+        fi
     elif command -v dnf >/dev/null 2>&1; then
         package_manager="dnf"
         install_cmd="dnf install -y"
@@ -385,20 +390,46 @@ export -f safe_sysctl_set
 export -f check_container_limitations
 export -f safe_package_install
 
-# Detect OS information for scripts that need it
-if [[ -f /etc/os-release ]]; then
-    # Source os-release to get ID and VERSION_CODENAME
-    . /etc/os-release
-    export ID
-    export VERSION_CODENAME
-    # For compatibility, also export as CURRENT_DEBIAN_CODENAME
-    export CURRENT_DEBIAN_CODENAME="${VERSION_CODENAME:-unknown}"
-else
-    # Fallback values
-    export ID="unknown"
-    export VERSION_CODENAME="unknown"
-    export CURRENT_DEBIAN_CODENAME="unknown"
-fi
+# Enhanced OS detection with PakOS support
+detect_os_info() {
+    if [[ -f /etc/os-release ]]; then
+        # Source os-release to get distribution information
+        . /etc/os-release
+        export ID
+        export VERSION_CODENAME
+        export VERSION_ID
+        export PRETTY_NAME
+        
+        # Detect PakOS and classify as Debian derivative
+        case "$ID" in
+            "pakos"|"pak-os"|"pakistan-os"|"PakOS")
+                export PAKOS_DETECTED=1
+                export IS_DEBIAN_DERIVATIVE=1
+                HARDN_STATUS "info" "PakOS detected: $PRETTY_NAME"
+                # Assume Debian-like behavior for PakOS
+                export CURRENT_DEBIAN_CODENAME="${VERSION_CODENAME:-stable}"
+                ;;
+            "debian"|"ubuntu"|"linuxmint"|"elementary"|"pop"|"zorin")
+                export IS_DEBIAN_DERIVATIVE=1
+                export CURRENT_DEBIAN_CODENAME="${VERSION_CODENAME:-unknown}"
+                ;;
+            *)
+                export IS_DEBIAN_DERIVATIVE=0
+                export CURRENT_DEBIAN_CODENAME="${VERSION_CODENAME:-unknown}"
+                ;;
+        esac
+    else
+        # Fallback values
+        export ID="unknown"
+        export VERSION_CODENAME="unknown"
+        export CURRENT_DEBIAN_CODENAME="unknown"
+        export IS_DEBIAN_DERIVATIVE=0
+        export PAKOS_DETECTED=0
+    fi
+}
+
+# Initialize OS detection
+detect_os_info
 
 # Module exit function - used by modules when they need to exit
 # (when run standalone rather than sourced)
