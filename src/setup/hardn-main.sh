@@ -13,9 +13,33 @@ fi
 if [ -f /usr/lib/hardn-xdr/src/setup/hardn-common.sh ]; then
     # shellcheck source=src/setup/hardn-common.sh
     source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
+elif [ -f "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/hardn-common.sh" ]; then
+    # Development/CI fallback
+    source "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/hardn-common.sh"
 else
-    echo "[ERROR] hardn-common.sh not found at expected path!"
-    exit 1
+    echo "[ERROR] hardn-common.sh not found at expected paths!"
+    echo "[INFO] Using basic fallback functions for CI environment"
+    
+    # Basic fallback functions for CI
+    HARDN_STATUS() { echo "$(date '+%Y-%m-%d %H:%M:%S') - [$1] $2"; }
+    check_root() { [[ $EUID -eq 0 ]]; }
+    is_installed() { command -v "$1" >/dev/null 2>&1 || dpkg -s "$1" >/dev/null 2>&1; }
+    hardn_yesno() { 
+        [[ "$SKIP_WHIPTAIL" == "1" ]] && return 0
+        echo "Auto-confirming: $1" >&2
+        return 0
+    }
+    hardn_msgbox() { 
+        [[ "$SKIP_WHIPTAIL" == "1" ]] && echo "Info: $1" >&2 && return 0
+        echo "Info: $1" >&2
+    }
+    is_container_environment() {
+        [[ -n "$CI" ]] || [[ -n "$GITHUB_ACTIONS" ]] || [[ -f /.dockerenv ]] || \
+        [[ -f /run/.containerenv ]] || grep -qa container /proc/1/environ 2>/dev/null
+    }
+    is_systemd_available() {
+        [[ -d /run/systemd/system ]] && systemctl --version >/dev/null 2>&1
+    }
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

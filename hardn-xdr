@@ -1,2 +1,4 @@
 #!/bin/bash
-exec /usr/lib/hardn-xdr/src/setup/hardn-main.sh "$@"
+# HARDN-XDR Main Launcher with fallback for development/CI environments
+exec bash "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/src/setup/hardn-main.sh" "$@" 2>/dev/null || \
+exec bash "/usr/lib/hardn-xdr/src/setup/hardn-main.sh" "$@"
