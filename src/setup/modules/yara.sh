@@ -1,9 +1,11 @@
 #!/bin/bash
 # Source common functions with fallback for development/CI environments
+# Source common functions with fallback for development/CI environments
 source "/usr/lib/hardn-xdr/src/setup/hardn-common.sh" 2>/dev/null || \
 source "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")/hardn-common.sh" 2>/dev/null || {
     echo "Warning: Could not source hardn-common.sh, using basic functions"
     HARDN_STATUS() { echo "$(date '+%Y-%m-%d %H:%M:%S') - [$1] $2"; }
+    log_message() { echo "$(date '+%Y-%m-%d %H:%M:%S') - $1"; }
     check_root() { [[ $EUID -eq 0 ]]; }
     is_installed() { command -v "$1" >/dev/null 2>&1 || dpkg -s "$1" >/dev/null 2>&1; }
     hardn_yesno() { 
@@ -22,11 +24,34 @@ source "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")/hardn-common.s
     is_systemd_available() {
         [[ -d /run/systemd/system ]] && systemctl --version >/dev/null 2>&1
     }
+    create_scheduled_task() {
+        echo "Info: Scheduled task creation skipped in CI environment" >&2
+        return 0
+    }
+    check_container_limitations() {
+        if [[ ! -w /proc/sys ]] || [[ -f /.dockerenv ]]; then
+            echo "Warning: Container limitations detected:" >&2
+            echo "  - read-only /proc/sys - kernel parameter changes limited" >&2
+        fi
+        return 0
+    }
+    hardn_module_exit() {
+        local exit_code="${1:-0}"
+        exit "$exit_code"
+    }
+    safe_package_install() {
+        local package="$1"
+        if [[ "$CI" == "true" ]] || ! check_root; then
+            echo "Info: Package installation skipped in CI environment: $package" >&2
+            return 0
+        fi
+        echo "Warning: Package installation not implemented in fallback: $package" >&2
+        return 1
+    }
 }
 #!/bin/bash
 
 # shellcheck disable=SC1091
-set -e
 
 # Install and configure YARA for malware detection
 # This script is designed to be sourced as a module from hardn-main.sh
@@ -60,7 +85,7 @@ install_yara() {
 
     # Create directories for YARA rules
     mkdir -p /etc/yara/rules
-    return 0
+    exit 0
 }
 
 
@@ -173,7 +198,7 @@ rkhunter --check --skip-keypress
 # Run YARA scan on important directories
 yara -r /etc/yara/rules/* /bin /sbin /usr/bin /usr/sbin /etc /var/www 2>/dev/null
 
-return 0
+exit 0
 EOF
     chmod +x /usr/local/bin/rkhunter-with-yara.sh
     HARDN_STATUS "info" "Created /usr/local/bin/rkhunter-with-yara.sh to run YARA after RKHunter."
@@ -193,7 +218,7 @@ fi
 
 # Clean up
 rm -f /tmp/recent_files.txt
-return 0
+exit 0
 EOF
     chmod +x /usr/local/bin/auditd-yara-scan.sh
     HARDN_STATUS "info" "Created /usr/local/bin/auditd-yara-scan.sh for periodic YARA scans on recent changes."
@@ -259,10 +284,11 @@ yara_module() {
     create_periodic_scan_script
 
     HARDN_STATUS "pass" "YARA rules setup and integration scripts completed."
-    return 0
+    exit 0
 }
 # Execute the module function when sourced from hardn-main.sh
 yara_module
 
 # shellcheck disable=SC2317
 return 0 2>/dev/null || hardn_module_exit 0
+set -e

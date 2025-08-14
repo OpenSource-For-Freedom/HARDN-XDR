@@ -41,7 +41,7 @@ if [[ "$mode" == "basic" ]]; then
     ufw --force enable
     HARDN_STATUS "pass" "UFW basic firewall enabled: deny incoming, allow outgoing."
     ufw status verbose
-    return 0
+    exit 0
 fi
 
 # Advanced mode
