@@ -48,20 +48,57 @@ source "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")/hardn-common.s
         echo "Warning: Package installation not implemented in fallback: $package" >&2
         return 1
     }
-}
-#!/bin/bash
-
-
-# Check if systemd is available and running
-is_systemd_available() {
-    # Check if systemd is the init system (PID 1)
-    if [[ -d /run/systemd/system ]] && [[ "$(readlink -f /sbin/init)" == *"systemd"* ]] || [[ -f /lib/systemd/systemd ]]; then
-        # Additional check: can we actually communicate with systemd?
-        if systemctl --version &>/dev/null && systemctl status --no-pager &>/dev/null; then
+    safe_systemctl() {
+        local operation="$1"
+        local service="$2"
+        local additional_args="${3:-}"
+        
+        if ! is_systemd_available; then
+            echo "Warning: systemd not available or functional, skipping: systemctl $operation $service" >&2
             return 0
         fi
-    fi
-    exit 1
+        
+        case "$operation" in
+            "enable"|"disable")
+                if systemctl "$operation" "$service" "$additional_args" >/dev/null 2>&1; then
+                    echo "Pass: Successfully executed: systemctl $operation $service" >&2
+                    return 0
+                else
+                    echo "Warning: Failed to execute: systemctl $operation $service (continuing anyway)" >&2
+                    return 0
+                fi
+                ;;
+            "start"|"stop"|"restart"|"reload")
+                if is_container_environment; then
+                    echo "Info: Container environment detected, skipping: systemctl $operation $service" >&2
+                    return 0
+                fi
+                
+                if systemctl "$operation" "$service" "$additional_args" >/dev/null 2>&1; then
+                    echo "Pass: Successfully executed: systemctl $operation $service" >&2
+                    return 0
+                else
+                    echo "Warning: Failed to execute: systemctl $operation $service (continuing anyway)" >&2
+                    return 0
+                fi
+                ;;
+            "status")
+                if systemctl "$operation" "$service" "$additional_args" >/dev/null 2>&1; then
+                    return 0
+                else
+                    return 1
+                fi
+                ;;
+            *)
+                if systemctl "$operation" "$service" "$additional_args" >/dev/null 2>&1; then
+                    return 0
+                else
+                    echo "Warning: systemctl $operation $service failed (continuing anyway)" >&2
+                    return 0
+                fi
+                ;;
+        esac
+    }
 }
 
 HARDN_STATUS "info" "Installing OpenSSH server..."
@@ -165,4 +202,3 @@ fi
 HARDN_STATUS "pass" "OpenSSH server installed."
 
 return 0 2>/dev/null || hardn_module_exit 0
-set -e
