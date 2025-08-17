@@ -70,7 +70,7 @@ sudo ./smoke_test.sh --full
 
 ## System Requirements
 
-- **OS**: Debian 12+ (Bookworm), Ubuntu 24.04+ (Noble), or compatible derivatives
+- **OS**: Debian 12+ (Bookworm), Ubuntu 24.04+ (Noble), PakOS and more.
 - **Architecture**: AMD64 or ARM64
 - **Memory**: 2GB+ recommended (1GB minimum with memory optimization)
 - **Storage**: 500MB free space for full installation
@@ -120,8 +120,6 @@ sudo ./hardn_audit.sh
 ## Documentation
 
 - **[Product Requirements Document](docs/PRD.md)** - Comprehensive project overview
-- **[Copilot Instructions](.github/copilot-instructions.md)** - Development guidelines
-- **[Implementation Summary](IMPLEMENTATION_SUMMARY.md)** - Recent updates and features
 - **[Maintenance Playbook](PLAYBOOK.md)** - Operations and troubleshooting
 
 ## Testing and Quality Assurance
