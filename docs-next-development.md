@@ -43,21 +43,28 @@ The new design features a grey-tone cyber theme:
    ```
    Site will be available at `http://localhost:3000`
 
-3. **Build and preview production**:
+3. **Build for local testing**:
+   ```bash
+   npm run build:dev
+   ```
+   This builds without the GitHub Pages basePath for local testing.
+
+4. **Build for GitHub Pages**:
    ```bash
    npm run build
-   npm run start
    ```
+   This builds with the correct `/HARDN-XDR/` basePath for deployment.
 
 ### Deployment
 
-The site automatically builds to the `/docs` folder for GitHub Pages:
+The site automatically builds and deploys to GitHub Pages via the deployment workflow:
 
 ```bash
+# Triggered automatically on push to main, or manually via:
 npm run build
 ```
 
-This generates static files in `/docs` that GitHub Pages serves directly.
+This generates static files in `/docs` that GitHub Pages serves at `https://opensource-for-freedom.github.io/HARDN-XDR/`.
 
 ## Project Structure
 
@@ -117,8 +124,12 @@ const nextConfig: NextConfig = {
   trailingSlash: true,     // GitHub Pages compatibility
   images: { unoptimized: true }, // No image optimization
   distDir: 'docs',         // Output to docs folder
+  basePath: '/HARDN-XDR',  // GitHub Pages repository path
+  assetPrefix: '/HARDN-XDR', // Asset path prefix
 };
 ```
+
+**Important**: The `basePath` and `assetPrefix` are configured for GitHub Pages deployment at `https://opensource-for-freedom.github.io/HARDN-XDR/`. For local development, use `npm run build:dev` which temporarily uses a development config without these paths.
 
 ### Tailwind CSS
 

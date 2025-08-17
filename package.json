@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
+    "build:dev": "cp next.config.dev.ts next.config.ts && next build && git checkout next.config.ts",
     "start": "next start",
     "lint": "next lint"
   },
