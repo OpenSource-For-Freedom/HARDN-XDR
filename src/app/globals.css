@@ -1,0 +1,141 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Source+Code+Pro:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+:root {
+  /* Grey Cyber Color Palette */
+  --bg-primary: #1a1a1a;
+  --bg-secondary: #2a2a2a;
+  --bg-tertiary: #3a3a3a;
+  --text-primary: #e2e8f0;
+  --text-secondary: #cbd5e0;
+  --text-muted: #a0aec0;
+  --accent-primary: #00d4ff;
+  --accent-secondary: #667eea;
+  --accent-tertiary: #4a5568;
+  --border-primary: #4a5568;
+  --border-secondary: #6a6a6a;
+  --cyber-glow: rgba(0, 212, 255, 0.3);
+  --cyber-glow-soft: rgba(0, 212, 255, 0.1);
+
+  --background: #1a1a1a;
+  --foreground: #e2e8f0;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: 'Source Code Pro', var(--font-geist-sans);
+  --font-mono: 'Source Code Pro', var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #1a1a1a;
+    --foreground: #e2e8f0;
+  }
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Source Code Pro', monospace;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  overflow-x: hidden;
+  min-height: 100vh;
+  position: relative;
+}
+
+/* Cyber glow effect utilities */
+.cyber-glow {
+  box-shadow: 0 0 20px var(--cyber-glow);
+}
+
+.cyber-glow-soft {
+  box-shadow: 0 0 10px var(--cyber-glow-soft);
+}
+
+.cyber-border {
+  border: 1px solid var(--border-primary);
+}
+
+.cyber-border-glow {
+  border: 1px solid var(--accent-primary);
+  box-shadow: 0 0 10px var(--cyber-glow-soft);
+}
+
+/* Matrix background pattern */
+.matrix-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: -1;
+  background: 
+    radial-gradient(circle at 20% 80%, var(--cyber-glow-soft) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(102, 126, 234, 0.1) 0%, transparent 50%),
+    linear-gradient(90deg, transparent 49%, rgba(0, 212, 255, 0.03) 50%, transparent 51%),
+    linear-gradient(0deg, transparent 49%, rgba(0, 212, 255, 0.03) 50%, transparent 51%);
+  background-size: 100% 100%, 100% 100%, 50px 50px, 50px 50px;
+  animation: matrixFlow 20s linear infinite;
+}
+
+@keyframes matrixFlow {
+  0% { background-position: 0% 0%, 0% 0%, 0px 0px, 0px 0px; }
+  100% { background-position: 0% 100%, 100% 0%, 50px 50px, -50px 50px; }
+}
+
+/* Cursor blink animation */
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.cursor {
+  animation: blink 1s infinite;
+}
+
+/* Terminal styling */
+.terminal-header {
+  background: rgba(0, 212, 255, 0.1);
+  border-bottom: 1px solid var(--accent-primary);
+}
+
+.terminal-content {
+  background: rgba(26, 26, 26, 0.95);
+  font-family: 'Source Code Pro', monospace;
+}
+
+/* Button hover effects */
+.cyber-button {
+  background: transparent;
+  border: 1px solid var(--border-primary);
+  color: var(--text-secondary);
+  transition: all 0.3s ease;
+}
+
+.cyber-button:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  box-shadow: 0 0 20px var(--cyber-glow);
+  transform: translateY(-2px);
+}
+
+/* Feature cards */
+.feature-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  transition: all 0.3s ease;
+}
+
+.feature-card:hover {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 20px var(--cyber-glow-soft);
+  transform: translateY(-2px);
+}
