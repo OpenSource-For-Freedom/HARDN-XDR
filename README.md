@@ -70,7 +70,7 @@ sudo ./smoke_test.sh --full
 
 ## System Requirements
 
-- **OS**: Debian 12+ (Bookworm), Ubuntu 24.04+ (Noble), PakOS and more.
+- **OS**: Debian 12+ (Bookworm), Ubuntu 24.04+ (Noble), PakOS 2023.1+ (Falcon), and other Debian-based distributions with systemd, kernel 5.10+ and apt package manager.
 - **Architecture**: AMD64 or ARM64
 - **Memory**: 2GB+ recommended (1GB minimum with memory optimization)
 - **Storage**: 500MB free space for full installation
