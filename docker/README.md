@@ -2,6 +2,11 @@
 
 ## Quick Start
 
+- Download HARDN-XDR by source. 
+```
+cd hardn-xdr
+```
+
 #### Build
 ```
 docker build -f docker/debian-bookworm/Dockerfile -t hardn-xdr:debian-bookworm .
