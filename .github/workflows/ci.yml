@@ -20,7 +20,7 @@ jobs:
       new_tag: ${{ steps.bump.outputs.new_tag }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Fetch tags
         run: git fetch --tags
@@ -461,7 +461,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download all release assets
         uses: actions/download-artifact@v4
