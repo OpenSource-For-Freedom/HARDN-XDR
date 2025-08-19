@@ -34,7 +34,8 @@
 ### Installation
 
 #### Docker
-- See /docker/README.md
+- See [Docker](docker/README.md)
+
 
 #### From Package
 ```bash
