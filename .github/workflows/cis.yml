@@ -1,4 +1,4 @@
-name: cis-compliance 
+name: cis-compliance
 
 on:
   push:
@@ -15,15 +15,15 @@ env:
   LYNIS_MIN_SCORE: "80"          # gate threshold
   VM_RAM_MB: "3072"              # per-VM RAM
   VM_CPUS: "2"                   # vCPU per VM
-  VM_TIMEOUT: "45m"              # overall timeout for a VM audit
-  SSH_WAIT_SECS: "480"           # wait up to 8 minutes for first-boot/cloud-init
+  VM_TIMEOUT: "45m"              # per-command timeout inside guest
+  SSH_WAIT_SECS: "480"           # wait up to 8 minutes for cloud-init/SSH
   ART_DIR: "vm-audit-artifacts"
 
 jobs:
   vm-audit:
-    name: Real OS audit in VM via Docker (${{ matrix.os }})
-    runs-on: self-hosted
-
+    name: Real OS audit in VM (GitHub runner) — ${{ matrix.os }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
     strategy:
       fail-fast: false
       matrix:
@@ -35,7 +35,6 @@ jobs:
             image_url: https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
             pkg_family: deb
           - os: pakos
-            # get paKOS image, using ubuntu 
             image_url: https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
             pkg_family: deb
 
@@ -46,25 +45,17 @@ jobs:
       - name: Ensure artifacts dir
         run: mkdir -p "${{ env.ART_DIR }}"
 
-      - name: Build VM runner image (with QEMU/KVM)
+      - name: Install QEMU and tools (no Docker, no KVM)
         run: |
-          cat > Dockerfile.vmrunner <<'DOCKER'
-          FROM debian:stable-slim
-          ENV DEBIAN_FRONTEND=noninteractive
-          RUN apt-get update && apt-get install -y --no-install-recommends \
-                qemu-kvm qemu-system-x86 cloud-image-utils genisoimage \
-                openssh-client sshpass \
-                curl wget jq ca-certificates iproute2 iputils-ping \
-                xz-utils sudo coreutils time \
-              && rm -rf /var/lib/apt/lists/*
-          # tiny helper
-          RUN useradd -m -u 1000 runner && echo "runner ALL=(ALL) NOPASSWD:ALL" >/etc/sudoers.d/runner
-          USER runner
-          WORKDIR /home/runner
-          COPY run_vm_audit.sh /usr/local/bin/run_vm_audit.sh
-          ENTRYPOINT ["/usr/local/bin/run_vm_audit.sh"]
-          DOCKER
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            qemu-system-x86 qemu-utils cloud-image-utils genisoimage \
+            openssh-client sshpass curl wget jq ca-certificates \
+            iproute2 iputils-ping xz-utils coreutils time
 
+      - name: Write vm audit runner script
+        shell: bash
+        run: |
           cat > run_vm_audit.sh <<'BASH'
           #!/usr/bin/env bash
           set -euo pipefail
@@ -115,20 +106,20 @@ jobs:
           EOF
           cloud-localds "$WORKDIR/seed.iso" "$CI_DIR/user-data" "$CI_DIR/meta-data"
 
-          echo "[INFO] Starting VM with KVM"
+          echo "[INFO] Starting VM (TCG emulation; KVM not available on GitHub runners)"
           SSH_PORT=$(shuf -i 2222-65000 -n 1)
           QEMU_LOG="$WORKDIR/qemu-console.log"
 
-          # Start QEMU in background
+          # NOTE: no -enable-kvm. Default accel is tcg on these runners.
           qemu-system-x86_64 \
-            -enable-kvm -cpu host -smp "$VM_CPUS" -m "${VM_RAM_MB}" \
+            -cpu max -smp "$VM_CPUS" -m "${VM_RAM_MB}" \
             -drive "if=virtio,file=$IMG,format=qcow2,cache=none,discard=unmap" \
             -cdrom "$WORKDIR/seed.iso" \
             -device virtio-net-pci \
             -netdev user,id=n1,hostfwd=tcp::${SSH_PORT}-:22 \
             -display none -serial file:"$QEMU_LOG" -daemonize
 
-          echo "[INFO] Waiting for SSH (port ${SSH_PORT}) up to ${SSH_WAIT_SECS}s"
+          echo "[INFO] Waiting for SSH on port ${SSH_PORT} (up to ${SSH_WAIT_SECS}s)"
           deadline=$(( $(date +%s) + SSH_WAIT_SECS ))
           until ssh -i "$SSH_DIR/id_ed25519" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "$SSH_PORT" ci@127.0.0.1 "echo OK" >/dev/null 2>&1; do
             if [ "$(date +%s)" -gt "$deadline" ]; then
@@ -139,16 +130,14 @@ jobs:
             fi
             sleep 5
           done
-          echo "[INFO] SSH reached"
 
-          # Command runner with timeout inside the VM
           vm_ssh () {
             timeout "$VM_TIMEOUT" ssh -i "$SSH_DIR/id_ed25519" \
               -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
               -p "$SSH_PORT" ci@127.0.0.1 "$@"
           }
 
-          echo "[INFO] Installing Lynis + OpenSCAP/SSG"
+          echo "[INFO] Install Lynis + OpenSCAP/SSG"
           case "$PKG_FAMILY" in
             deb)
               vm_ssh 'sudo DEBIAN_FRONTEND=noninteractive apt-get update'
@@ -167,7 +156,7 @@ jobs:
               ;;
           esac
 
-          echo "[INFO] Running Lynis"
+          echo "[INFO] Run Lynis"
           vm_ssh "sudo mkdir -p /tmp/lynis-out"
           vm_ssh "sudo lynis audit system --quiet --logfile /tmp/lynis-out/lynis.log --report-file /tmp/lynis-out/lynis-report.dat || true"
           mkdir -p "$ART_BASE/${OS_NAME}/lynis"
@@ -179,7 +168,7 @@ jobs:
           SCORE="$(awk -F= '/^(hardening_index|lynis_system_score)=/{print $2}' "$ART_BASE/${OS_NAME}/lynis/lynis-report.dat" 2>/dev/null | tail -n1 || true)"
           echo "[INFO] Lynis score (${OS_NAME}): ${SCORE:-N/A}"
 
-          echo "[INFO] Running OpenSCAP (CIS if present)"
+          echo "[INFO] Run OpenSCAP (CIS if present)"
           vm_ssh "sudo mkdir -p /tmp/osc"
           DS="$(vm_ssh 'ls /usr/share/xml/scap/ssg/content/ssg-*-ds.xml 2>/dev/null | head -n1' || true)"
           if [ -n "$DS" ]; then
@@ -202,15 +191,13 @@ jobs:
             scp -i "$SSH_DIR/id_ed25519" -P "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
                 ci@127.0.0.1:/tmp/osc/results.arf "$ART_BASE/${OS_NAME}/openscap/" || true
           else
-            echo "[WARN] No SSG datastream found in VM; skipping OpenSCAP."
+            echo "[WARN] No SSG datastream found; skipping OpenSCAP."
           fi
 
-          echo "[INFO] Asking guest to shutdown"
+          echo "[INFO] Ask guest to shutdown"
           vm_ssh "sudo shutdown -h now" || true
-          # Allow a moment for VM to power off
           sleep 10 || true
 
-          # Gate on score if found
           if [ -n "${SCORE:-}" ]; then
             awk -v s="$SCORE" -v min="$LYNIS_MIN_SCORE" 'BEGIN{ exit (s+0<min) ? 1 : 0 }' \
               || { echo "[ERROR] ${OS_NAME} Lynis score ${SCORE} < ${LYNIS_MIN_SCORE}"; exit 5; }
@@ -220,26 +207,11 @@ jobs:
 
           echo "[INFO] Completed ${OS_NAME}"
           BASH
+          chmod +x run_vm_audit.sh
 
-          docker build -t os-vm-runner:latest -f Dockerfile.vmrunner .
-
-      - name: Launch VM for ${{ matrix.os }} and run audits
-        # needs privileged Docker for /dev/kvm pass-through
+      - name: Launch VM and run audits for ${{ matrix.os }}
         run: |
-          set -e
-          # Pass-thru KVM if present; otherwise QEMU will fall back to TCG (slow)
-          DEVICES=()
-          [ -e /dev/kvm ] && DEVICES+=(--device /dev/kvm)
-          mkdir -p "${{ env.ART_DIR }}"
-          docker run --rm --privileged "${DEVICES[@]}" \
-            -e LYNIS_MIN_SCORE="${{ env.LYNIS_MIN_SCORE }}" \
-            -e VM_RAM_MB="${{ env.VM_RAM_MB }}" \
-            -e VM_CPUS="${{ env.VM_CPUS }}" \
-            -e SSH_WAIT_SECS="${{ env.SSH_WAIT_SECS }}" \
-            -e VM_TIMEOUT="${{ env.VM_TIMEOUT }}" \
-            -v "$(pwd)/${{ env.ART_DIR }}:/artifacts" \
-            os-vm-runner:latest \
-              "${{ matrix.os }}" "${{ matrix.image_url }}" "${{ matrix.pkg_family }}" "/artifacts"
+          ./run_vm_audit.sh "${{ matrix.os }}" "${{ matrix.image_url }}" "${{ matrix.pkg_family }}" "${{ env.ART_DIR }}"
 
       - name: Upload artifacts (${{ matrix.os }})
         if: always()
