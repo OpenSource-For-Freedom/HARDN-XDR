@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  hardn-xdr:
+    build:
+      context: ../..
+      dockerfile: docker/debian-bookworm/Dockerfile
+    image: hardn-xdr:debian-bookworm
+    container_name: hardn-xdr-debian
+    restart: unless-stopped
+    volumes:
+      - hardn_data:/home/hardn/data
+      - /var/log:/host/var/log:ro
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      - HARDN_XDR_ENV=production
+    command: /bin/bash
+    stdin_open: true
+    tty: true
+
+volumes:
+  hardn_data:
+    driver: local

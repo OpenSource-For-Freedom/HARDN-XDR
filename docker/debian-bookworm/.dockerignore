@@ -1,0 +1,15 @@
+# Ignore unnecessary files during Docker build
+.git
+.gitignore
+*.md
+.idea/
+node_modules/
+.next/
+out/
+build/
+coverage/
+.env*
+*.log
+.DS_Store
+docs-backup/
+tmp/

@@ -1,5 +1,13 @@
 #!/bin/bash
 
+# Set default values for environment variables to prevent unbound variable errors
+: "${CI:=}"
+: "${GITHUB_ACTIONS:=}"
+: "${GITLAB_CI:=}"
+: "${JENKINS_URL:=}"
+: "${BUILDKITE:=}"
+: "${container:=}"
+
 if [[ -n "$CI" || -n "$GITHUB_ACTIONS" || -n "$GITLAB_CI" || -n "$JENKINS_URL" || -n "$BUILDKITE" || ! -t 0 ]]; then
     export SKIP_WHIPTAIL=1
 fi
@@ -39,9 +47,14 @@ HARDN_WHIPTAIL_MENU_HEIGHT=8
 
 # Whiptail message box or fallback
 hardn_msgbox() {
-    local message="$1"
+    local message="${1:-}"
     local height="${2:-$HARDN_WHIPTAIL_HEIGHT}"
     local width="${3:-$HARDN_WHIPTAIL_WIDTH}"
+
+    if [[ -z "$message" ]]; then
+        HARDN_STATUS "error" "hardn_msgbox called without message parameter"
+        return 1
+    fi
 
     if [[ "$SKIP_WHIPTAIL" == "1" ]]; then
         HARDN_STATUS "info" "[fallback] $message"
@@ -58,9 +71,14 @@ hardn_msgbox() {
 
 # Whiptail info box or fallback
 hardn_infobox() {
-    local message="$1"
+    local message="${1:-}"
     local height="${2:-$HARDN_WHIPTAIL_HEIGHT}"
     local width="${3:-$HARDN_WHIPTAIL_WIDTH}"
+
+    if [[ -z "$message" ]]; then
+        HARDN_STATUS "error" "hardn_infobox called without message parameter"
+        return 1
+    fi
 
     if [[ "$SKIP_WHIPTAIL" == "1" ]]; then
         HARDN_STATUS "info" "[fallback] $message"
@@ -106,9 +124,14 @@ hardn_menu() {
 
 # Whiptail yes/no dialog or fallback to "yes"
 hardn_yesno() {
-    local message="$1"
+    local message="${1:-}"
     local height="${2:-$HARDN_WHIPTAIL_HEIGHT}"
     local width="${3:-$HARDN_WHIPTAIL_WIDTH}"
+
+    if [[ -z "$message" ]]; then
+        HARDN_STATUS "error" "hardn_yesno called without message parameter"
+        return 1
+    fi
 
     if [[ "$SKIP_WHIPTAIL" == "1" ]]; then
         HARDN_STATUS "info" "[fallback] Auto-confirming: $message"
@@ -177,9 +200,14 @@ is_systemd_available() {
 
 # Safe systemctl wrapper that handles container environments
 safe_systemctl() {
-    local operation="$1"
-    local service="$2"
+    local operation="${1:-}"
+    local service="${2:-}"
     local additional_args="${3:-}"
+
+    if [[ -z "$operation" || -z "$service" ]]; then
+        HARDN_STATUS "error" "safe_systemctl called without required parameters (operation: '$operation', service: '$service')"
+        return 1
+    fi
     
     if ! is_systemd_available; then
         HARDN_STATUS "warning" "systemd not available or functional, skipping: systemctl $operation $service"

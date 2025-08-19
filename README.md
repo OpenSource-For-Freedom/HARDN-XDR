@@ -33,6 +33,9 @@
 
 ### Installation
 
+#### Docker
+- See /docker/README.md
+
 #### From Package
 ```bash
 # Download the latest release

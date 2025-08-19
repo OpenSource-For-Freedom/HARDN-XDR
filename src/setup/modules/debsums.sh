@@ -60,10 +60,13 @@ fi
 export LC_ALL=C
 export LANG=C
 
+# Initialize temporary files variable
+TMP_FILES=""
+
 # Set up cleanup trap for any temporary files
 cleanup() {
     # Remove any temporary files created by the script
-    [ -n "$TMP_FILES" ] && rm -f "$TMP_FILES"
+    [ -n "$TMP_FILES" ] && rm -f $TMP_FILES
 }
 trap cleanup EXIT INT TERM
 
