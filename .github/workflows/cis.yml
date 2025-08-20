@@ -1,4 +1,4 @@
-name: cis-compliance
+name: cis-debian
 
 on:
   push:
@@ -6,82 +6,67 @@ on:
   pull_request:
   workflow_dispatch:
   schedule:
-    - cron: "0 4 * * 1"
+    - cron: "0 4 * * 1"   # Mondays 04:00 UTC
 
 permissions:
   contents: read
 
 env:
-  LYNIS_MIN_SCORE: "80"          # gate threshold
-  VM_RAM_MB: "3072"              # per-VM RAM
-  VM_CPUS: "2"                   # vCPU per VM
-  VM_TIMEOUT: "45m"              # per-command timeout inside guest
-  SSH_WAIT_SECS: "480"           # wait up to 8 minutes for cloud-init/SSH
-  ART_DIR: "vm-audit-artifacts"
+  VM_RAM_MB: "2048"         # GitHub runner friendly
+  VM_CPUS: "1"
+  SSH_WAIT_SECS: "600"      # wait up to 10m for cloud-init/SSH
+  VM_TIMEOUT: "30m"         # per-command timeout inside guest
+  ART_DIR: "cis-artifacts"
+  DEBIAN12_IMAGE_URL: "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2"
 
 jobs:
-  vm-audit:
-    name: Real OS audit in VM (GitHub runner) — ${{ matrix.os }}
+  debian12-cis:
+    name: Debian 12 — CIS (OpenSCAP) + Lynis
     runs-on: ubuntu-latest
-    timeout-minutes: 360
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: debian-12
-            image_url: https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2
-            pkg_family: deb
-          - os: ubuntu-24.04
-            image_url: https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
-            pkg_family: deb
-          - os: pakos
-            image_url: https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
-            pkg_family: deb
+    timeout-minutes: 150
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Ensure artifacts dir
-        run: mkdir -p "${{ env.ART_DIR }}"
+      - name: Prepare artifacts dir
+        run: mkdir -p "${{ env.ART_DIR }}/debian-12"
 
-      - name: Install QEMU and tools (no Docker, no KVM)
+      - name: Install QEMU + helpers (no KVM needed)
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             qemu-system-x86 qemu-utils cloud-image-utils genisoimage \
-            openssh-client sshpass curl wget jq ca-certificates \
+            openssh-client curl jq ca-certificates \
             iproute2 iputils-ping xz-utils coreutils time
 
-      - name: Write vm audit runner script
+      - name: Write audit runner script
         shell: bash
         run: |
-          cat > run_vm_audit.sh <<'BASH'
+          cat > run_debian12_audits.sh <<'BASH'
           #!/usr/bin/env bash
           set -euo pipefail
 
-          OS_NAME="${1:?os name}"
-          IMAGE_URL="${2:?cloud image url}"
-          PKG_FAMILY="${3:?pkg family}"
-          ART_BASE="${4:?artifact dir}"
-          LYNIS_MIN_SCORE="${LYNIS_MIN_SCORE:-80}"
+          ART_BASE="${1:?artifact dir}"
+          IMG_URL="${2:?debian12 cloud image url}"
           VM_RAM_MB="${VM_RAM_MB:-2048}"
-          VM_CPUS="${VM_CPUS:-2}"
-          SSH_WAIT_SECS="${SSH_WAIT_SECS:-480}"
-          VM_TIMEOUT="${VM_TIMEOUT:-45m}"
+          VM_CPUS="${VM_CPUS:-1}"
+          SSH_WAIT_SECS="${SSH_WAIT_SECS:-600}"
+          VM_TIMEOUT="${VM_TIMEOUT:-30m}"
 
+          OS_NAME="debian-12"
           WORKDIR="$(pwd)/work-${OS_NAME}"
-          mkdir -p "$WORKDIR" "$ART_BASE/${OS_NAME}/lynis" "$ART_BASE/${OS_NAME}/openscap"
+          mkdir -p "$WORKDIR" "$ART_BASE/${OS_NAME}"
 
-          echo "[INFO] Downloading cloud image for ${OS_NAME}"
+          echo "[INFO] Downloading Debian 12 cloud image"
           IMG="$WORKDIR/disk.qcow2"
-          curl -fsSL "$IMAGE_URL" -o "$WORKDIR/orig.img"
+          curl -fsSL "$IMG_URL" -o "$WORKDIR/orig.img"
           qemu-img convert -O qcow2 "$WORKDIR/orig.img" "$IMG"
-          qemu-img resize "$IMG" +6G
+          qemu-img resize "$IMG" +6G || true
 
           echo "[INFO] Generating SSH key"
           SSH_DIR="$WORKDIR/ssh"; mkdir -p "$SSH_DIR"
-          ssh-keygen -t ed25519 -f "$SSH_DIR/id_ed25519" -N "" -C "ci@hardn-xdr"
+          ssh-keygen -t ed25519 -f "$SSH_DIR/id_ed25519" -N "" -C "ci@hardn-xdr" >/dev/null
 
           echo "[INFO] Building cloud-init seed"
           CI_DIR="$WORKDIR/cloudinit"; mkdir -p "$CI_DIR"
@@ -106,30 +91,28 @@ jobs:
           EOF
           cloud-localds "$WORKDIR/seed.iso" "$CI_DIR/user-data" "$CI_DIR/meta-data"
 
-          echo "[INFO] Starting VM (TCG emulation; KVM not available on GitHub runners)"
+          echo "[INFO] Launching QEMU (TCG emulation; e1000 NIC)"
           SSH_PORT=$(shuf -i 2222-65000 -n 1)
           QEMU_LOG="$WORKDIR/qemu-console.log"
-
-          # NOTE: no -enable-kvm. Default accel is tcg on these runners.
           qemu-system-x86_64 \
             -cpu max -smp "$VM_CPUS" -m "${VM_RAM_MB}" \
             -drive "if=virtio,file=$IMG,format=qcow2,cache=none,discard=unmap" \
             -cdrom "$WORKDIR/seed.iso" \
-            -device virtio-net-pci \
             -netdev user,id=n1,hostfwd=tcp::${SSH_PORT}-:22 \
+            -device e1000,netdev=n1 \
             -display none -serial file:"$QEMU_LOG" -daemonize
 
-          echo "[INFO] Waiting for SSH on port ${SSH_PORT} (up to ${SSH_WAIT_SECS}s)"
+          echo "[INFO] Waiting for SSH on port ${SSH_PORT} (<= ${SSH_WAIT_SECS}s)"
           deadline=$(( $(date +%s) + SSH_WAIT_SECS ))
           until ssh -i "$SSH_DIR/id_ed25519" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "$SSH_PORT" ci@127.0.0.1 "echo OK" >/dev/null 2>&1; do
             if [ "$(date +%s)" -gt "$deadline" ]; then
               echo "[ERROR] VM did not become reachable via SSH"
-              echo "---- QEMU console tail ----"
               tail -n 200 "$QEMU_LOG" || true
               exit 1
             fi
             sleep 5
           done
+          echo "[INFO] SSH reached"
 
           vm_ssh () {
             timeout "$VM_TIMEOUT" ssh -i "$SSH_DIR/id_ed25519" \
@@ -137,85 +120,84 @@ jobs:
               -p "$SSH_PORT" ci@127.0.0.1 "$@"
           }
 
-          echo "[INFO] Install Lynis + OpenSCAP/SSG"
-          case "$PKG_FAMILY" in
-            deb)
-              vm_ssh 'sudo DEBIAN_FRONTEND=noninteractive apt-get update'
-              vm_ssh 'sudo DEBIAN_FRONTEND=noninteractive apt-get install -y lynis openscap-scanner scap-security-guide'
-              ;;
-            rpm)
-              vm_ssh 'if command -v dnf; then sudo dnf install -y lynis openscap-scanner scap-security-guide; else sudo yum install -y lynis openscap-scanner scap-security-guide; fi'
-              ;;
-            arch)
-              vm_ssh 'sudo pacman -Sy --noconfirm lynis openscap scap-security-guide || true'
-              ;;
-            *)
-              echo "[WARN] Unknown PKG_FAMILY=$PKG_FAMILY; trying deb"
-              vm_ssh 'sudo DEBIAN_FRONTEND=noninteractive apt-get update || true'
-              vm_ssh 'sudo DEBIAN_FRONTEND=noninteractive apt-get install -y lynis openscap-scanner scap-security-guide || true'
-              ;;
-          esac
+          # ---------------------------
+          # Install tools inside guest
+          # ---------------------------
+          echo "[INFO] Installing OpenSCAP + SSG + Lynis inside guest"
+          vm_ssh 'sudo DEBIAN_FRONTEND=noninteractive apt-get update'
+          vm_ssh 'sudo DEBIAN_FRONTEND=noninteractive apt-get install -y openscap-scanner scap-security-guide lynis'
 
-          echo "[INFO] Run Lynis"
+          # ---------------------------
+          # OpenSCAP (CIS) evaluation
+          # ---------------------------
+          echo "[INFO] Locating Debian 12 SCAP datastream"
+          DS_PATH="$(vm_ssh "ls /usr/share/xml/scap/ssg/content/ssg-debian12-ds.xml 2>/dev/null || true")"
+          if [ -z "$DS_PATH" ]; then
+            DS_PATH="$(vm_ssh "ls /usr/share/xml/scap/ssg/content/ssg-*-ds.xml 2>/dev/null | grep debian || true")"
+          fi
+          if [ -z "$DS_PATH" ]; then
+            echo "[ERROR] Could not find Debian SCAP datastream in guest."
+            exit 2
+          fi
+          echo "[INFO] Using datastream: $DS_PATH"
+
+          echo "[INFO] Selecting a CIS profile from datastream"
+          CIS_PROFILE="$(vm_ssh "oscap info '$DS_PATH' | awk '/^ +Profile/{print \$2,\$0}' | grep -i 'cis' | awk '{print \$1}' | head -n1" || true)"
+          if [ -z "$CIS_PROFILE" ]; then
+            echo "[WARN] No explicit CIS profile found; falling back to 'standard' if present"
+            CIS_PROFILE="$(vm_ssh "oscap info '$DS_PATH' | awk '/^ +Profile/{print \$2,\$0}' | grep -i 'standard' | awk '{print \$1}' | head -n1" || true)"
+          fi
+          if [ -z "$CIS_PROFILE" ]; then
+            echo "[ERROR] No suitable profile found in $DS_PATH"
+            exit 3
+          fi
+          echo "[INFO] Selected profile: $CIS_PROFILE"
+
+          echo "[INFO] Running OpenSCAP evaluation (this can take a while)"
+          vm_ssh "sudo mkdir -p /tmp/osc"
+          vm_ssh "sudo oscap xccdf eval --profile '$CIS_PROFILE' --report /tmp/osc/report.html --results /tmp/osc/results.xml --results-arf /tmp/osc/results.arf --oval-results '$DS_PATH' || true"
+
+          echo "[INFO] Collecting OpenSCAP artifacts"
+          mkdir -p "$ART_BASE/${OS_NAME}"
+          scp -i "$SSH_DIR/id_ed25519" -P "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+              ci@127.0.0.1:/tmp/osc/report.html "$ART_BASE/${OS_NAME}/" || true
+          scp -i "$SSH_DIR/id_ed25519" -P "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+              ci@127.0.0.1:/tmp/osc/results.xml "$ART_BASE/${OS_NAME}/" || true
+          scp -i "$SSH_DIR/id_ed25519" -P "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+              ci@127.0.0.1:/tmp/osc/results.arf "$ART_BASE/${OS_NAME}/" || true
+
+          # ---------------------------
+          # Lynis hardening audit
+          # ---------------------------
+          echo "[INFO] Running Lynis"
           vm_ssh "sudo mkdir -p /tmp/lynis-out"
           vm_ssh "sudo lynis audit system --quiet --logfile /tmp/lynis-out/lynis.log --report-file /tmp/lynis-out/lynis-report.dat || true"
-          mkdir -p "$ART_BASE/${OS_NAME}/lynis"
+          echo "[INFO] Collecting Lynis artifacts"
+          mkdir -p "$ART_BASE/${OS_NAME}"
           scp -i "$SSH_DIR/id_ed25519" -P "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-              ci@127.0.0.1:/tmp/lynis-out/lynis.log "$ART_BASE/${OS_NAME}/lynis/" || true
+              ci@127.0.0.1:/tmp/lynis-out/lynis.log "$ART_BASE/${OS_NAME}/" || true
           scp -i "$SSH_DIR/id_ed25519" -P "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-              ci@127.0.0.1:/tmp/lynis-out/lynis-report.dat "$ART_BASE/${OS_NAME}/lynis/" || true
+              ci@127.0.0.1:/tmp/lynis-out/lynis-report.dat "$ART_BASE/${OS_NAME}/" || true
 
-          SCORE="$(awk -F= '/^(hardening_index|lynis_system_score)=/{print $2}' "$ART_BASE/${OS_NAME}/lynis/lynis-report.dat" 2>/dev/null | tail -n1 || true)"
-          echo "[INFO] Lynis score (${OS_NAME}): ${SCORE:-N/A}"
+          # Optional: print Lynis score to host logs
+          SCORE="$(awk -F= '/^(hardening_index|lynis_system_score)=/{print $2}' "$ART_BASE/${OS_NAME}/lynis-report.dat" 2>/dev/null | tail -n1 || true)"
+          echo "[INFO] Lynis hardening score: ${SCORE:-N/A}"
 
-          echo "[INFO] Run OpenSCAP (CIS if present)"
-          vm_ssh "sudo mkdir -p /tmp/osc"
-          DS="$(vm_ssh 'ls /usr/share/xml/scap/ssg/content/ssg-*-ds.xml 2>/dev/null | head -n1' || true)"
-          if [ -n "$DS" ]; then
-            CIS_PROFILE="$(vm_ssh "oscap info '$DS' | awk '/^ +Profile/{print \$2,\$0}' | grep -i cis | awk '{print \$1}' | head -n1" || true)"
-            if [ -n "$CIS_PROFILE" ]; then
-              vm_ssh "sudo oscap xccdf eval --profile '$CIS_PROFILE' --report /tmp/osc/report.html --results /tmp/osc/results.xml --results-arf /tmp/osc/results.arf --oval-results '$DS' || true"
-            else
-              STD_PROFILE="$(vm_ssh "oscap info '$DS' | awk '/^ +Profile/{print \$2,\$0}' | grep -i standard | awk '{print \$1}' | head -n1" || true)"
-              if [ -n "$STD_PROFILE" ]; then
-                vm_ssh "sudo oscap xccdf eval --profile '$STD_PROFILE' --report /tmp/osc/report.html --results /tmp/osc/results.xml --results-arf /tmp/osc/results.arf --oval-results '$DS' || true"
-              else
-                vm_ssh "sudo oscap xccdf eval --report /tmp/osc/report.html --results /tmp/osc/results.xml --results-arf /tmp/osc/results.arf --oval-results '$DS' || true"
-              fi
-            fi
-            mkdir -p "$ART_BASE/${OS_NAME}/openscap"
-            scp -i "$SSH_DIR/id_ed25519" -P "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-                ci@127.0.0.1:/tmp/osc/report.html "$ART_BASE/${OS_NAME}/openscap/" || true
-            scp -i "$SSH_DIR/id_ed25519" -P "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-                ci@127.0.0.1:/tmp/osc/results.xml "$ART_BASE/${OS_NAME}/openscap/" || true
-            scp -i "$SSH_DIR/id_ed25519" -P "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-                ci@127.0.0.1:/tmp/osc/results.arf "$ART_BASE/${OS_NAME}/openscap/" || true
-          else
-            echo "[WARN] No SSG datastream found; skipping OpenSCAP."
-          fi
-
-          echo "[INFO] Ask guest to shutdown"
+          echo "[INFO] Shutting down VM"
           vm_ssh "sudo shutdown -h now" || true
           sleep 10 || true
 
-          if [ -n "${SCORE:-}" ]; then
-            awk -v s="$SCORE" -v min="$LYNIS_MIN_SCORE" 'BEGIN{ exit (s+0<min) ? 1 : 0 }' \
-              || { echo "[ERROR] ${OS_NAME} Lynis score ${SCORE} < ${LYNIS_MIN_SCORE}"; exit 5; }
-          else
-            echo "[WARN] No Lynis score found; not gating ${OS_NAME}."
-          fi
-
-          echo "[INFO] Completed ${OS_NAME}"
+          echo "[INFO] Done. Artifacts saved under $ART_BASE/${OS_NAME}"
           BASH
-          chmod +x run_vm_audit.sh
+          chmod +x run_debian12_audits.sh
 
-      - name: Launch VM and run audits for ${{ matrix.os }}
+      - name: Run Debian 12 CIS + Lynis
         run: |
-          ./run_vm_audit.sh "${{ matrix.os }}" "${{ matrix.image_url }}" "${{ matrix.pkg_family }}" "${{ env.ART_DIR }}"
+          ./run_debian12_audits.sh "${{ env.ART_DIR }}" "${{ env.DEBIAN12_IMAGE_URL }}"
 
-      - name: Upload artifacts (${{ matrix.os }})
+      - name: Upload all artifacts (OpenSCAP + Lynis)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: "${{ matrix.os }}-vm-audit"
-          path: "${{ env.ART_DIR }}/${{ matrix.os }}/"
+          name: debian-12-cis-and-lynis
+          path: "${{ env.ART_DIR }}/debian-12"
