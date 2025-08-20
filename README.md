@@ -9,7 +9,6 @@
 ## Features
 
 ### Security Compliance
-- [![cis-compliance](https://github.com/OpenSource-For-Freedom/HARDN-XDR/actions/workflows/cis.yml/badge.svg)](https://github.com/OpenSource-For-Freedom/HARDN-XDR/actions/workflows/cis.yml)
 - **DISA STIG**: Defense Information Systems Agency Security Technical Implementation Guides
 - **CIS Controls**: Center for Internet Security benchmarks and controls
 - **FIPS 140-2**: Federal cryptographic standards compliance
