@@ -46,16 +46,6 @@ sudo dpkg -i hardn_1.1.***_all.deb
 sudo apt-get install -f  # Fix dependencies
 ```
 
-#### From Source
-```bash
-# Clone the repository
-git clone https://github.com/OpenSource-For-Freedom/HARDN-XDR.git
-cd HARDN-XDR
-
-# Run the hardening script
-sudo ./hardn-xdr
-```
-
 ### Basic Usage
 
 ```bash
