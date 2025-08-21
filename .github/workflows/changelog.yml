@@ -1,0 +1,69 @@
+name: Changelog
+
+on:
+  release:
+    types: [published]         # runs AFTER your ci.yml publishes a release
+  workflow_dispatch:
+
+permissions:
+  contents: write              # commit to CHANGELOG.md
+
+
+jobs:
+  update-changelog:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0       # git-cliff needs tags & history
+
+      - name: Install git-cliff
+        uses: orhun/git-cliff-action@v3
+        with:
+          tag: "v2.6.1"        # pin for reproducibility
+
+      - name: Rebuild CHANGELOG.md (all tags -> HEAD)
+        run: git cliff --config .cliff.toml --all --output CHANGELOG.md
+
+      - name: Commit CHANGELOG.md if changed (skip CI)
+        run: |
+          if ! git diff --quiet -- CHANGELOG.md; then
+            git config user.name  "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add CHANGELOG.md
+            git commit -m "docs(changelog): update after ${{ github.event.release.tag_name }} [skip ci]"
+            git push
+          else
+            echo "No changes in CHANGELOG.md"
+          fi
+
+  sync-release-body:
+    runs-on: ubuntu-latest
+    needs: update-changelog
+
+    steps:
+      - name: Checkout (depth 0)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install git-cliff
+        uses: orhun/git-cliff-action@v3
+        with:
+          tag: "v2.6.1"
+
+      # Generate ONLY the notes for the published tag, post ci
+      - name: Generate release notes for this tag
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          git cliff --config .cliff.toml --tag "$TAG" --output RELEASE_NOTES.md
+
+      - name: Update GitHub Release body from RELEASE_NOTES.md
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          tag: ${{ github.event.release.tag_name }}
+          bodyFile: RELEASE_NOTES.md
+          token: ${{ secrets.GITHUB_TOKEN }}
