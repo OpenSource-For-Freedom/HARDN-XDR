@@ -1,0 +1,116 @@
+[changelog]
+header = """
+# Changelog
+All notable changes to this project will be documented in this file.
+
+The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
+"""
+body = """
+{% if version %}## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}{% else %}## [Unreleased]{% endif %}
+{% if commits | length == 0 %}_No changes._{% endif %}
+
+{% if commits | filter(attribute="group", value="Added") | length > 0 -%}
+### Added
+{%- for commit in commits | filter(attribute="group", value="Added") -%}
+- {{ commit.message | split(pat="\n") | first }} ({{ commit.id | truncate(length=7, end="") }})
+{%- endfor -%}
+{%- endif %}
+
+{% if commits | filter(attribute="group", value="Changed") | length > 0 -%}
+### Changed
+{%- for commit in commits | filter(attribute="group", value="Changed") -%}
+- {{ commit.message | split(pat="\n") | first }} ({{ commit.id | truncate(length=7, end="") }})
+{%- endfor -%}
+{%- endif %}
+
+{% if commits | filter(attribute="group", value="Fixed") | length > 0 -%}
+### Fixed
+{%- for commit in commits | filter(attribute="group", value="Fixed") -%}
+- {{ commit.message | split(pat="\n") | first }} ({{ commit.id | truncate(length=7, end="") }})
+{%- endfor -%}
+{%- endif %}
+
+{% if commits | filter(attribute="group", value="Security") | length > 0 -%}
+### Security
+{%- for commit in commits | filter(attribute="group", value="Security") -%}
+- {{ commit.message | split(pat="\n") | first }} ({{ commit.id | truncate(length=7, end="") }})
+{%- endfor -%}
+{%- endif %}
+
+{% if commits | filter(attribute="group", value="CI") | length > 0 -%}
+### CI
+{%- for commit in commits | filter(attribute="group", value="CI") -%}
+- {{ commit.message | split(pat="\n") | first }} ({{ commit.id | truncate(length=7, end="") }})
+{%- endfor -%}
+{%- endif %}
+
+{% if commits | filter(attribute="group", value="Build") | length > 0 -%}
+### Build
+{%- for commit in commits | filter(attribute="group", value="Build") -%}
+- {{ commit.message | split(pat="\n") | first }} ({{ commit.id | truncate(length=7, end="") }})
+{%- endfor -%}
+{%- endif %}
+
+{% if commits | filter(attribute="group", value="Docs") | length > 0 -%}
+### Docs
+{%- for commit in commits | filter(attribute="group", value="Docs") -%}
+- {{ commit.message | split(pat="\n") | first }} ({{ commit.id | truncate(length=7, end="") }})
+{%- endfor -%}
+{%- endif %}
+
+{% if commits | filter(attribute="group", value="Other") | length > 0 -%}
+### Misc
+{%- for commit in commits | filter(attribute="group", value="Other") -%}
+- {{ commit.message | split(pat="\n") | first }} ({{ commit.id | truncate(length=7, end="") }})
+{%- endfor -%}
+{%- endif %}
+
+"""
+footer = """
+
+"""
+
+[[commit_types]]
+type = "feat"
+group = "Added"
+[[commit_types]]
+type = "fix"
+group = "Fixed"
+[[commit_types]]
+type = "perf"
+group = "Changed"
+[[commit_types]]
+type = "refactor"
+group = "Changed"
+[[commit_types]]
+type = "revert"
+group = "Fixed"
+[[commit_types]]
+type = "security"
+group = "Security"
+[[commit_types]]
+type = "ci"
+group = "CI"
+[[commit_types]]
+type = "build"
+group = "Build"
+[[commit_types]]
+type = "docs"
+group = "Docs"
+[[commit_types]]
+type = "style"
+group = "Other"
+[[commit_types]]
+type = "test"
+group = "Other"
+[[commit_types]]
+type = "chore"
+group = "Other"
+
+[git]
+conventional_commits = true
+filter_unconventional = false
+tag_pattern = "v[0-9]*"
+skip_tags = ""
+ignore_tags = ""
+topo_order = true
