@@ -525,6 +525,19 @@ EOF
         echo "" >> "$config_dir/apparmor-stig-compliance.txt"
         echo "Unconfined Processes:" >> "$config_dir/apparmor-stig-compliance.txt"
         aa-status 2>/dev/null | grep "processes are unconfined" >> "$config_dir/apparmor-stig-compliance.txt" || true
+
+        # --- Enhancement: Add summary counts ---
+        local enforce_count complain_count
+        enforce_count=$(aa-status 2>/dev/null | grep -c "(enforce)" || echo 0)
+        complain_count=$(aa-status 2>/dev/null | grep -c "(complain)" || echo 0)
+
+        echo "" >> "$config_dir/apparmor-stig-compliance.txt"
+        echo "Summary:" >> "$config_dir/apparmor-stig-compliance.txt"
+        echo "  Total profiles in enforce mode : $enforce_count" >> "$config_dir/apparmor-stig-compliance.txt"
+        echo "  Total profiles in complain mode: $complain_count" >> "$config_dir/apparmor-stig-compliance.txt"
+        echo "" >> "$config_dir/apparmor-stig-compliance.txt"
+
+        HARDN_STATUS "info" "AppArmor profile summary: $enforce_count enforce / $complain_count complain"
     fi
     
     cat >> "$config_dir/apparmor-stig-compliance.txt" << 'EOF'
@@ -556,7 +569,6 @@ EOF
 }
 
 HARDN_STATUS "pass" "AppArmor module completed in $MODE mode."
-
 
 return 0 2>/dev/null || hardn_module_exit 0
 set -e
