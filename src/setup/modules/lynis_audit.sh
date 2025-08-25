@@ -50,7 +50,6 @@ source "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")/hardn-common.s
     }
 }
 
-# Configuration
 LYNIS_VERSION="3.0.9"
 LYNIS_CONFIG_DIR="/etc/hardn-xdr/lynis"
 LYNIS_REPORTS_DIR="/var/log/hardn-xdr/lynis"
