@@ -1,11 +1,7 @@
 #!/usr/bin/env bash
 
-# Compliance Validation Module
-# Part of HARDN-XDR Security Framework
+# Compliance Validation 
 # Purpose: Enhanced OpenSCAP/OVAL scanning and DISA STIG profile validation
-# STIG Requirements: Automated compliance validation, SCAP scanning, STIG profile mapping
-
-# Source common functions with fallback for development/CI environments
 source "/usr/lib/hardn-xdr/src/setup/hardn-common.sh" 2>/dev/null || \
 source "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")/hardn-common.sh" 2>/dev/null || {
     echo "Warning: Could not source hardn-common.sh, using basic functions"
