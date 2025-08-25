@@ -1,9 +1,6 @@
 #!/bin/bash
-# Module: lynis_audit.sh
-# Purpose: Integrate Lynis security auditing for comprehensive system validation
-# Compliance: STIG-V-25000, CIS-001.1, DISA-STIG-LYAUD-01
 
-# Source common functions with fallback for development/CI environments
+# Compliance: STIG-V-25000, CIS-001.1, DISA-STIG-LYAUD-01
 source "/usr/lib/hardn-xdr/src/setup/hardn-common.sh" 2>/dev/null || \
 source "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")/hardn-common.sh" 2>/dev/null || {
     echo "Warning: Could not source hardn-common.sh, using basic functions"
