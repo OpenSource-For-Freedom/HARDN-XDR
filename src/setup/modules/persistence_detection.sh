@@ -1,6 +1,8 @@
 #!/bin/bash
-# Source common functions with fallback for development/CI environments
-# Source common functions with fallback for development/CI environments
+# Persistence Detection 
+
+# Purpose: Boot process integrity and sophisticated rootkit detection
+
 source "/usr/lib/hardn-xdr/src/setup/hardn-common.sh" 2>/dev/null || \
 source "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")/hardn-common.sh" 2>/dev/null || {
     echo "Warning: Could not source hardn-common.sh, using basic functions"
@@ -49,11 +51,6 @@ source "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")/hardn-common.s
         return 1
     }
 }
-#!/bin/bash
-
-# Persistence Detection Module
-# Part of HARDN-XDR Security Framework
-# Purpose: Boot process integrity and sophisticated rootkit detection
 
 
 HARDN_STATUS "info" "Setting up Persistence Detection..."
