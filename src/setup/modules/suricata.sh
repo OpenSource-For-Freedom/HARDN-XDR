@@ -1,7 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC1091
-# Source common functions - try both installed path and relative path
+
 if [[ -f "/usr/lib/hardn-xdr/src/setup/hardn-common.sh" ]]; then
     source /usr/lib/hardn-xdr/src/setup/hardn-common.sh
 elif [[ -f "../hardn-common.sh" ]]; then
