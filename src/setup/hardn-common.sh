@@ -13,8 +13,8 @@ if [[ -n "$CI" || -n "$GITHUB_ACTIONS" || -n "$GITLAB_CI" || -n "$JENKINS_URL" |
 fi
 
 HARDN_STATUS() {
-    local status="$1"
-    local message="$2"
+    local status="${1:-unknown}"
+    local message="${2:-}"
     case "$status" in
         "pass"|"success") echo -e "\033[1;32m[PASS]\033[0m $message" ;;
         "warning") echo -e "\033[1;33m[WARNING]\033[0m $message" ;;
