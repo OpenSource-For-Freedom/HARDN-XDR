@@ -1,10 +1,8 @@
 #!/bin/bash
 
-# Behavioral Analysis Module
-# Part of HARDN-XDR Security Framework
+# Behavioral Analysis : testing as LEGION backend minimal config file
 # Purpose: System behavior baselining and anomaly detection
 
-# Source common functions with fallback for development/CI environments
 source "/usr/lib/hardn-xdr/src/setup/hardn-common.sh" 2>/dev/null || \
 source "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")/hardn-common.sh" 2>/dev/null || {
     echo "Warning: Could not source hardn-common.sh, using basic functions"
