@@ -1,10 +1,7 @@
 #!/bin/bash
 
 # Credential Protection Module
-# Part of HARDN-XDR Security Framework
-# Purpose: Enhanced credential dumping protection and token manipulation prevention
-
-# Source common functions with fallback for development/CI environments
+# Purpose: credential dumping protection and token manipulation prevention
 source "/usr/lib/hardn-xdr/src/setup/hardn-common.sh" 2>/dev/null || \
 source "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")/hardn-common.sh" 2>/dev/null || {
     echo "Warning: Could not source hardn-common.sh, using basic functions"
