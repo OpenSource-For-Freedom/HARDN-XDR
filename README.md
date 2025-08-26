@@ -33,8 +33,8 @@
 ### Installation
 
 #### Docker
+- HARDN-XDR "Container" version is compatible with the most Recent Docker OS, alongside Debian:slim
 - See [Docker](docker/README.md)
-
 
 #### From Package
 ```bash
@@ -58,7 +58,7 @@ sudo SKIP_WHIPTAIL=1 ./hardn-xdr
 # Run compliance audit and generate dashboard pre deployment
 sudo ./hardn_audit.sh
 
-# Run comprehensive system compnents "smoke test"
+# Run this minimal install using an entry script to call main
 sudo ./smoke_test.sh --full
 ```
 
