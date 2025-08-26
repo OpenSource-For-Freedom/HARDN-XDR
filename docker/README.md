@@ -25,6 +25,22 @@ cd /opt/hardn-xdr
 ```
 
 ### Menu
+
+OPTIONS:
+  --docker              Deploy CVE mitigation in Docker (includes UFW firewall)
+  --docker-cve          Deploy CVE mitigation modules in Docker (explicit)
+  --docker-debian-cve   Deploy Debian-specific CVE mitigations
+  --docker-security     Deploy comprehensive security modules in Docker
+  --docker-detection    Deploy threat detection & analysis modules
+  --docker-full         Deploy CVE + Security modules
+  --docker-all          Deploy ALL Docker-compatible modules
+  --container-mode      Run in container-optimized mode (non-interactive)
+  --module MODULE       Run specific security module
+  --list-modules        List all available security modules
+  --audit               Run security audit only
+  --version             Show version information
+  --help                Show this help message
+
 ```
 bash /opt/hardn-xdr/src/setup/hardn-main.sh --help
 ```
