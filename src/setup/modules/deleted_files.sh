@@ -1,6 +1,5 @@
 #!/bin/bash
-# Source common functions with fallback for development/CI environments
-# Source common functions with fallback for development/CI environments
+
 source "/usr/lib/hardn-xdr/src/setup/hardn-common.sh" 2>/dev/null || \
 source "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")/hardn-common.sh" 2>/dev/null || {
     echo "Warning: Could not source hardn-common.sh, using basic functions"
@@ -49,7 +48,7 @@ source "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")/hardn-common.s
         return 1
     }
 }
-#!/bin/bash
+
 
 HARDN_STATUS "info" "Checking for deleted files in use..."
 if command -v lsof >/dev/null 2>&1; then

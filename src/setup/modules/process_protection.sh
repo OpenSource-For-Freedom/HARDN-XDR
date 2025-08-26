@@ -1,10 +1,8 @@
 #!/bin/bash
 
-# Process Protection Module
-# Part of HARDN-XDR Security Framework
-# Purpose: Detect and prevent process injection techniques
+# Process Protection 
 
-# Resolve repo install or source tree layout
+# Purpose: Detect and prevent process injection techniques
 COMMON_CANDIDATES=(
   "/usr/lib/hardn-xdr/src/setup/hardn-common.sh"
   "$(dirname "$(readlink -f "$0")")/../hardn-common.sh"

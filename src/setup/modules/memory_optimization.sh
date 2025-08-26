@@ -2,8 +2,6 @@
 # Module: memory_optimization.sh
 # Purpose: Optimize system and memory management for less powerful desktops
 # Compliance: CIS-005.1, STIG-V-38539
-
-# Source common functions with fallback for development/CI environments
 source "/usr/lib/hardn-xdr/src/setup/hardn-common.sh" 2>/dev/null || \
 source "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")/hardn-common.sh" 2>/dev/null || {
     echo "Warning: Could not source hardn-common.sh, using basic functions"
@@ -387,11 +385,11 @@ EOF
 EOF
     else
         cat >> "$report_file" << 'EOF'
-✓ Conservative swap management (swappiness=10)
-✓ Standard memory caching (dirty_ratio=10)
-✓ All security modules enabled
-✓ Standard service memory limits (512MB default)
-✓ Resource monitoring enabled
+- Conservative swap management (swappiness=10)
+- Standard memory caching (dirty_ratio=10)
+- All security modules enabled
+- Standard service memory limits (512MB default)
+- Resource monitoring enabled
 
 ## Recommendations for Standard Systems
 - Resource optimization is minimal for this system

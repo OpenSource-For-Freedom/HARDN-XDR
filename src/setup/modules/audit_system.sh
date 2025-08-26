@@ -1,6 +1,5 @@
 #!/bin/bash
-# Source common functions with fallback for development/CI environments
-# Source common functions with fallback for development/CI environments
+
 source "/usr/lib/hardn-xdr/src/setup/hardn-common.sh" 2>/dev/null || \
 source "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")/hardn-common.sh" 2>/dev/null || {
     echo "Warning: Could not source hardn-common.sh, using basic functions"
@@ -49,11 +48,9 @@ source "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")/hardn-common.s
         return 1
     }
 }
-#!/bin/bash
 
-# shellcheck disable=SC1091
 
-# Check for container environment
+
 if is_container_environment; then
     HARDN_STATUS "info" "Container environment detected - system audit capabilities may be limited"
     HARDN_STATUS "info" "Some audit features may not be available in containerized environments"

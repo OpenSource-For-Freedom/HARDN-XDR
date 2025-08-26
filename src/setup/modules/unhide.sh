@@ -1,6 +1,5 @@
 #!/bin/bash
-# Source common functions with fallback for development/CI environments
-# Source common functions with fallback for development/CI environments
+
 source "/usr/lib/hardn-xdr/src/setup/hardn-common.sh" 2>/dev/null || \
 source "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")/hardn-common.sh" 2>/dev/null || {
     echo "Warning: Could not source hardn-common.sh, using basic functions"
@@ -49,28 +48,25 @@ source "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")/hardn-common.s
         return 1
     }
 }
-#!/bin/bash
 
-# shellcheck disable=SC1091
-
-HARDN_STATUS "[*] Updating package index..."
+HARDN_STATUS "info" "Updating package index..."
 sudo apt update
 
-HARDN_STATUS "[*] Installing unhide..."
+HARDN_STATUS "info" "Installing unhide..."
 sudo apt install -y unhide
 
-HARDN_STATUS "[*] Verifying installation..."
+HARDN_STATUS "info" "Verifying installation..."
 if command -v unhide >/dev/null 2>&1; then
-    HARDN_STATUS "[+] Unhide installed successfully: $(unhide -v 2>&1 | head -n1)"
+    HARDN_STATUS "pass" "Unhide installed successfully: $(unhide -v 2>&1 | head -n1)"
 else
-    HARDN_STATUS "[!] Failed to install unhide." >&2
+    HARDN_STATUS "error" "Failed to install unhide."
     exit 1
 fi
 
-HARDN_STATUS "[*] Usage example:"
-HARDN_STATUS "    sudo unhide proc"
-HARDN_STATUS "    sudo unhide sys"
+HARDN_STATUS "info" "Usage example:"
+HARDN_STATUS "info" "    sudo unhide proc"
+HARDN_STATUS "info" "    sudo unhide sys"
 
-# shellcheck disable=SC2317
+
 return 0 2>/dev/null || hardn_module_exit 0
 set -e

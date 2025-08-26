@@ -1,11 +1,7 @@
 #!/usr/bin/env bash
 
-# Backup and Recovery Security Module
-# Part of HARDN-XDR Security Framework
-# Purpose: STIG compliance for secure backup and recovery procedures
-# STIG Requirements: Offline/immutable backups, hardened recovery processes
+# Backup and Recovery Security
 
-# Source common functions with fallback for development/CI environments
 source "/usr/lib/hardn-xdr/src/setup/hardn-common.sh" 2>/dev/null || \
 source "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")/hardn-common.sh" 2>/dev/null || {
     echo "Warning: Could not source hardn-common.sh, using basic functions"
