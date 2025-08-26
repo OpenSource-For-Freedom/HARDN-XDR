@@ -48,7 +48,7 @@ source "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")/hardn-common.s
         return 1
     }
 }
-apt install libpam-pwquality
+safe_package_install libpam-pwquality
 
 # STIG Password Quality Assessment Module
 # Purpose: Provide STIG password policy recommendations and guidance
