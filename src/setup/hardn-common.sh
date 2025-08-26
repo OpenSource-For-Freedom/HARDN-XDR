@@ -146,10 +146,8 @@ hardn_yesno() {
     whiptail --title "$HARDN_WHIPTAIL_TITLE" --yesno "$message" "$height" "$width"
 }
 
-# Export functions so they’re available in sourced module scripts
-# Enhanced container and CI environment detection
 is_container_environment() {
-    # Check multiple container indicators
+
     if [[ -n "$CI" || -n "$GITHUB_ACTIONS" || -n "$GITLAB_CI" || -n "$JENKINS_URL" ]]; then
         return 0
     fi
