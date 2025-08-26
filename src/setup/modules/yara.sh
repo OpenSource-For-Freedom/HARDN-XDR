@@ -1,6 +1,17 @@
 #!/bin/bash
-# Source common functions with fallback for development/CI environments
-# Source common functions with fallback for development/CI environments
+# Refactored version:
+#--------------------
+# 1.Organizes the code into logical functions
+# 2.Avoids nested functions
+# 3.Uses proper return values for error handling
+# 4.Follows a clear flow of execution
+# 5.Includes a main yara_module() function that orchestrates the entire process
+# 6.Includes proper comments and documentation
+# 7.Maintains the same functionality as the original script
+# 8.Is designed to be sourced as a module from hardn-main.sh
+
+
+# Install and configure YARA for malware detection
 source "/usr/lib/hardn-xdr/src/setup/hardn-common.sh" 2>/dev/null || \
 source "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")/hardn-common.sh" 2>/dev/null || {
     echo "Warning: Could not source hardn-common.sh, using basic functions"
@@ -49,27 +60,8 @@ source "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")/hardn-common.s
         return 1
     }
 }
-#!/bin/bash
-
-# shellcheck disable=SC1091
-
-# Install and configure YARA for malware detection
-# This script is designed to be sourced as a module from hardn-main.sh
-
-# Refactored version:
-#--------------------
-# 1.Organizes the code into logical functions
-# 2.Avoids nested functions
-# 3.Uses proper return values for error handling
-# 4.Follows a clear flow of execution
-# 5.Includes a main yara_module() function that orchestrates the entire process
-# 6.Includes proper comments and documentation
-# 7.Maintains the same functionality as the original script
-# 8.Is designed to be sourced as a module from hardn-main.sh
 
 
-
-# Function to install YARA and dependencies
 install_yara() {
     HARDN_STATUS "info" "Installing YARA and related packages..."
     
