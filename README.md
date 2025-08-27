@@ -11,7 +11,7 @@
 ### Security Compliance Goals
 - **DISA STIG**: Defense Information Systems Agency Security Technical Implementation Guides
 - **CIS Controls**: Center for Internet Security benchmarks and controls
-- **FIPS 140-2**: Federal cryptographic standards compliance
+- **FIPS 140-2**: Federal cryptographic standards compliance (Ubuntu)
 - **Debian Security**: Distribution-specific security hardening
 
 ### Security Modules (47+)
