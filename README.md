@@ -39,7 +39,7 @@
 #### From Package
 ```bash
 # Download the latest release
-wget https://github.com/OpenSource-For-Freedom/HARDN-XDR/releases/latest/download/hardn_1.1.257_all.deb
+wget wget https://github.com/OpenSource-For-Freedom/HARDN-XDR/releases/latest/download/hardn_latest_amd64.deb
 
 # Install the package
 sudo dpkg -i hardn_1.1.***_all.deb
