@@ -470,33 +470,49 @@ jobs:
 
       - name: Verify logo and .debs
         run: |
-          test -f docs/hardn.jpg
-          test -f release_assets/deb-amd64/*.deb
-          test -f release_assets/deb-arm64/*.deb
+          # Logo must exist in repo
+          if [ ! -f docs/hardn.jpg ]; then
+            echo "docs/hardn.jpg not found"; exit 1
+          fi
 
-      - name: Build release notes
+          if ! ls release_assets/deb-amd64/*.deb 1>/dev/null 2>&1; then
+            echo "No .deb files found in release_assets/deb-amd64/"; exit 1
+          fi
+          if ! ls release_assets/deb-arm64/*.deb 1>/dev/null 2>&1; then
+            echo "No .deb files found in release_assets/deb-arm64/"; exit 1
+          fi
+
+      - name: Normalize asset names for wget latest/download
+        run: |
+          AMD_DEB="$(ls release_assets/deb-amd64/*.deb | head -n1)"
+          ARM_DEB="$(ls release_assets/deb-arm64/*.deb | head -n1)"
+          cp "$AMD_DEB" release_assets/hardn_latest_amd64.deb
+          cp "$ARM_DEB" release_assets/hardn_latest_arm64.deb
+          ls -lh release_assets/hardn_latest_*.deb
+
+      - name: Build release notes (logo + wget links)
         run: |
           tag="${{ needs.build-and-test.outputs.new_tag }}"
           {
-            echo "![HARDN-XDR Logo](https://raw.githubusercontent.com/OpenSource-For-Freedom/HARDN-XDR/main/docs/hardn.jpg)"
+            echo "![HARDN-XDR](https://raw.githubusercontent.com/OpenSource-For-Freedom/HARDN-XDR/${tag}/docs/hardn.jpg)"
             echo
             echo "Multi-architecture Debian-only release (AMD64/ARM64)."
             echo
-            echo "### Direct wget/curl download links"
+            echo "### Direct wget links"
             echo '```bash'
             echo "wget https://github.com/OpenSource-For-Freedom/HARDN-XDR/releases/latest/download/hardn_latest_amd64.deb"
             echo "wget https://github.com/OpenSource-For-Freedom/HARDN-XDR/releases/latest/download/hardn_latest_arm64.deb"
             echo '```'
           } > release_notes.md
+          sed -n '1,50p' release_notes.md
 
-      - name: Create GitHub Release
+      - name: Create GitHub Release (exactly two .debs)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           tag="${{ needs.build-and-test.outputs.new_tag }}"
-
           gh release create "$tag" \
-            release_assets/deb-amd64/*.deb \
-            release_assets/deb-arm64/*.deb \
+            release_assets/hardn_latest_amd64.deb \
+            release_assets/hardn_latest_arm64.deb \
             --title "Release $tag" \
             --notes-file release_notes.md
