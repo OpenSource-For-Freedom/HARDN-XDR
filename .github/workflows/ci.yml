@@ -478,7 +478,7 @@ jobs:
         run: |
           tag="${{ needs.build-and-test.outputs.new_tag }}"
           {
-            echo "![HARDN-XDR Logo](https://raw.githubusercontent.com/OpenSource-For-Freedom/HARDN-XDR/${tag}/docs/hardn.jpg)"
+            echo "![HARDN-XDR Logo](https://raw.githubusercontent.com/OpenSource-For-Freedom/HARDN-XDR/main/docs/hardn.jpg)"
             echo
             echo "Multi-architecture Debian-only release (AMD64/ARM64)."
             echo
