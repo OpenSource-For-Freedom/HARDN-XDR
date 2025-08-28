@@ -58,7 +58,7 @@ jobs:
       - name: Install deps and tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y dpkg-dev debhelper fakeroot build-essential devscripts lintian gnupg whiptail
+          sudo apt-get install -y dpkg-dev debhelper fakeroot build-essential lintian gnupg whiptail
 
       - name: Ensure hardn-xdr exists and is executable
         run: |
@@ -73,19 +73,6 @@ jobs:
           chmod +x hardn-xdr src/setup/hardn-main.sh src/setup/hardn-common.sh
           chmod +x debian/postinst
           find src/setup/modules -type f -name "*.sh" -exec chmod +x {} \;
-
-      - name: Update changelog for ${{ matrix.arch }}
-        run: |
-          raw_tag="${{ steps.bump.outputs.new_tag }}"
-          version="${raw_tag#v}"
-          export DEBCHANGE_RELEASE_DATE="$(date -R)"
-          arch="${{ matrix.arch }}"
-          if [ ! -f debian/changelog ]; then touch debian/changelog; fi
-          dch --newversion "$version" \
-              "Automated release $version for architecture: $arch (Architecture: all package)." \
-              --distribution unstable \
-              --force-distribution
-          dch --release --force-distribution ""
 
       - name: Build package for ${{ matrix.arch }} - Architecture all
         env:
@@ -107,26 +94,19 @@ jobs:
           version="${raw_tag#v}"
           deb_file=$(ls ../*.deb | head -n 1)
 
-          arch_name="hardn_${version}_${{ matrix.arch }}.deb"
+          # Create ONLY the stable alias file per-arch (so releases have exactly two assets total)
           mkdir -p release_assets/deb-${{ matrix.arch }}
-          cp "$deb_file" "release_assets/deb-${{ matrix.arch }}/$arch_name"
-
-          # Add stable alias so 'latest/download' works
           if [ "${{ matrix.arch }}" = "amd64" ]; then
             cp "$deb_file" "release_assets/deb-${{ matrix.arch }}/hardn_latest_amd64.deb"
           else
             cp "$deb_file" "release_assets/deb-${{ matrix.arch }}/hardn_latest_arm64.deb"
           fi
 
-          echo "arch_deb=release_assets/deb-${{ matrix.arch }}/$arch_name" >> $GITHUB_OUTPUT
-
-      - name: Upload .deb for ${{ matrix.arch }}
+      - name: Upload alias .deb for ${{ matrix.arch }} (Actions artifact only)
         uses: actions/upload-artifact@v4
         with:
           name: deb-${{ matrix.arch }}
-          path: |
-            ${{ steps.prepare.outputs.arch_deb }}
-            release_assets/deb-${{ matrix.arch }}/hardn_latest_${{ matrix.arch }}.deb
+          path: release_assets/deb-${{ matrix.arch }}/*.deb
 
   test-deployment:
     needs: build-and-test
@@ -157,10 +137,9 @@ jobs:
           echo "Testing ${{ matrix.deployment_type }} deployment for ${{ matrix.arch }} on ${{ matrix.distro }}"
           cp release_assets/deb-${{ matrix.arch }}/*.deb ./hardn.deb
           mkdir -p ./logbundle/hardn-ci-${{ matrix.distro }}-${{ matrix.deployment_type }}
-          chmod 777 ./logbundle
-          chmod 777 ./logbundle/hardn-ci-${{ matrix.distro }}-${{ matrix.deployment_type }}
+          chmod 777 ./logbundle ./logbundle/hardn-ci-${{ matrix.distro }}-${{ matrix.deployment_type }}
 
-          # base image
+          # Select base image
           if [ "${{ matrix.distro }}" = "ubuntu" ]; then
             BASE_IMAGE="ubuntu:24.04"
           elif [ "${{ matrix.distro }}" = "PakOS" ]; then
@@ -202,9 +181,11 @@ jobs:
               # Install HARDN-XDR
               dpkg -i /tmp/hardn.deb || true
               apt-get install -f -y
+
+              # Ensure scripts are executable
               chmod +x /usr/lib/hardn-xdr/src/setup/modules/*.sh || true
 
-              # Logs 
+              # Logs dir
               mkdir -p /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'
               chmod 777 /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'
 
@@ -219,7 +200,7 @@ jobs:
                 apt-cache policy | head -20 | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/environment.log
               fi
 
-              # Environment 
+              # Environment dump
               {
                 echo "=== Environment Detection Test ==="
                 echo "CI: $CI"
@@ -228,11 +209,11 @@ jobs:
                 echo "DISPLAY: ${DISPLAY:-none}"
               } | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/environment.log
 
-              
+              # Main run
               echo "=== Main HARDN-XDR Execution ===" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/hardn-xdr.log
               timeout 300 /usr/bin/hardn-xdr >> /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/hardn-xdr.log 2>&1 || echo "HARDN-XDR finished with status: $?"
 
-
+              # Module tests
               echo "=== Individual Module Testing ===" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/modules.log
               fail_count=0
               total_count=0
@@ -279,13 +260,13 @@ jobs:
                 fi
               done
 
-
+              # Optional audit
               if [ -f "/usr/lib/hardn-xdr/hardn_audit.sh" ]; then
                 echo "=== Compliance Audit Test ===" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/audit.log
                 timeout 300 bash /usr/lib/hardn-xdr/hardn_audit.sh >> /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/audit.log 2>&1 || echo "Audit finished with status: $?"
               fi
 
-
+              # Summary & metrics
               echo "=== Test Summary ===" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/summary.log
               echo "Total modules tested: $total_count" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/summary.log
               if [ "${{ matrix.arch }}" = "arm64" ] && [ "$skip_count" -gt 0 ]; then
@@ -312,73 +293,22 @@ jobs:
               find /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}' -type d -exec chmod 755 {} \;
             '
 
-      - name: Copy logs and generate reports
+      - name: Copy logs and generate reports (Actions artifacts only)
         run: |
           mkdir -p release_assets/hardn-logs-${{ matrix.arch }}-${{ matrix.distro }}-${{ matrix.deployment_type }}
           cp -r ./logbundle/* release_assets/hardn-logs-${{ matrix.arch }}-${{ matrix.distro }}-${{ matrix.deployment_type }}/ || true
 
-      - name: Analyze test results
-        id: analyze
-        run: |
-          log_dir="release_assets/hardn-logs-${{ matrix.arch }}-${{ matrix.distro }}-${{ matrix.deployment_type }}/hardn-ci-${{ matrix.distro }}-${{ matrix.deployment_type }}"
-          total_modules=0
-          failed_modules=0
-          skipped_modules=0
-          critical_failures=0
-
-          [ -f "$log_dir/total_count.txt" ] && total_modules=$(cat "$log_dir/total_count.txt")
-          [ -f "$log_dir/fail_count.txt" ] && failed_modules=$(cat "$log_dir/fail_count.txt")
-          [ -f "$log_dir/skip_count.txt" ] && skipped_modules=$(cat "$log_dir/skip_count.txt")
-          [ -f "$log_dir/critical_failures.txt" ] && critical_failures=$(cat "$log_dir/critical_failures.txt")
-
-          echo "total_modules=$total_modules" >> $GITHUB_OUTPUT
-          echo "failed_modules=$failed_modules" >> $GITHUB_OUTPUT
-          echo "skipped_modules=$skipped_modules" >> $GITHUB_OUTPUT
-          echo "critical_failures=$critical_failures" >> $GITHUB_OUTPUT
-
-          echo "passed=false" >> $GITHUB_OUTPUT
-          tested_modules=$((total_modules - skipped_modules))
-          if [ "$critical_failures" -eq 0 ] && [ "$tested_modules" -gt 0 ] && [ "$failed_modules" -lt $((tested_modules / 5)) ]; then
-            echo "passed=true" >> $GITHUB_OUTPUT
-          elif [ "$tested_modules" -eq 0 ] && [ "$total_modules" -gt 0 ]; then
-            echo "WARNING: No modules tested (infra issue) -> marking as passed"
-            echo "passed=true" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Test Result Summary
-        if: always()
-        run: |
-          echo "=== CI Test Summary ==="
-          echo "Architecture: ${{ matrix.arch }}"
-          echo "Distribution: ${{ matrix.distro }}"
-          echo "Deployment Type: ${{ matrix.deployment_type }}"
-          echo "Passed: ${{ steps.analyze.outputs.passed }}"
-          echo "Totals: modules=${{ steps.analyze.outputs.total_modules }}, failed=${{ steps.analyze.outputs.failed_modules }}, skipped=${{ steps.analyze.outputs.skipped_modules }}, critical=${{ steps.analyze.outputs.critical_failures }}"
-
-      - name: Generate enhanced test report
+      - name: Generate condensed test summary (Actions artifact only)
         run: |
           mkdir -p release_assets/hardn-logs-zip
-          zip -r release_assets/hardn-logs-zip/hardn_logs_bundle_${{ matrix.arch }}_${{ matrix.distro }}_${{ matrix.deployment_type }}.zip release_assets/hardn-logs-${{ matrix.arch }}-${{ matrix.distro }}-${{ matrix.deployment_type }}
-          log_dir="release_assets/hardn-logs-${{ matrix.arch }}-${{ matrix.distro }}-${{ matrix.deployment_type }}/hardn-ci-${{ matrix.distro }}-${{ matrix.deployment_type }}"
-          if [ -d "$log_dir" ]; then
-            f="release_assets/test_summary_${{ matrix.arch }}_${{ matrix.distro }}_${{ matrix.deployment_type }}.md"
-            echo "## Test Results for ${{ matrix.arch }} on ${{ matrix.distro }} (${{ matrix.deployment_type }})" > "$f"
-            echo "" >> "$f"
-            if [ -f "$log_dir/summary.log" ]; then
-              echo "### Summary" >> "$f"
-              echo '```' >> "$f"
-              cat "$log_dir/summary.log" >> "$f"
-              echo '```' >> "$f"
-            fi
-          fi
+          zip -r release_assets/hardn-logs-zip/hardn_logs_bundle_${{ matrix.arch }}_${{ matrix.distro }}_${{ matrix.deployment_type }}.zip release_assets/hardn-logs-${{ matrix.arch }}-${{ matrix.distro }}-${{ matrix.deployment_type }} || true
 
-      - name: Upload enhanced test logs
+      - name: Upload logs (Actions artifacts only)
         uses: actions/upload-artifact@v4
         with:
           name: hardn-logs-zip-${{ matrix.arch }}-${{ matrix.distro }}-${{ matrix.deployment_type }}
-          path: |
-            release_assets/hardn-logs-zip/hardn_logs_bundle_${{ matrix.arch }}_${{ matrix.distro }}_${{ matrix.deployment_type }}.zip
-            release_assets/test_summary_${{ matrix.arch }}_${{ matrix.distro }}_${{ matrix.deployment_type }}.md
+          path: release_assets/hardn-logs-zip/hardn_logs_bundle_${{ matrix.arch }}_${{ matrix.distro }}_${{ matrix.deployment_type }}.zip
+          if-no-files-found: ignore
 
   check-deployment-results:
     needs: [build-and-test, test-deployment]
@@ -409,39 +339,44 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Download all release assets
+      - name: Download alias .debs (from Actions artifacts)
         uses: actions/download-artifact@v5
         with:
           path: release_assets
 
-      - name: Verify logo presence
+      - name: Verify presence of logo and assets
         run: |
-          if [ -f "docs/hardn.jpg" ]; then
-            echo "Found docs/hardn.jpg"
-          else
-            echo "WARNING: docs/hardn.jpg not found; image will be omitted from notes."
+          ls -l release_assets || true
+          if [ ! -f "docs/hardn.jpg" ]; then
+            echo "ERROR: docs/hardn.jpg not found (release notes image)"; exit 1
+          fi
+          if [ ! -f "release_assets/deb-amd64/hardn_latest_amd64.deb" ]; then
+            echo "ERROR: missing amd64 .deb"; exit 1
+          fi
+          if [ ! -f "release_assets/deb-arm64/hardn_latest_arm64.deb" ]; then
+            echo "ERROR: missing arm64 .deb"; exit 1
           fi
 
-      - name: Create GitHub Release
+      - name: Build release notes (with image)
+        run: |
+          tag="${{ needs.build-and-test.outputs.new_tag }}"
+          {
+            echo "![HARDN-XDR](https://raw.githubusercontent.com/OpenSource-For-Freedom/HARDN-XDR/${tag}/docs/hardn.jpg)"
+            echo
+            echo "Multi-architecture Debian-only release (AMD64/ARM64)."
+            echo
+            echo "### Direct latest-download links"
+            echo "- \`amd64\`: https://github.com/OpenSource-For-Freedom/HARDN-XDR/releases/latest/download/hardn_latest_amd64.deb"
+            echo "- \`arm64\`: https://github.com/OpenSource-For-Freedom/HARDN-XDR/releases/latest/download/hardn_latest_arm64.deb"
+          } > release_notes.md
+
+      - name: Create GitHub Release (exactly two assets)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           tag="${{ needs.build-and-test.outputs.new_tag }}"
-
-          mapfile -t release_files < <(find release_assets -type f \( -name "*.deb" -o -name "*.zip" \) | sort)
-          if [ -f "docs/hardn.jpg" ]; then
-            img="![HARDN-XDR](https://raw.githubusercontent.com/OpenSource-For-Freedom/HARDN-XDR/${tag}/docs/hardn.jpg)\n\n"
-          else
-            img=""
-          fi
-          notes="${img}Multi-architecture Debian-only release (AMD64/ARM64) with full test logs.
-
-
-          - \`amd64\`: https://github.com/OpenSource-For-Freedom/HARDN-XDR/releases/latest/download/hardn_latest_amd64.deb
-          - \`arm64\`: https://github.com/OpenSource-For-Freedom/HARDN-XDR/releases/latest/download/hardn_latest_arm64.deb
-          "
-
           gh release create "$tag" \
-            "${release_files[@]}" \
+            release_assets/deb-amd64/hardn_latest_amd64.deb \
+            release_assets/deb-arm64/hardn_latest_arm64.deb \
             --title "Release $tag" \
-            --notes "$notes"
+            --notes-file release_notes.md
