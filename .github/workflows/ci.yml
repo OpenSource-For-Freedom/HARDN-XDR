@@ -30,7 +30,6 @@ jobs:
         run: |
           latest_tag=$(git tag -l "v1.1.*" --sort=-v:refname | head -n 1)
           [ -z "$latest_tag" ] && latest_tag="v1.1.0"
-          echo "Current latest tag: $latest_tag"
           echo "latest_tag=$latest_tag" >> $GITHUB_OUTPUT
 
       - name: Extract patch version and find next available tag
@@ -43,7 +42,6 @@ jobs:
           max_attempts=10
           attempt=0
           while git rev-parse "$new_tag" >/dev/null 2>&1 && [ $attempt -lt $max_attempts ]; do
-            echo "Tag $new_tag already exists, trying next version..."
             new_patch=$((new_patch + 1))
             new_tag="v1.1.$new_patch"
             attempt=$((attempt + 1))
@@ -52,13 +50,12 @@ jobs:
             echo "ERROR: Could not find available tag after $max_attempts attempts"
             exit 1
           fi
-          echo "Will create new tag: $new_tag"
           echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
 
-      - name: Install deps and tools
+      - name: Install build deps (incl. devscripts)
         run: |
           sudo apt-get update
-          sudo apt-get install -y dpkg-dev debhelper fakeroot build-essential lintian gnupg whiptail
+          sudo apt-get install -y dpkg-dev debhelper fakeroot build-essential devscripts lintian gnupg whiptail
 
       - name: Ensure hardn-xdr exists and is executable
         run: |
@@ -74,27 +71,40 @@ jobs:
           chmod +x debian/postinst
           find src/setup/modules -type f -name "*.sh" -exec chmod +x {} \;
 
+      - name: Generate debian/changelog for this build
+        run: |
+          raw_tag="${{ steps.bump.outputs.new_tag }}"   # e.g. v1.1.258
+          version="${raw_tag#v}"                        # -> 1.1.258
+          mkdir -p debian
+          cat > debian/changelog <<'EOF'
+           hardn (VERSION) unstable; urgency=medium
+
+            l* Automated release VERSION from CI
+
+            -- Tim Burns <control@cybersynapse.ro>  DATE_RFC2822
+          EOF
+          sed -i "s/VERSION/${version}/g" debian/changelog
+          sed -i "s/DATE_RFC2822/$(date -R)/" debian/changelog
+          echo "==== debian/changelog ===="
+          cat debian/changelog
+
       - name: Build package for ${{ matrix.arch }} - Architecture all
         env:
           DEBIAN_FRONTEND: noninteractive
           SKIP_WHIPTAIL: 1
         run: |
           dpkg-buildpackage -us -uc
-          sudo apt install -f -y
+          sudo apt-get install -f -y
 
       - name: Lint package
         run: |
           deb_file=$(ls ../*.deb | head -n 1)
           lintian "$deb_file" || echo "Lintian warnings found, but continuing..."
 
-      - name: Prepare release assets for ${{ matrix.arch }}
+      - name: Prepare release assets for ${{ matrix.arch }} (stable aliases only)
         id: prepare
         run: |
-          raw_tag="${{ steps.bump.outputs.new_tag }}"
-          version="${raw_tag#v}"
           deb_file=$(ls ../*.deb | head -n 1)
-
-          # Create ONLY the stable alias file per-arch (so releases have exactly two assets total)
           mkdir -p release_assets/deb-${{ matrix.arch }}
           if [ "${{ matrix.arch }}" = "amd64" ]; then
             cp "$deb_file" "release_assets/deb-${{ matrix.arch }}/hardn_latest_amd64.deb"
@@ -102,7 +112,7 @@ jobs:
             cp "$deb_file" "release_assets/deb-${{ matrix.arch }}/hardn_latest_arm64.deb"
           fi
 
-      - name: Upload alias .deb for ${{ matrix.arch }} (Actions artifact only)
+      - name: Upload alias .deb for ${{ matrix.arch }} (Actions artifact)
         uses: actions/upload-artifact@v4
         with:
           name: deb-${{ matrix.arch }}
@@ -139,7 +149,7 @@ jobs:
           mkdir -p ./logbundle/hardn-ci-${{ matrix.distro }}-${{ matrix.deployment_type }}
           chmod 777 ./logbundle ./logbundle/hardn-ci-${{ matrix.distro }}-${{ matrix.deployment_type }}
 
-          # Select base image
+          # Choose base image
           if [ "${{ matrix.distro }}" = "ubuntu" ]; then
             BASE_IMAGE="ubuntu:24.04"
           elif [ "${{ matrix.distro }}" = "PakOS" ]; then
@@ -148,10 +158,10 @@ jobs:
             BASE_IMAGE="debian:stable-slim"
           fi
 
-          # PakOS fallback
+          # PakOS fallback if image missing
           if [ "${{ matrix.distro }}" = "PakOS" ]; then
             if ! docker pull --platform linux/${{ matrix.arch }} pakos/pakos:latest 2>/dev/null; then
-              echo "Warning: PakOS Docker image not available, using Debian as fallback for testing"
+              echo "Warning: PakOS image unavailable; falling back to Debian"
               BASE_IMAGE="debian:stable-slim"
             fi
           fi
@@ -293,13 +303,10 @@ jobs:
               find /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}' -type d -exec chmod 755 {} \;
             '
 
-      - name: Copy logs and generate reports (Actions artifacts only)
+      - name: Copy logs and zip (Actions artifacts only)
         run: |
           mkdir -p release_assets/hardn-logs-${{ matrix.arch }}-${{ matrix.distro }}-${{ matrix.deployment_type }}
           cp -r ./logbundle/* release_assets/hardn-logs-${{ matrix.arch }}-${{ matrix.distro }}-${{ matrix.deployment_type }}/ || true
-
-      - name: Generate condensed test summary (Actions artifact only)
-        run: |
           mkdir -p release_assets/hardn-logs-zip
           zip -r release_assets/hardn-logs-zip/hardn_logs_bundle_${{ matrix.arch }}_${{ matrix.distro }}_${{ matrix.deployment_type }}.zip release_assets/hardn-logs-${{ matrix.arch }}-${{ matrix.distro }}-${{ matrix.deployment_type }} || true
 
@@ -324,10 +331,8 @@ jobs:
           build_success="${{ needs.build-and-test.result }}"
           echo "Build result: $build_success"
           if [ "$build_success" = "success" ]; then
-            echo " Builds succeeded - core functionality verified"
             echo "passed=true" >> $GITHUB_OUTPUT
           else
-            echo " Builds failed - indicates code issues"
             echo "passed=false" >> $GITHUB_OUTPUT
           fi
 
@@ -346,16 +351,11 @@ jobs:
 
       - name: Verify presence of logo and assets
         run: |
-          ls -l release_assets || true
           if [ ! -f "docs/hardn.jpg" ]; then
             echo "ERROR: docs/hardn.jpg not found (release notes image)"; exit 1
           fi
-          if [ ! -f "release_assets/deb-amd64/hardn_latest_amd64.deb" ]; then
-            echo "ERROR: missing amd64 .deb"; exit 1
-          fi
-          if [ ! -f "release_assets/deb-arm64/hardn_latest_arm64.deb" ]; then
-            echo "ERROR: missing arm64 .deb"; exit 1
-          fi
+          test -f "release_assets/deb-amd64/hardn_latest_amd64.deb"
+          test -f "release_assets/deb-arm64/hardn_latest_arm64.deb"
 
       - name: Build release notes (with image)
         run: |
@@ -369,6 +369,7 @@ jobs:
             echo "- \`amd64\`: https://github.com/OpenSource-For-Freedom/HARDN-XDR/releases/latest/download/hardn_latest_amd64.deb"
             echo "- \`arm64\`: https://github.com/OpenSource-For-Freedom/HARDN-XDR/releases/latest/download/hardn_latest_arm64.deb"
           } > release_notes.md
+          cat release_notes.md
 
       - name: Create GitHub Release (exactly two assets)
         env:
