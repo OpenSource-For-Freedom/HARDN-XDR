@@ -23,7 +23,8 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Fetch tags
-        run: git fetch --tags
+        run: |
+          git fetch --tags
 
       - name: Get latest v1.1.x tag
         id: get_tag
@@ -73,20 +74,21 @@ jobs:
 
       - name: Generate debian/changelog for this build
         run: |
-          raw_tag="${{ steps.bump.outputs.new_tag }}"   # e.g. v1.1.258
-          version="${raw_tag#v}"                        # -> 1.1.258
+          raw_tag="${{ steps.bump.outputs.new_tag }}"
+          version="${raw_tag#v}"
           mkdir -p debian
-          cat > debian/changelog <<'EOF'
-           hardn (VERSION) unstable; urgency=medium
-
-            l* Automated release VERSION from CI
-
-            -- Tim Burns <control@cybersynapse.ro>  DATE_RFC2822
+          # Use a pipe-prefixed heredoc and strip it so header begins at column 0 in the file.
+          sed -e 's/^ *|//' > debian/changelog <<'EOF'
+          |hardn (${version}) unstable; urgency=medium
+          |
+          |  * Automated release ${version} from CI
+          |
+          | -- Tim Burns <control@cybersynapse.ro>  DATE_RFC2822
+          |
           EOF
-          sed -i "s/VERSION/${version}/g" debian/changelog
           sed -i "s/DATE_RFC2822/$(date -R)/" debian/changelog
           echo "==== debian/changelog ===="
-          cat debian/changelog
+          nl -ba debian/changelog | sed -n '1,20p'
 
       - name: Build package for ${{ matrix.arch }} - Architecture all
         env:
@@ -102,7 +104,6 @@ jobs:
           lintian "$deb_file" || echo "Lintian warnings found, but continuing..."
 
       - name: Prepare release assets for ${{ matrix.arch }} (stable aliases only)
-        id: prepare
         run: |
           deb_file=$(ls ../*.deb | head -n 1)
           mkdir -p release_assets/deb-${{ matrix.arch }}
@@ -112,7 +113,7 @@ jobs:
             cp "$deb_file" "release_assets/deb-${{ matrix.arch }}/hardn_latest_arm64.deb"
           fi
 
-      - name: Upload alias .deb for ${{ matrix.arch }} (Actions artifact)
+      - name: Upload alias .deb for ${{ matrix.arch }}
         uses: actions/upload-artifact@v4
         with:
           name: deb-${{ matrix.arch }}
@@ -141,15 +142,12 @@ jobs:
           path: release_assets/deb-${{ matrix.arch }}
 
       - name: Enhanced headless deployment test for ${{ matrix.deployment_type }}
-        id: simulate
-        continue-on-error: true
         run: |
-          echo "Testing ${{ matrix.deployment_type }} deployment for ${{ matrix.arch }} on ${{ matrix.distro }}"
+          echo "Testing ${{ matrix.deployment_type }} for ${{ matrix.arch }} on ${{ matrix.distro }}"
           cp release_assets/deb-${{ matrix.arch }}/*.deb ./hardn.deb
           mkdir -p ./logbundle/hardn-ci-${{ matrix.distro }}-${{ matrix.deployment_type }}
           chmod 777 ./logbundle ./logbundle/hardn-ci-${{ matrix.distro }}-${{ matrix.deployment_type }}
 
-          # Choose base image
           if [ "${{ matrix.distro }}" = "ubuntu" ]; then
             BASE_IMAGE="ubuntu:24.04"
           elif [ "${{ matrix.distro }}" = "PakOS" ]; then
@@ -158,7 +156,6 @@ jobs:
             BASE_IMAGE="debian:stable-slim"
           fi
 
-          # PakOS fallback if image missing
           if [ "${{ matrix.distro }}" = "PakOS" ]; then
             if ! docker pull --platform linux/${{ matrix.arch }} pakos/pakos:latest 2>/dev/null; then
               echo "Warning: PakOS image unavailable; falling back to Debian"
@@ -168,15 +165,13 @@ jobs:
 
           docker run --rm -i --platform linux/${{ matrix.arch }} \
             --privileged \
-            --name hardn-test-${{ matrix.arch }}-${{ matrix.distro }}-${{ github.run_id }} \
-            -e SKIP_WHIPTAIL=1 \
-            -e DEBIAN_FRONTEND=noninteractive \
             -e CI=true \
-            -e DEPLOYMENT_TYPE=${{ matrix.deployment_type }} \
+            -e ARCH=${{ matrix.arch }} \
+            -e DSTRO=${{ matrix.distro }} \
+            -e DTYPE=${{ matrix.deployment_type }} \
             -v "$(pwd)/hardn.deb:/tmp/hardn.deb" \
             -v "$(pwd)/logbundle:/var/log/" \
-            $BASE_IMAGE bash -euxo pipefail -c '
-              # Update with retries
+            "$BASE_IMAGE" bash -euxo pipefail -c '
               for attempt in 1 2 3; do
                 echo "Attempt $attempt: apt-get update"
                 if apt-get update; then break; fi
@@ -186,45 +181,27 @@ jobs:
                   sleep 30
                 fi
               done
-              apt-get install -f -y
 
-              # Install HARDN-XDR
+              apt-get install -f -y
               dpkg -i /tmp/hardn.deb || true
               apt-get install -f -y
 
-              # Ensure scripts are executable
               chmod +x /usr/lib/hardn-xdr/src/setup/modules/*.sh || true
 
-              # Logs dir
-              mkdir -p /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'
-              chmod 777 /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'
+              LOG_DIR="/var/log/hardn-ci-${DSTRO}-${DTYPE}"
+              mkdir -p "$LOG_DIR"
+              chmod 777 "$LOG_DIR"
 
-              # PakOS specifics
-              if [ "${{ matrix.distro }}" = "PakOS" ]; then
-                echo "Setting up PakOS-specific configurations..." | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/environment.log
-                if [ -f /etc/os-release ]; then
-                  echo "PakOS Version Info:" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/environment.log
-                  cat /etc/os-release | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/environment.log
-                fi
-                echo "Verifying PakOS package repositories..." | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/environment.log
-                apt-cache policy | head -20 | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/environment.log
-              fi
+              echo "=== Environment ===" | tee -a "$LOG_DIR/environment.log"
+              echo "CI: $CI" | tee -a "$LOG_DIR/environment.log"
+              echo "DEPLOYMENT_TYPE: ${DTYPE}" | tee -a "$LOG_DIR/environment.log"
+              echo "TTY: $(tty || echo none)" | tee -a "$LOG_DIR/environment.log"
+              echo "DISPLAY: ${DISPLAY:-none}" | tee -a "$LOG_DIR/environment.log"
 
-              # Environment dump
-              {
-                echo "=== Environment Detection Test ==="
-                echo "CI: $CI"
-                echo "DEPLOYMENT_TYPE: $DEPLOYMENT_TYPE"
-                echo "TTY: $(tty || echo none)"
-                echo "DISPLAY: ${DISPLAY:-none}"
-              } | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/environment.log
+              echo "=== Main HARDN-XDR Execution ===" | tee -a "$LOG_DIR/hardn-xdr.log"
+              timeout 300 /usr/bin/hardn-xdr >> "$LOG_DIR/hardn-xdr.log" 2>&1 || echo "HARDN-XDR finished with status: $?"
 
-              # Main run
-              echo "=== Main HARDN-XDR Execution ===" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/hardn-xdr.log
-              timeout 300 /usr/bin/hardn-xdr >> /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/hardn-xdr.log 2>&1 || echo "HARDN-XDR finished with status: $?"
-
-              # Module tests
-              echo "=== Individual Module Testing ===" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/modules.log
+              echo "=== Module Testing ===" | tee -a "$LOG_DIR/modules.log"
               fail_count=0
               total_count=0
               skip_count=0
@@ -235,12 +212,12 @@ jobs:
                 module_path="/usr/lib/hardn-xdr/src/setup/modules/$module"
                 if [ -f "$module_path" ]; then
                   total_count=$((total_count+1))
-                  echo "[$total_count] Testing priority module: $module" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/modules.log
-                  if timeout 300 bash "$module_path" > /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/$module.log 2>&1; then
-                    echo "[$total_count] PASS: $module" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/modules.log
+                  echo "[$total_count] Testing priority module: $module" | tee -a "$LOG_DIR/modules.log"
+                  if timeout 300 bash "$module_path" > "$LOG_DIR/$module.log" 2>&1; then
+                    echo "[$total_count] PASS: $module" | tee -a "$LOG_DIR/modules.log"
                   else
                     exit_code=$?
-                    echo "[$total_count] FAIL: $module (exit code: $exit_code)" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/modules.log
+                    echo "[$total_count] FAIL: $module (exit code: $exit_code)" | tee -a "$LOG_DIR/modules.log"
                     fail_count=$((fail_count+1))
                     critical_failures=$((critical_failures+1))
                   fi
@@ -252,65 +229,47 @@ jobs:
                 if [ -f "$script" ]; then
                   name=$(basename "$script")
                   echo "$PRIORITY_MODULES" | grep -q "$name" && continue
-                  if [ "${{ matrix.arch }}" = "arm64" ] && echo "$ARM64_SKIP_MODULES" | grep -q "$name"; then
+                  if [ "${ARCH}" = "arm64" ] && echo "$ARM64_SKIP_MODULES" | grep -q "$name"; then
                     total_count=$((total_count+1))
                     skip_count=$((skip_count+1))
-                    echo "[$total_count] SKIP: $name (ARM64 CI - emulation performance)" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/modules.log
+                    echo "[$total_count] SKIP: $name (ARM64 CI)" | tee -a "$LOG_DIR/modules.log"
                     continue
                   fi
                   total_count=$((total_count+1))
-                  echo "[$total_count] Testing: $name" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/modules.log
-                  if timeout 300 bash "$script" > /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/$name.log 2>&1; then
-                    echo "[$total_count] PASS: $name" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/modules.log
+                  echo "[$total_count] Testing: $name" | tee -a "$LOG_DIR/modules.log"
+                  if timeout 300 bash "$script" > "$LOG_DIR/$name.log" 2>&1; then
+                    echo "[$total_count] PASS: $name" | tee -a "$LOG_DIR/modules.log"
                   else
                     exit_code=$?
-                    echo "[$total_count] FAIL: $name (exit code: $exit_code)" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/modules.log
+                    echo "[$total_count] FAIL: $name (exit code: $exit_code)" | tee -a "$LOG_DIR/modules.log"
                     fail_count=$((fail_count+1))
                   fi
                 fi
               done
 
-              # Optional audit
               if [ -f "/usr/lib/hardn-xdr/hardn_audit.sh" ]; then
-                echo "=== Compliance Audit Test ===" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/audit.log
-                timeout 300 bash /usr/lib/hardn-xdr/hardn_audit.sh >> /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/audit.log 2>&1 || echo "Audit finished with status: $?"
+                echo "=== Compliance Audit ===" | tee -a "$LOG_DIR/audit.log"
+                timeout 300 bash /usr/lib/hardn-xdr/hardn_audit.sh >> "$LOG_DIR/audit.log" 2>&1 || echo "Audit finished with status: $?"
               fi
 
-              # Summary & metrics
-              echo "=== Test Summary ===" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/summary.log
-              echo "Total modules tested: $total_count" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/summary.log
-              if [ "${{ matrix.arch }}" = "arm64" ] && [ "$skip_count" -gt 0 ]; then
-                echo "Modules skipped (ARM64 CI): $skip_count" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/summary.log
-                echo "Modules actually tested: $((total_count - skip_count))" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/summary.log
+              echo "=== Summary ===" | tee -a "$LOG_DIR/summary.log"
+              echo "Total modules tested: $total_count" | tee -a "$LOG_DIR/summary.log"
+              if [ "${ARCH}" = "arm64" ] && [ "$skip_count" -gt 0 ]; then
+                echo "Modules skipped (ARM64 CI): $skip_count" | tee -a "$LOG_DIR/summary.log"
+                echo "Modules actually tested: $((total_count - skip_count))" | tee -a "$LOG_DIR/summary.log"
               fi
-              echo "Total failures: $fail_count" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/summary.log
-              echo "Critical failures: $critical_failures" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/summary.log
-              tested_count=$((total_count - skip_count))
-              if [ "$tested_count" -gt 0 ]; then
-                echo "Success rate: $(( (tested_count - fail_count) * 100 / tested_count ))%" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/summary.log
-              else
-                echo "Success rate: N/A (no modules tested)" | tee -a /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/summary.log
-              fi
-
-              # Persist counters
-              echo "$fail_count" > /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/fail_count.txt
-              echo "$total_count" > /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/total_count.txt
-              echo "${skip_count:-0}" > /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/skip_count.txt
-              echo "$critical_failures" > /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}'/critical_failures.txt
-
-              # Permissions
-              find /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}' -type f -exec chmod 644 {} \;
-              find /var/log/hardn-ci-'${{ matrix.distro }}'-'${{ matrix.deployment_type }}' -type d -exec chmod 755 {} \;
+              echo "Total failures: $fail_count" | tee -a "$LOG_DIR/summary.log"
+              echo "Critical failures: $critical_failures" | tee -a "$LOG_DIR/summary.log"
             '
 
-      - name: Copy logs and zip (Actions artifacts only)
+      - name: Copy logs and zip
         run: |
           mkdir -p release_assets/hardn-logs-${{ matrix.arch }}-${{ matrix.distro }}-${{ matrix.deployment_type }}
           cp -r ./logbundle/* release_assets/hardn-logs-${{ matrix.arch }}-${{ matrix.distro }}-${{ matrix.deployment_type }}/ || true
           mkdir -p release_assets/hardn-logs-zip
           zip -r release_assets/hardn-logs-zip/hardn_logs_bundle_${{ matrix.arch }}_${{ matrix.distro }}_${{ matrix.deployment_type }}.zip release_assets/hardn-logs-${{ matrix.arch }}-${{ matrix.distro }}-${{ matrix.deployment_type }} || true
 
-      - name: Upload logs (Actions artifacts only)
+      - name: Upload logs
         uses: actions/upload-artifact@v4
         with:
           name: hardn-logs-zip-${{ matrix.arch }}-${{ matrix.distro }}-${{ matrix.deployment_type }}
@@ -327,9 +286,7 @@ jobs:
       - name: Check deployment results
         id: check
         run: |
-          echo "=== Overall CI Status Check ==="
           build_success="${{ needs.build-and-test.result }}"
-          echo "Build result: $build_success"
           if [ "$build_success" = "success" ]; then
             echo "passed=true" >> $GITHUB_OUTPUT
           else
@@ -344,20 +301,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Download alias .debs (from Actions artifacts)
+      - name: Download alias .debs
         uses: actions/download-artifact@v5
         with:
           path: release_assets
 
       - name: Verify presence of logo and assets
         run: |
-          if [ ! -f "docs/hardn.jpg" ]; then
-            echo "ERROR: docs/hardn.jpg not found (release notes image)"; exit 1
-          fi
-          test -f "release_assets/deb-amd64/hardn_latest_amd64.deb"
-          test -f "release_assets/deb-arm64/hardn_latest_arm64.deb"
+          test -f docs/hardn.jpg
+          test -f release_assets/deb-amd64/hardn_latest_amd64.deb
+          test -f release_assets/deb-arm64/hardn_latest_arm64.deb
 
-      - name: Build release notes (with image)
+      - name: Build release notes
         run: |
           tag="${{ needs.build-and-test.outputs.new_tag }}"
           {
@@ -366,12 +321,11 @@ jobs:
             echo "Multi-architecture Debian-only release (AMD64/ARM64)."
             echo
             echo "### Direct latest-download links"
-            echo "- \`amd64\`: https://github.com/OpenSource-For-Freedom/HARDN-XDR/releases/latest/download/hardn_latest_amd64.deb"
-            echo "- \`arm64\`: https://github.com/OpenSource-For-Freedom/HARDN-XDR/releases/latest/download/hardn_latest_arm64.deb"
+            echo "- amd64: https://github.com/OpenSource-For-Freedom/HARDN-XDR/releases/latest/download/hardn_latest_amd64.deb"
+            echo "- arm64: https://github.com/OpenSource-For-Freedom/HARDN-XDR/releases/latest/download/hardn_latest_arm64.deb"
           } > release_notes.md
-          cat release_notes.md
 
-      - name: Create GitHub Release (exactly two assets)
+      - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
