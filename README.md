@@ -8,7 +8,7 @@
 ## Features
 ## CI/CD Testing 
 - [![ci](https://github.com/OpenSource-For-Freedom/HARDN-XDR/actions/workflows/ci.yml/badge.svg)](https://github.com/OpenSource-For-Freedom/HARDN-XDR/actions/workflows/ci.yml)
-
+![ci](docs/IMG_2734.jpeg)
 
 ### Security Compliance Goals
 - **DISA STIG**: Defense Information Systems Agency Security Technical Implementation Guides
