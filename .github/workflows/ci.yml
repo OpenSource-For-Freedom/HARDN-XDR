@@ -455,6 +455,7 @@ jobs:
             echo "passed=false" >> $GITHUB_OUTPUT
           fi
 
+  
   release:
     needs: [build-and-test, check-deployment-results]
     if: needs.check-deployment-results.outputs.passed == 'true'
@@ -471,10 +472,11 @@ jobs:
       - name: Verify logo and .debs
         run: |
           # Logo must exist in repo
-          if [ ! -f docs/hardn.jpg ]; then
-            echo "docs/hardn.jpg not found"; exit 1
+          if [ ! -f docs/hardn.jpeg ]; then
+            echo "docs/hardn.jpeg not found"; exit 1
           fi
 
+          # Make sure both arch artifacts are present
           if ! ls release_assets/deb-amd64/*.deb 1>/dev/null 2>&1; then
             echo "No .deb files found in release_assets/deb-amd64/"; exit 1
           fi
@@ -494,7 +496,7 @@ jobs:
         run: |
           tag="${{ needs.build-and-test.outputs.new_tag }}"
           {
-            echo "![HARDN-XDR](https://raw.githubusercontent.com/OpenSource-For-Freedom/HARDN-XDR/${tag}/docs/hardn.jpg)"
+            echo "![HARDN-XDR](https://raw.githubusercontent.com/OpenSource-For-Freedom/HARDN-XDR/${tag}/docs/hardn.jpeg)"
             echo
             echo "Multi-architecture Debian-only release (AMD64/ARM64)."
             echo
