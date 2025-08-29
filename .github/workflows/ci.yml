@@ -394,7 +394,7 @@ jobs:
             echo "  3. Docker/container environment issues"
             echo "  4. Actual code issues (less likely if builds passed)"
             echo ""
-            echo "ℹ  If builds passed but deployment tests failed, this is likely infrastructure-related"
+            echo "   If builds passed but deployment tests failed, this is likely infrastructure-related"
           else
             echo " Test completed successfully"
           fi
@@ -455,6 +455,7 @@ jobs:
             echo "passed=false" >> $GITHUB_OUTPUT
           fi
 
+  
   release:
     needs: [build-and-test, check-deployment-results]
     if: needs.check-deployment-results.outputs.passed == 'true'
@@ -463,42 +464,57 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Download all release assets
+      - name: Download built .debs
         uses: actions/download-artifact@v5
         with:
           path: release_assets
 
-      - name: Copy logo into release
+      - name: Verify logo and .debs
         run: |
-          mkdir -p release_assets
-          if [ -f "docs/assets/sig_logo.png" ]; then
-            cp "docs/assets/sig_logo.png" release_assets/sig_logo.png
-          else
-            echo "Warning: Logo file not found, creating placeholder"
-            echo "HARDN-XDR Logo not available" > release_assets/sig_logo.txt
+          # Logo must exist in repo
+          if [ ! -f docs/hardn.jpeg ]; then
+            echo "docs/hardn.jpeg not found"; exit 1
           fi
 
-      - name: Create GitHub Release
+          # Make sure both arch artifacts are present
+          if ! ls release_assets/deb-amd64/*.deb 1>/dev/null 2>&1; then
+            echo "No .deb files found in release_assets/deb-amd64/"; exit 1
+          fi
+          if ! ls release_assets/deb-arm64/*.deb 1>/dev/null 2>&1; then
+            echo "No .deb files found in release_assets/deb-arm64/"; exit 1
+          fi
+
+      - name: Normalize asset names for wget latest/download
+        run: |
+          AMD_DEB="$(ls release_assets/deb-amd64/*.deb | head -n1)"
+          ARM_DEB="$(ls release_assets/deb-arm64/*.deb | head -n1)"
+          cp "$AMD_DEB" release_assets/hardn_latest_amd64.deb
+          cp "$ARM_DEB" release_assets/hardn_latest_arm64.deb
+          ls -lh release_assets/hardn_latest_*.deb
+
+      - name: Build release notes (logo + wget links)
+        run: |
+          tag="${{ needs.build-and-test.outputs.new_tag }}"
+          {
+            echo "![HARDN-XDR](https://raw.githubusercontent.com/OpenSource-For-Freedom/HARDN-XDR/${tag}/docs/hardn.jpeg)"
+            echo
+            echo "Multi-architecture Debian-only release (AMD64/ARM64)."
+            echo
+            echo "### Direct wget links"
+            echo '```bash'
+            echo "wget https://github.com/OpenSource-For-Freedom/HARDN-XDR/releases/latest/download/hardn_latest_amd64.deb"
+            echo "wget https://github.com/OpenSource-For-Freedom/HARDN-XDR/releases/latest/download/hardn_latest_arm64.deb"
+            echo '```'
+          } > release_notes.md
+          sed -n '1,50p' release_notes.md
+
+      - name: Create GitHub Release (exactly two .debs)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           tag="${{ needs.build-and-test.outputs.new_tag }}"
-
-          release_files=()
-          for f in release_assets/deb-*/*.deb release_assets/hardn-logs-zip/*.zip; do
-            if [ -f "$f" ]; then
-              release_files+=("$f")
-            fi
-          done
-
-          if [ -f "release_assets/sig_logo.png" ]; then
-            release_files+=(release_assets/sig_logo.png)
-            logo_note="![HARDN-XDR Logo](docs/assets/sig_logo.png)\n\n"
-          else
-            logo_note=""
-          fi
-
           gh release create "$tag" \
-            "${release_files[@]}" \
+            release_assets/hardn_latest_amd64.deb \
+            release_assets/hardn_latest_arm64.deb \
             --title "Release $tag" \
-            --notes "${logo_note}Multi-architecture Debian-only release (AMD64/ARM64) with full test logs."
+            --notes-file release_notes.md
