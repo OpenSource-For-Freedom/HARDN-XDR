@@ -39,10 +39,13 @@
 #### From Package
 ```bash
 # Download the latest release
-wget wget https://github.com/OpenSource-For-Freedom/HARDN-XDR/releases/latest/download/hardn_latest_amd64.deb
+## amd64
+wget https://github.com/OpenSource-For-Freedom/HARDN-XDR/releases/latest/download/hardn_latest_amd64.deb
+## arm64
+wget https://github.com/OpenSource-For-Freedom/HARDN-XDR/releases/latest/download/hardn_latest_arm64.deb
 
-# Install the package
-sudo dpkg -i hardn_1.1.***_all.deb
+# Install the package (amd64)
+sudo dpkg -i hardn_latest_amd64.deb
 sudo apt-get install -f  # Fix dependencies
 ```
 
