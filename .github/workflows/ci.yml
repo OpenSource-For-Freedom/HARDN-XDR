@@ -500,9 +500,10 @@ jobs:
             echo
             echo "Multi-architecture Debian-only release (AMD64/ARM64)."
             echo
-            echo "### Direct wget links"
             echo '```bash'
             echo "wget https://github.com/OpenSource-For-Freedom/HARDN-XDR/releases/latest/download/hardn_latest_amd64.deb"
+            echo '```'
+            echo '```'
             echo "wget https://github.com/OpenSource-For-Freedom/HARDN-XDR/releases/latest/download/hardn_latest_arm64.deb"
             echo '```'
           } > release_notes.md
