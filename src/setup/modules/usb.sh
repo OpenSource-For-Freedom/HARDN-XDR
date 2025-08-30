@@ -1,89 +1,93 @@
 #!/bin/bash
+# Module: usb_storage_block_light.sh — block USB mass storage safely (desktop/VM friendly)
 
-# Resolve repo install or source tree layout
+# --- Common includes (graceful fallback) ---
 COMMON_CANDIDATES=(
   "/usr/lib/hardn-xdr/src/setup/hardn-common.sh"
   "$(dirname "$(readlink -f "$0")")/../hardn-common.sh"
 )
 for c in "${COMMON_CANDIDATES[@]}"; do
-  [ -r "$c" ] && . "$c" && break
+  [[ -r "$c" ]] && . "$c" && break
 done
-type -t HARDN_STATUS >/dev/null 2>&1 || { echo "[ERROR] failed to source hardn-common.sh"; exit 0; } # exit 0 to avoid CI failures
+type -t HARDN_STATUS >/dev/null 2>&1 || { echo "[WARN] hardn-common.sh not found; continuing"; HARDN_STATUS(){ echo "$(date '+%F %T') - [$1] $2"; }; }
+type -t hardn_module_exit >/dev/null 2>&1 || hardn_module_exit(){ exit "${1:-0}"; }
+type -t is_container >/dev/null 2>&1 || is_container(){ [[ -f /.dockerenv || -f /run/.containerenv ]] || grep -qa container /proc/1/environ 2>/dev/null; }
 
-# Skip if not root
-require_root_or_skip || exit 0
-
-# Skip in container environments
+# --- Require root; skip in containers (never fail the chain) ---
+type -t require_root_or_skip >/dev/null 2>&1 && require_root_or_skip || { HARDN_STATUS "info" "Not root; skipping"; return 0 2>/dev/null || hardn_module_exit 0; }
 if is_container; then
-    HARDN_STATUS "info" "Skipping USB configuration in container environment"
-    exit 0
+  HARDN_STATUS "info" "Container detected — skipping USB storage policy"
+  return 0 2>/dev/null || hardn_module_exit 0
 fi
 
-# Guard required tools
-require_cmd_or_skip udevadm || exit 0
-require_cmd_or_skip modprobe || exit 0
-#!/bin/bash
-# shellcheck disable=SC1091
-# Remove set -e to handle errors gracefully in CI environment
+# --- Helpers ---
+is_root_on_usb() {
+  local src dev parent tran
+  src="$(findmnt -no SOURCE / 2>/dev/null)" || return 1
+  src="$(readlink -f "$src")"
+  # Walk to the parent disk that has TRAN info
+  dev="$src"
+  parent="$(lsblk -no PKNAME "$dev" 2>/dev/null)"
+  [[ -n "$parent" ]] && dev="/dev/$parent"
+  tran="$(lsblk -no TRAN "$dev" 2>/dev/null)"
+  # If TRAN empty (LVM/crypto), try the top-most physical parent
+  if [[ -z "$tran" ]]; then
+    dev="$(lsblk -pno NAME,TYPE "$src" | awk '$2=="disk"{print $1; exit}')"
+    [[ -n "$dev" ]] && tran="$(lsblk -no TRAN "$dev" 2>/dev/null)"
+  fi
+  [[ "$tran" == "usb" ]]
+}
 
+# --- Config knobs (env overridable) ---
+# HARDN_USB_MODE: off|light|strict (default: light)
+USB_MODE="${HARDN_USB_MODE:-light}"
+# HARDN_USB_ENFORCE_NOW=true → try to unload usb_storage/uas immediately (safe no-op if busy)
+ENFORCE_NOW="${HARDN_USB_ENFORCE_NOW:-false}"
 
-# USB storage blocking for security hardening (automated mode)
-HARDN_STATUS "info" "Configuring USB storage blocking for enhanced security"
-HARDN_STATUS "warning" "USB storage devices will be blocked for security purposes"
-
-ROOT_USB=$(lsblk -o NAME,TRAN,MOUNTPOINT | grep -E 'usb.*\/$' || true)
-
-if [[ -n "$ROOT_USB" ]]; then
-  HARDN_STATUS "warning" "System is running from USB storage. Skipping USB block to avoid system lockout."
-  exit 0  # Changed from return 0 for consistency
+# --- Early outs / safety checks ---
+if [[ "$USB_MODE" == "off" ]]; then
+  HARDN_STATUS "info" "USB storage policy disabled (HARDN_USB_MODE=off)"
+  return 0 2>/dev/null || hardn_module_exit 0
 fi
 
-# Optional: Check if keyboard is present before blocking
-KEYBOARD_OK=$(udevadm info -q property --export -n /dev/input/event* | grep ID_INPUT_KEYBOARD || true)
-if [[ -z "$KEYBOARD_OK" ]]; then
-  HARDN_STATUS "error" "No valid USB keyboard detected. Blocking USB now may cause login failure."
-  return 1
+if is_root_on_usb; then
+  HARDN_STATUS "warning" "Root filesystem is on USB — skipping USB storage blacklist to avoid lockout."
+  return 0 2>/dev/null || hardn_module_exit 0
 fi
 
-# Proceed with blocking
-cat > /etc/modprobe.d/99-usb-storage.conf << 'EOF'
+# --- Write modprobe blacklist (takes effect on next boot) ---
+install -d -m 0755 /etc/modprobe.d
+cat > /etc/modprobe.d/99-usb-storage.conf <<'EOF'
+# HARDN-XDR: block USB mass storage drivers (light/strict modes)
 blacklist usb-storage
 blacklist uas
 EOF
+chmod 0644 /etc/modprobe.d/99-usb-storage.conf
+HARDN_STATUS "pass" "Prepared /etc/modprobe.d/99-usb-storage.conf (applies on next boot)."
 
-HARDN_STATUS "info" "USB storage modules blacklisted."
+# (Remove empty udev file; we don't need it)
+[[ -f /etc/udev/rules.d/99-usb-storage.rules ]] && rm -f /etc/udev/rules.d/99-usb-storage.rules
 
-cat > /etc/udev/rules.d/99-usb-storage.rules << 'EOF'
-# Add valid udev rules here if needed
-EOF
-
-HARDN_STATUS "info" "Udev rules written."
-
-udevadm control --reload-rules && udevadm trigger && HARDN_STATUS "pass" "Udev rules reloaded."
-
-# Try unloading storage
-if lsmod | grep -q usb_storage; then
-  if rmmod usb_storage; then
-    HARDN_STATUS "pass" "usb-storage module unloaded."
-  else
-    HARDN_STATUS "warning" "Failed to unload usb-storage."
-  fi
+# --- Keep HID working (ensure usbhid present) ---
+if ! lsmod | grep -q '^usbhid'; then
+  modprobe usbhid >/dev/null 2>&1 && HARDN_STATUS "pass" "usbhid module loaded." || HARDN_STATUS "info" "usbhid not loaded (may be built-in); continuing."
 else
-  HARDN_STATUS "info" "usb-storage module not currently loaded."
+  HARDN_STATUS "info" "usbhid already active."
 fi
 
-# Ensure HID is enabled
-if ! lsmod | grep -q usbhid; then
-  if modprobe usbhid; then
-    HARDN_STATUS "pass" "usbhid module loaded."
-  else
-    HARDN_STATUS "warning" "Could not load usbhid (may be normal in CI environment)!"
-  fi
+# --- Optional immediate enforcement (non-fatal) ---
+if [[ "$ENFORCE_NOW" == "true" ]]; then
+  HARDN_STATUS "info" "Attempting immediate unload of usb mass storage drivers…"
+  # Try uas first (can hold the device), then usb_storage
+  rmmod uas       >/dev/null 2>&1 || true
+  rmmod usb_storage >/dev/null 2>&1 || true
+  udevadm control --reload-rules >/dev/null 2>&1 || true
+  udevadm trigger                >/dev/null 2>&1 || true
+  HARDN_STATUS "info" "Immediate enforcement attempted (devices in use may remain until reboot)."
 else
-  HARDN_STATUS "pass" "usbhid module already active."
+  HARDN_STATUS "info" "No immediate unload (desktop/VM safe). Policy will apply after reboot."
 fi
 
-HARDN_STATUS "pass" "USB policy: storage blocked, HID enabled."
-
-# shellcheck disable=SC2317
+# --- Summary & continue ---
+HARDN_STATUS "pass" "USB policy set: mass storage blocked on next boot; HID preserved."
 return 0 2>/dev/null || hardn_module_exit 0
