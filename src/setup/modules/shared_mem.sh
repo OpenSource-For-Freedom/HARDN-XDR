@@ -1,64 +1,72 @@
 #!/bin/bash
+# Module: shm_hardening_light.sh — safe for desktops/VMs
 
 source "/usr/lib/hardn-xdr/src/setup/hardn-common.sh" 2>/dev/null || \
 source "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")/hardn-common.sh" 2>/dev/null || {
-    echo "Warning: Could not source hardn-common.sh, using basic functions"
-    HARDN_STATUS() { echo "$(date '+%Y-%m-%d %H:%M:%S') - [$1] $2"; }
-    log_message() { echo "$(date '+%Y-%m-%d %H:%M:%S') - $1"; }
-    check_root() { [[ $EUID -eq 0 ]]; }
-    is_installed() { command -v "$1" >/dev/null 2>&1 || dpkg -s "$1" >/dev/null 2>&1; }
-    hardn_yesno() { 
-        [[ "$SKIP_WHIPTAIL" == "1" ]] && return 0
-        echo "Auto-confirming: $1" >&2
-        return 0
-    }
-    hardn_msgbox() { 
-        [[ "$SKIP_WHIPTAIL" == "1" ]] && echo "Info: $1" >&2 && return 0
-        echo "Info: $1" >&2
-    }
-    is_container_environment() {
-        [[ -n "$CI" ]] || [[ -n "$GITHUB_ACTIONS" ]] || [[ -f /.dockerenv ]] || \
-        [[ -f /run/.containerenv ]] || grep -qa container /proc/1/environ 2>/dev/null
-    }
-    is_systemd_available() {
-        [[ -d /run/systemd/system ]] && systemctl --version >/dev/null 2>&1
-    }
-    create_scheduled_task() {
-        echo "Info: Scheduled task creation skipped in CI environment" >&2
-        return 0
-    }
-    check_container_limitations() {
-        if [[ ! -w /proc/sys ]] || [[ -f /.dockerenv ]]; then
-            echo "Warning: Container limitations detected:" >&2
-            echo "  - read-only /proc/sys - kernel parameter changes limited" >&2
-        fi
-        return 0
-    }
-    hardn_module_exit() {
-        local exit_code="${1:-0}"
-        exit "$exit_code"
-    }
-    safe_package_install() {
-        local package="$1"
-        if [[ "$CI" == "true" ]] || ! check_root; then
-            echo "Info: Package installation skipped in CI environment: $package" >&2
-            return 0
-        fi
-        echo "Warning: Package installation not implemented in fallback: $package" >&2
-        return 1
-    }
+  HARDN_STATUS(){ echo "$(date '+%F %T') - [$1] $2"; }
+  is_systemd_available(){ [[ -d /run/systemd/system ]] && systemctl --version >/dev/null 2>&1; }
+  hardn_module_exit(){ exit "${1:-0}"; }
 }
 
+HARDN_STATUS "info" "Securing shared memory (light mode)…"
 
-HARDN_STATUS "info" "Securing shared memory..."
-if ! grep -q "tmpfs /run/shm" /etc/fstab; then
-	echo "tmpfs /run/shm tmpfs defaults,noexec,nosuid,nodev 0 0" >> /etc/fstab
-	HARDN_STATUS "pass" "Shared memory security configured in /etc/fstab"
-else
-	HARDN_STATUS "info" "Shared memory security already configured"
+# Detect desktop/VM (keep exec by default)
+DESKTOP_VM=false
+if is_systemd_available && (systemctl is-active --quiet gdm3 || systemctl is-active --quiet gdm || \
+    systemctl is-active --quiet lightdm || systemctl is-active --quiet sddm); then
+  DESKTOP_VM=true
+elif [[ -n "$DISPLAY" || -n "$XDG_SESSION_TYPE" || "${HARDN_PROFILE,,}" =~ ^(desktop|vm)$ ]]; then
+  DESKTOP_VM=true
 fi
 
-HARDN_STATUS "pass" "Shared memory hardening completed"
+mountpoint="/dev/shm"
+current_opts="$(findmnt -no OPTIONS "$mountpoint" 2>/dev/null || true)"
 
+# Decide options
+base_opts="mode=1777,strictatime,nosuid,nodev"
+if [[ "${HARDN_SHM_STRICT:-false}" == "true" && "$DESKTOP_VM" != "true" ]]; then
+  desired_opts="$base_opts,noexec"
+else
+  desired_opts="$base_opts"  # keep exec on desktop/VM by default
+fi
+
+# If already compliant enough, do nothing
+needs_change=true
+if [[ -n "$current_opts" ]]; then
+  # Check we at least have nosuid,nodev; noexec is optional unless STRICT=true
+  if [[ "$current_opts" == *"nosuid"* && "$current_opts" == *"nodev"* ]]; then
+    if [[ "$desired_opts" == *"noexec"* && "$current_opts" != *"noexec"* ]]; then
+      needs_change=true
+    else
+      needs_change=false
+    fi
+  fi
+fi
+
+if ! is_systemd_available; then
+  # Non-systemd: do not touch /etc/fstab automatically to avoid boot issues
+  if [[ "$needs_change" == true ]]; then
+    HARDN_STATUS "warning" "Non-systemd system: not editing /etc/fstab automatically."
+    HARDN_STATUS "info"    "Recommend adding an /etc/fstab line for /dev/shm with: $desired_opts"
+  else
+    HARDN_STATUS "pass" "Shared memory already has nosuid,nodev; no changes needed."
+  fi
+  HARDN_STATUS "pass" "Shared memory hardening (light) complete."
+  return 0 2>/dev/null || hardn_module_exit 0
+fi
+
+# Systemd: write a drop-in (no immediate remount/restart)
+install -d -m 0755 /etc/systemd/system/dev-shm.mount.d
+cat > /etc/systemd/system/dev-shm.mount.d/override.conf <<EOF
+[Mount]
+Options=$desired_opts
+EOF
+chmod 0644 /etc/systemd/system/dev-shm.mount.d/override.conf
+
+HARDN_STATUS "pass" "Configured /dev/shm via systemd drop-in (override.conf)."
+HARDN_STATUS "info" "No remount now (desktop-safe). It will apply on next boot."
+HARDN_STATUS "info" "To apply immediately (optional): systemctl daemon-reload && systemctl restart dev-shm.mount"
+
+HARDN_STATUS "pass" "Shared memory hardening completed (light mode)."
 return 0 2>/dev/null || hardn_module_exit 0
-set -e
+# (No set -e here — we always continue)
