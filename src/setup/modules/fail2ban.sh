@@ -1,165 +1,151 @@
 #!/bin/bash
+# Module: fail2ban_light.sh (desktop/VM friendly)
+
 source "/usr/lib/hardn-xdr/src/setup/hardn-common.sh" 2>/dev/null || \
 source "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")/hardn-common.sh" 2>/dev/null || {
-    echo "Warning: Could not source hardn-common.sh, using basic functions"
-    HARDN_STATUS() { echo "$(date '+%Y-%m-%d %H:%M:%S') - [$1] $2"; }
-    log_message() { echo "$(date '+%Y-%m-%d %H:%M:%S') - $1"; }
-    check_root() { [[ $EUID -eq 0 ]]; }
-    is_installed() { command -v "$1" >/dev/null 2>&1 || dpkg -s "$1" >/dev/null 2>&1; }
-    hardn_yesno() { 
-        [[ "$SKIP_WHIPTAIL" == "1" ]] && return 0
-        echo "Auto-confirming: $1" >&2
-        return 0
-    }
-    hardn_msgbox() { 
-        [[ "$SKIP_WHIPTAIL" == "1" ]] && echo "Info: $1" >&2 && return 0
-        echo "Info: $1" >&2
-    }
-    is_container_environment() {
-        [[ -n "$CI" ]] || [[ -n "$GITHUB_ACTIONS" ]] || [[ -f /.dockerenv ]] || \
-        [[ -f /run/.containerenv ]] || grep -qa container /proc/1/environ 2>/dev/null
-    }
-    is_systemd_available() {
-        [[ -d /run/systemd/system ]] && systemctl --version >/dev/null 2>&1
-    }
-    create_scheduled_task() {
-        echo "Info: Scheduled task creation skipped in CI environment" >&2
-        return 0
-    }
-    check_container_limitations() {
-        if [[ ! -w /proc/sys ]] || [[ -f /.dockerenv ]]; then
-            echo "Warning: Container limitations detected:" >&2
-            echo "  - read-only /proc/sys - kernel parameter changes limited" >&2
-        fi
-        return 0
-    }
-    hardn_module_exit() {
-        local exit_code="${1:-0}"
-        exit "$exit_code"
-    }
-    safe_package_install() {
-        local package="$1"
-        if [[ "$CI" == "true" ]] || ! check_root; then
-            echo "Info: Package installation skipped in CI environment: $package" >&2
-            return 0
-        fi
-        echo "Warning: Package installation not implemented in fallback: $package" >&2
-        return 1
-    }
+  echo "Warning: Could not source hardn-common.sh, using basic functions"
+  HARDN_STATUS(){ echo "$(date '+%F %T') - [$1] $2"; }
+  log_message(){ echo "$(date '+%F %T') - $1"; }
+  check_root(){ [[ $EUID -eq 0 ]]; }
+  is_installed(){ command -v "$1" >/dev/null 2>&1 || dpkg -s "$1" >/dev/null 2>&1; }
+  is_systemd_available(){ [[ -d /run/systemd/system ]] && systemctl --version >/dev/null 2>&1; }
+  is_container_environment(){ [[ -n "$CI" || -n "$GITHUB_ACTIONS" || -f /.dockerenv || -f /run/.containerenv ]] || grep -qa container /proc/1/environ 2>/dev/null; }
+  hardn_module_exit(){ exit "${1:-0}"; }
 }
+type safe_systemctl >/dev/null 2>&1 || safe_systemctl(){ timeout 20 systemctl "$@" >/dev/null 2>&1; }
 
-
-# -------- Check for container environment --------
+# -------- Skip containers --------
 if is_container_environment; then
-    HARDN_STATUS "info" "Container environment detected, skipping Fail2ban setup."
-    HARDN_STATUS "info" "Fail2ban is not suitable for container environments"
-    return 0 2>/dev/null || hardn_module_exit 0
+  HARDN_STATUS "info" "Container detected; skipping Fail2ban."
+  return 0 2>/dev/null || hardn_module_exit 0
 fi
 
-# Install Fail2ban automatically for security hardening
-HARDN_STATUS "info" "Installing Fail2ban for brute force protection (automated mode)"
+HARDN_STATUS "info" "Installing Fail2ban (light desktop/VM mode)..."
 
-# -------- Installation --------
 install_fail2ban() {
-    HARDN_STATUS "info" "Installing Fail2ban..."
-
-    if command -v yum &>/dev/null; then
-        yum install -y epel-release
-        yum install -y fail2ban
-    elif command -v dnf &>/dev/null; then
-        dnf install -y epel-release
-        dnf install -y fail2ban
-    elif command -v apt &>/dev/null; then
-        apt update -y
-        apt install -y fail2ban
-    elif command -v rpm &>/dev/null; then
-        HARDN_STATUS "error" "Please use yum or dnf to install Fail2ban on RPM-based systems."
-        return 1
-    else
-        HARDN_STATUS "error" "No supported package manager found."
-        return 1
-    fi
-
-    HARDN_STATUS "pass" "Fail2ban installed successfully."
+  if command -v apt >/dev/null 2>&1; then
+    apt update -y && apt install -y --no-install-recommends fail2ban
+  elif command -v dnf >/dev/null 2>&1; then
+    # Many desktops already have EPEL; don’t force it if unavailable
+    dnf install -y fail2ban || {
+      dnf install -y epel-release && dnf install -y fail2ban
+    }
+  elif command -v yum >/dev/null 2>&1; then
+    yum install -y fail2ban || { yum install -y epel-release && yum install -y fail2ban; }
+  else
+    HARDN_STATUS "error" "No supported package manager found."
+    return 1
+  fi
+  HARDN_STATUS "pass" "Fail2ban installed."
+  return 0
 }
 
-# -------- Enable + Start Service --------
-enable_and_start_fail2ban() {
-    HARDN_STATUS "info" "Enabling and starting Fail2ban service..."
-    safe_systemctl "enable" "fail2ban"
-    safe_systemctl "start" "fail2ban"
-    safe_systemctl "status" "fail2ban" "--no-pager" || true
-    HARDN_STATUS "pass" "Fail2ban service enabled and running."
+# -------- Banaction autodetect (don’t break laptops) --------
+detect_banaction() {
+  if command -v ufw >/dev/null 2>&1 && safe_systemctl is-active ufw --quiet; then
+    echo "ufw"; return
+  fi
+  if command -v firewall-cmd >/dev/null 2>&1 && safe_systemctl is-active firewalld --quiet; then
+    echo "firewallcmd-rich-rules"; return
+  fi
+  if command -v iptables-nft >/dev/null 2>&1 || command -v iptables >/dev/null 2>&1; then
+    echo "iptables-multiport"; return
+  fi
+  echo "none" # log-only; safest on desktops/VMs without firewall
 }
 
-# -------- Systemd Hardening --------
+# -------- Configure defaults (systemd backend, safe thresholds) --------
+configure_defaults() {
+  install -d -m 0755 /etc/fail2ban
+  local jail_local="/etc/fail2ban/jail.local"
+  local banaction; banaction="$(detect_banaction)"
+
+  # ignore localhost and RFC1918; systemd backend avoids heavy file tailing
+  cat > "$jail_local" <<EOF
+[DEFAULT]
+backend = systemd
+ignoreip = 127.0.0.1/8 ::1 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+banaction = ${banaction}
+findtime = 1h
+maxretry = 10
+bantime = 1h
+EOF
+
+  HARDN_STATUS "pass" "Fail2ban defaults set (backend=systemd, banaction=${banaction})."
+}
+
+# -------- Only enable sshd jail if SSH actually exists --------
+configure_sshd_jail_if_present() {
+  # Debian/Ubuntu service name is "ssh"; unit file provides "sshd" binary
+  local has_ssh=false
+  if command -v sshd >/dev/null 2>&1; then
+    has_ssh=true
+  elif systemctl list-unit-files | grep -qE '^ssh\.service'; then
+    has_ssh=true
+  fi
+
+  if [[ "$has_ssh" == "true" ]]; then
+    install -d -m 0755 /etc/fail2ban/jail.d
+    cat > /etc/fail2ban/jail.d/10-sshd.conf <<'EOF'
+[sshd]
+enabled = true
+port    = ssh
+logpath = %(sshd_log)s
+maxretry = 6
+findtime = 30m
+bantime  = 1h
+EOF
+    HARDN_STATUS "pass" "Enabled sshd jail."
+  else
+    HARDN_STATUS "info" "No SSH service detected; leaving sshd jail disabled."
+  fi
+}
+
+# -------- Minimal systemd hardening (safe for desktops) --------
 harden_fail2ban_service() {
-    HARDN_STATUS "info" "Applying systemd hardening to Fail2ban..."
-    mkdir -p /etc/systemd/system/fail2ban.service.d
-    cat > /etc/systemd/system/fail2ban.service.d/override.conf <<EOF
+  install -d -m 0755 /etc/systemd/system/fail2ban.service.d
+  cat > /etc/systemd/system/fail2ban.service.d/override.conf <<'EOF'
 [Service]
 PrivateTmp=true
 ProtectSystem=full
 ProtectHome=true
 NoNewPrivileges=true
-PrivateDevices=true
+# Keep it modest; fail2ban often needs to call firewall tools
+# CapabilityBoundingSet= cap_net_admin cap_net_raw
 EOF
-    safe_systemctl "daemon-reexec"
-    HARDN_STATUS "pass" "Fail2ban service hardened with override.conf"
+  safe_systemctl daemon-reload
+  HARDN_STATUS "pass" "Applied minimal systemd hardening to fail2ban."
 }
 
-# -------- UFW Integration --------
-configure_ufw_for_fail2ban() {
-    if ! command -v ufw >/dev/null 2>&1; then
-        HARDN_STATUS "info" "UFW not found. Skipping UFW integration."
-        return 0
-    fi
-
-    if ! safe_systemctl "status" "ufw" "--quiet"; then
-        HARDN_STATUS "warning" "UFW is not active. Skipping UFW integration."
-        return 0
-    fi
-
-    # Enable UFW integration automatically for enhanced security
-    HARDN_STATUS "info" "Configuring Fail2ban with UFW integration (automated mode)"
-
-    mkdir -p /etc/fail2ban
-    JAIL_LOCAL="/etc/fail2ban/jail.local"
-    touch "$JAIL_LOCAL"
-
-    if ! grep -q '\[DEFAULT\]' "$JAIL_LOCAL"; then
-        cat >> "$JAIL_LOCAL" <<EOF
-[DEFAULT]
-banaction = ufw
-EOF
-        HARDN_STATUS "info" "UFW banaction set in jail.local."
-    elif ! grep -q 'banaction = ufw' "$JAIL_LOCAL"; then
-        sed -i 's/^banaction\s*=.*/banaction = ufw/' "$JAIL_LOCAL"
-        HARDN_STATUS "info" "banaction updated to use UFW."
-    fi
-
-    systemctl restart fail2ban
-    HARDN_STATUS "pass" "Fail2ban reloaded with UFW support."
+# -------- Start/enable only if useful --------
+enable_and_start_fail2ban() {
+  safe_systemctl enable fail2ban
+  safe_systemctl restart fail2ban
+  safe_systemctl is-active fail2ban --quiet && \
+    HARDN_STATUS "pass" "Fail2ban is running." || \
+    HARDN_STATUS "warning" "Fail2ban not active (no jails?) — this is okay on desktops."
 }
 
+# -------- Summary --------
 summary_message() {
-    HARDN_STATUS "pass" "Fail2ban installation and hardening completed successfully"
-    HARDN_STATUS "info" "Check active jails: fail2ban-client status"
-    HARDN_STATUS "info" "Logs: /var/log/fail2ban.log"
-    HARDN_STATUS "info" "Configuration: /etc/fail2ban/jail.local"
+  HARDN_STATUS "info"  "Check status: fail2ban-client status"
+  HARDN_STATUS "info"  "Logs: /var/log/fail2ban.log"
+  HARDN_STATUS "info"  "Config: /etc/fail2ban/jail.local, /etc/fail2ban/jail.d/*.conf"
+  HARDN_STATUS "pass"  "Fail2ban setup (light) complete."
 }
 
 main() {
-    install_fail2ban || return 0
-    harden_fail2ban_service
-    enable_and_start_fail2ban
-    configure_ufw_for_fail2ban
-    summary_message
-    HARDN_STATUS "pass" "Fail2ban installation and setup complete."
-    return 0 2>/dev/null || hardn_module_exit 0
+  install_fail2ban || { HARDN_STATUS "warning" "Install failed; skipping configuration"; return 0; }
+  configure_defaults
+  configure_sshd_jail_if_present
+  harden_fail2ban_service
+  enable_and_start_fail2ban
+  summary_message
+  return 0
 }
 
 main
 
+# -------- Continue section (like your other modules) --------
 return 0 2>/dev/null || hardn_module_exit 0
-set -e
+# no 'set -e' at end — we want the chain to continue
