@@ -54,5 +54,3 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
 fi
 
 return 0 2>/dev/null || hardn_module_exit 0
-
-return 0 2>/dev/null || hardn_module_exit 0
