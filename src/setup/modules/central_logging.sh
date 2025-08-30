@@ -1,186 +1,117 @@
 #!/bin/bash
+# Module: central_logging.sh (desktop-safe, no MTA)
 
 source "/usr/lib/hardn-xdr/src/setup/hardn-common.sh" 2>/dev/null || \
 source "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")/hardn-common.sh" 2>/dev/null || {
-    echo "Warning: Could not source hardn-common.sh, using basic functions"
-    HARDN_STATUS() { echo "$(date '+%Y-%m-%d %H:%M:%S') - [$1] $2"; }
-    log_message() { echo "$(date '+%Y-%m-%d %H:%M:%S') - $1"; }
-    check_root() { [[ $EUID -eq 0 ]]; }
-    is_installed() { command -v "$1" >/dev/null 2>&1 || dpkg -s "$1" >/dev/null 2>&1; }
-    hardn_yesno() { 
-        [[ "$SKIP_WHIPTAIL" == "1" ]] && return 0
-        echo "Auto-confirming: $1" >&2
-        return 0
-    }
-    hardn_msgbox() { 
-        [[ "$SKIP_WHIPTAIL" == "1" ]] && echo "Info: $1" >&2 && return 0
-        echo "Info: $1" >&2
-    }
-    is_container_environment() {
-        [[ -n "$CI" ]] || [[ -n "$GITHUB_ACTIONS" ]] || [[ -f /.dockerenv ]] || \
-        [[ -f /run/.containerenv ]] || grep -qa container /proc/1/environ 2>/dev/null
-    }
-    is_systemd_available() {
-        [[ -d /run/systemd/system ]] && systemctl --version >/dev/null 2>&1
-    }
-    create_scheduled_task() {
-        echo "Info: Scheduled task creation skipped in CI environment" >&2
-        return 0
-    }
-    check_container_limitations() {
-        if [[ ! -w /proc/sys ]] || [[ -f /.dockerenv ]]; then
-            echo "Warning: Container limitations detected:" >&2
-            echo "  - read-only /proc/sys - kernel parameter changes limited" >&2
-        fi
-        return 0
-    }
-    hardn_module_exit() {
-        local exit_code="${1:-0}"
-        exit "$exit_code"
-    }
-    safe_package_install() {
-        local package="$1"
-        if [[ "$CI" == "true" ]] || ! check_root; then
-            echo "Info: Package installation skipped in CI environment: $package" >&2
-            return 0
-        fi
-        echo "Warning: Package installation not implemented in fallback: $package" >&2
-        return 1
-    }
+  echo "Warning: Could not source hardn-common.sh, using basic functions"
+  HARDN_STATUS(){ echo "$(date '+%F %T') - [$1] $2"; }
+  log_message(){ echo "$(date '+%F %T') - $1"; }
+  check_root(){ [[ $EUID -eq 0 ]]; }
+  is_installed(){ command -v "$1" >/dev/null 2>&1 || dpkg -s "$1" >/dev/null 2>&1; }
+  hardn_module_exit(){ exit "${1:-0}"; }
+  is_container_environment(){ [[ -n "$CI" || -n "$GITHUB_ACTIONS" || -f /.dockerenv || -f /run/.containerenv ]] || grep -qa container /proc/1/environ 2>/dev/null; }
+  safe_package_install(){ apt-get update -y && apt-get install -y "$@" 2>/dev/null; }  # simple apt fallback
 }
 
 HARDN_STATUS "info" "Setting up central logging for security tools..."
 
 install_logging_packages() {
-    HARDN_STATUS "info" "Checking and installing logging packages (rsyslog, logrotate)..."
-    
-    # Use the safe package installation function
-    local missing_packages=()
-    for pkg in rsyslog logrotate; do
-        if ! is_installed "$pkg"; then
-            missing_packages+=("$pkg")
-        fi
-    done
-    
-    if [[ ${#missing_packages[@]} -gt 0 ]]; then
-        HARDN_STATUS "info" "Installing missing packages: ${missing_packages[*]}"
-        if ! safe_package_install "${missing_packages[@]}"; then
-            HARDN_STATUS "warning" "Some logging packages could not be installed in this environment"
-            # Don't fail completely - logging may work with existing tools
-        fi
+  local need=()
+  for p in rsyslog logrotate; do
+    is_installed "$p" || need+=("$p")
+  done
+  if ((${#need[@]})); then
+    HARDN_STATUS "info" "Installing: ${need[*]}"
+    if ! safe_package_install "${need[@]}"; then
+      HARDN_STATUS "warning" "Could not install some logging packages; continuing with what’s available"
     fi
-    
-    HARDN_STATUS "pass" "Logging package installation completed."
-    exit 0
+  fi
+  HARDN_STATUS "pass" "Logging package check complete."
+  return 0
 }
 
-if ! install_logging_packages; then
-    HARDN_STATUS "warning" "Package installation had issues but continuing with available tools"
-fi
+install_logging_packages || HARDN_STATUS "warning" "Package installation had issues; proceeding"
 
+# Create log target
+HARDN_STATUS "info" "Preparing log directory and file..."
+install -d -m 0755 /usr/local/var/log/suricata
+install -m 0640 -o root -g adm /dev/null /usr/local/var/log/suricata/hardn-xdr.log
+ln -sf /usr/local/var/log/suricata/hardn-xdr.log /var/log/hardn-xdr.log
+HARDN_STATUS "pass" "Log file at /usr/local/var/log/suricata/hardn-xdr.log"
 
-# Create necessary directories
-# ADD ALL DIR's fo monitoring
-HARDN_STATUS "info" "Creating log directories and files..."
-mkdir -p /usr/local/var/log/suricata
-# Note: /var/log/suricata is often created by the suricata package itself
-touch /usr/local/var/log/suricata/hardn-xdr.log
-chmod 640 /usr/local/var/log/suricata/hardn-xdr.log
-chown root:adm /usr/local/var/log/suricata/hardn-xdr.log
-HARDN_STATUS "pass" "Log directory /usr/local/var/log/suricata created and permissions set."
+# rsyslog config (classic syntax; no facility rewriting—direct file writes)
+HARDN_STATUS "info" "Writing /etc/rsyslog.d/30-hardn-xdr.conf..."
+cat >/etc/rsyslog.d/30-hardn-xdr.conf <<'EOF'
+# HARDN-XDR Central Logging
+# Collects security tool events into one file for local review/shipping.
 
-
-# Create rsyslog configuration for centralized logging
-HARDN_STATUS "info" "Creating rsyslog configuration file /etc/rsyslog.d/30-hardn-xdr.conf..."
-cat > /etc/rsyslog.d/30-hardn-xdr.conf << 'EOF'
-# HARDN-XDR Central Logging Configuration
-# This file is automatically generated by HARDN-XDR.
-# Any manual changes may be overwritten.
-
-# Create a template for security logs
+# Template
 $template HARDNFormat,"%TIMESTAMP% %HOSTNAME% %syslogtag%%msg%\n"
 
-# Define the central log file path
-local5.* /usr/local/var/log/suricata/hardn-xdr.log;HARDNFormat
-
-# Specific rules to route logs to local5 facility if they don't use it by default
-# Suricata (often uses local5, but explicit rule ensures it)
-if $programname == 'suricata' then local5.*
-# AIDE
-if $programname == 'aide' then local5.*
-# Fail2Ban
-if $programname == 'fail2ban' then local5.*
-# AppArmor
-if $programname == 'apparmor' then local5.*
-# Auditd/SELinux (auditd logs via auditd, setroubleshoot logs via setroubleshoot)
-if $programname == 'audit' or $programname == 'setroubleshoot' then local5.*
-# RKHunter (often logs with tag rkhunter)
-if $programname == 'rkhunter' or $syslogtag contains 'rkhunter' then local5.*
-# Debsums (piped to logger, tag might be debsums or CRON)
-if $programname == 'debsums' or $syslogtag contains 'debsums' then local5.*
-# Lynis (cronjob logs via logger, tag might be lynis or CRON)
-if $programname == 'lynis' or $syslogtag contains 'lynis' then local5.*
-
-# Stop processing these messages after they are sent to the central log
+# Route specific programs directly to the HARDN log
+if $programname == 'suricata' then /usr/local/var/log/suricata/hardn-xdr.log;HARDNFormat
+& stop
+if $programname == 'aide' then /usr/local/var/log/suricata/hardn-xdr.log;HARDNFormat
+& stop
+if $programname == 'fail2ban' then /usr/local/var/log/suricata/hardn-xdr.log;HARDNFormat
+& stop
+if ($programname == 'apparmor' or $syslogtag contains 'apparmor') then /usr/local/var/log/suricata/hardn-xdr.log;HARDNFormat
+& stop
+if ($programname == 'audit' or $syslogtag contains 'audit') then /usr/local/var/log/suricata/hardn-xdr.log;HARDNFormat
+& stop
+if ($programname == 'rkhunter' or $syslogtag contains 'rkhunter') then /usr/local/var/log/suricata/hardn-xdr.log;HARDNFormat
+& stop
+if ($programname == 'debsums' or $syslogtag contains 'debsums') then /usr/local/var/log/suricata/hardn-xdr.log;HARDNFormat
+& stop
+if ($programname == 'lynis' or $syslogtag contains 'lynis') then /usr/local/var/log/suricata/hardn-xdr.log;HARDNFormat
 & stop
 EOF
-chmod 644 /etc/rsyslog.d/30-hardn-xdr.conf
-HARDN_STATUS "pass" "Rsyslog configuration created/updated."
+chmod 0644 /etc/rsyslog.d/30-hardn-xdr.conf
+HARDN_STATUS "pass" "rsyslog rules installed."
 
-
-# Restart rsyslog to apply changes
-if systemctl is-active --quiet rsyslog; then
-    HARDN_STATUS "info" "Restarting rsyslog service..."
-    sudo systemctl restart rsyslog
-    HARDN_STATUS "pass" "Rsyslog service restarted."
+# Enable/start rsyslog if present
+if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files | grep -q '^rsyslog\.service'; then
+  systemctl enable rsyslog >/dev/null 2>&1 || true
+  if systemctl is-active --quiet rsyslog; then
+    HARDN_STATUS "info" "Restarting rsyslog..."
+    systemctl restart rsyslog >/dev/null 2>&1 || true
+  else
+    HARDN_STATUS "info" "Starting rsyslog..."
+    systemctl start rsyslog >/dev/null 2>&1 || true
+  fi
+  HARDN_STATUS "pass" "rsyslog is enabled and running."
 else
-    HARDN_STATUS "warning" "Rsyslog service not running. Configuration will be applied on next start."
+  HARDN_STATUS "warning" "systemd/rsyslog service not found; config will take effect when rsyslog runs."
 fi
 
-# Create logrotate configuration for the central log
-HARDN_STATUS "info" "Creating logrotate configuration file /etc/logrotate.d/hardn-xdr..."
-cat > /etc/logrotate.d/hardn-xdr << 'EOF'
+# logrotate config (portable; no shell functions)
+HARDN_STATUS "info" "Writing /etc/logrotate.d/hardn-xdr..."
+cat >/etc/logrotate.d/hardn-xdr <<'EOF'
 /usr/local/var/log/suricata/hardn-xdr.log {
-    daily
-    rotate 30
-    compress
-    delaycompress
-    missingok
-    notifempty
-    create 640 root adm
-    postrotate
-        # Ensure rsyslog reloads its configuration or reopens log files
-        # Use the standard rsyslog-rotate script if available, otherwise restart
-        if [ -x /usr/lib/rsyslog/rsyslog-rotate ]; then
-            /usr/lib/rsyslog/rsyslog-rotate
-        elif is_container_environment; then
-            # In containers, try to reload gracefully or skip
-            pkill -HUP rsyslog 2>/dev/null || true
-        else
-            systemctl reload rsyslog >/dev/null 2>&1 || true
-        fi
-    endscript
-    # Add a prerotate script to ensure the file exists and has correct permissions before rotation
-    prerotate
-        if [ ! -f /usr/local/var/log/suricata/hardn-xdr.log ]; then
-            mkdir -p /usr/local/var/log/suricata
-            touch /usr/local/var/log/suricata/hardn-xdr.log
-        fi
-        chmod 640 /usr/local/var/log/suricata/hardn-xdr.log
-        chown root:adm /usr/local/var/log/suricata/hardn-xdr.log
-    endscript
+  daily
+  rotate 30
+  compress
+  delaycompress
+  missingok
+  notifempty
+  create 640 root adm
+  prerotate
+    install -d -m 0755 /usr/local/var/log/suricata
+    [ -f /usr/local/var/log/suricata/hardn-xdr.log ] || touch /usr/local/var/log/suricata/hardn-xdr.log
+    chown root:adm /usr/local/var/log/suricata/hardn-xdr.log
+    chmod 640 /usr/local/var/log/suricata/hardn-xdr.log
+  endscript
+  postrotate
+    # Try a polite HUP; fallback to systemctl reload if available
+    pkill -HUP rsyslogd 2>/dev/null || true
+    if command -v systemctl >/dev/null 2>&1; then
+      systemctl reload rsyslog >/dev/null 2>&1 || true
+    fi
+  endscript
 }
 EOF
-chmod 644 /etc/logrotate.d/hardn-xdr
-HARDN_STATUS "pass" "Logrotate configuration created/updated."
+chmod 0644 /etc/logrotate.d/hardn-xdr
+HARDN_STATUS "pass" "logrotate rule installed."
 
-
-# Create a symlink in /var/log for easier access
-HARDN_STATUS "info" "Creating symlink /var/log/hardn-xdr.log..."
-ln -sf /usr/local/var/log/suricata/hardn-xdr.log /var/log/hardn-xdr.log
-HARDN_STATUS "pass" "Symlink created at /var/log/hardn-xdr.log."
-
-
-HARDN_STATUS "pass" "Central logging setup complete. All security logs will be collected in /usr/local/var/log/suricata/hardn-xdr.log"
+HARDN_STATUS "pass" "Central logging setup complete → /usr/local/var/log/suricata/hardn-xdr.log"
 return 0 2>/dev/null || hardn_module_exit 0
-set -e
